@@ -3,11 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 
-interface HeaderProps {
-  onOpenAuthPreview?: (provider: string) => void;
-}
-
-export default function Header({ onOpenAuthPreview }: HeaderProps) {
+export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -104,13 +100,13 @@ export default function Header({ onOpenAuthPreview }: HeaderProps) {
         {/* Desktop CTA actions */}
         <div className="hidden sm:flex items-center gap-3">
           <Link
-            href="/dashboard"
+            href="/auth"
             className="text-sm font-medium text-slate-700 hover:text-teal-600 dark:text-slate-300 dark:hover:text-teal-400 px-3 py-2 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
           >
             Sign In
           </Link>
           <Link
-            href="/dashboard"
+            href="/auth"
             className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-teal-700/20 hover:from-teal-500 hover:to-emerald-500 hover:shadow-md hover:shadow-teal-600/30 active:scale-[0.98] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
           >
             <span>Get Started</span>
@@ -134,7 +130,7 @@ export default function Header({ onOpenAuthPreview }: HeaderProps) {
         {/* Mobile controls (Compact Get Started + Hamburger Menu) */}
         <div className="flex sm:hidden items-center gap-2">
           <Link
-            href="/dashboard"
+            href="/auth"
             className="rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-teal-500 active:scale-95 transition-all"
           >
             Get Started
@@ -214,14 +210,14 @@ export default function Header({ onOpenAuthPreview }: HeaderProps) {
             </a>
             <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-2">
               <Link
-                href="/dashboard"
+                href="/auth"
                 onClick={() => setMobileMenuOpen(false)}
                 className="w-full text-center rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
               >
                 Sign In
               </Link>
               <Link
-                href="/dashboard"
+                href="/auth"
                 onClick={() => setMobileMenuOpen(false)}
                 className="w-full text-center rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 py-2.5 text-sm font-semibold text-white shadow-sm hover:from-teal-500 hover:to-emerald-500"
               >

@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Header from "@/components/landing/Header";
 import Hero from "@/components/landing/Hero";
 import DashboardPreview from "@/components/landing/DashboardPreview";
@@ -12,18 +11,12 @@ import FinalCTA from "@/components/landing/FinalCTA";
 import Footer from "@/components/landing/Footer";
 
 export default function WelcomePage() {
-  const [authPreviewProvider, setAuthPreviewProvider] = useState<string | null>(null);
-
-  const handleOpenAuthPreview = (provider: string) => {
-    setAuthPreviewProvider(provider);
-  };
-
   return (
     <div className="flex min-h-full flex-col">
-      <Header onOpenAuthPreview={handleOpenAuthPreview} />
+      <Header />
 
       <main className="flex-1">
-        <Hero onOpenAuthPreview={handleOpenAuthPreview} />
+        <Hero />
         <DashboardPreview />
 
         {/* Mobile Product Preview Section */}
@@ -73,66 +66,6 @@ export default function WelcomePage() {
       </main>
 
       <Footer />
-
-      {/* Auth Preview Modal — visual placeholder only */}
-      {authPreviewProvider && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
-          onClick={() => setAuthPreviewProvider(null)}
-          role="dialog"
-          aria-modal="true"
-          aria-label={`Continue with ${authPreviewProvider}`}
-        >
-          <div
-            className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={() => setAuthPreviewProvider(null)}
-              className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer"
-              aria-label="Close"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-                <path d="M18 6 6 18" />
-                <path d="m6 6 12 12" />
-              </svg>
-            </button>
-
-            <div className="text-center">
-              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-tr from-teal-600 to-emerald-500 text-white shadow-md">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6" aria-hidden="true">
-                  <path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z" />
-                  <path d="m8.5 8.5 7 7" />
-                </svg>
-              </div>
-
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                Continue with {authPreviewProvider}
-              </h3>
-              <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-                Authentication is coming soon. For now, you can explore the dashboard preview.
-              </p>
-
-              <div className="mt-6 flex flex-col gap-2.5">
-                <a
-                  href="/dashboard"
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:from-teal-500 hover:to-emerald-500 transition-all"
-                >
-                  Explore Dashboard Preview →
-                </a>
-                <button
-                  type="button"
-                  onClick={() => setAuthPreviewProvider(null)}
-                  className="w-full rounded-xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                >
-                  Maybe Later
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

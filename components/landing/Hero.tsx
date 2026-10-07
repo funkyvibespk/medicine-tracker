@@ -2,11 +2,7 @@
 
 import Link from "next/link";
 
-interface HeroProps {
-  onOpenAuthPreview: (provider: string) => void;
-}
-
-export default function Hero({ onOpenAuthPreview }: HeroProps) {
+export default function Hero() {
   return (
     <section className="relative overflow-hidden pt-12 pb-16 sm:pt-16 sm:pb-20 lg:pt-20 lg:pb-24">
       {/* Subtle ambient gradient mesh background */}
@@ -47,7 +43,7 @@ export default function Hero({ onOpenAuthPreview }: HeroProps) {
         <div className="mt-8 flex flex-col items-center justify-center gap-3.5 sm:flex-row sm:flex-wrap">
           {/* Primary CTA */}
           <Link
-            href="/dashboard"
+            href="/auth"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 px-6 py-3.5 text-base font-semibold text-white shadow-md shadow-teal-700/25 transition-all hover:from-teal-500 hover:to-emerald-500 hover:shadow-lg hover:shadow-teal-600/35 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
           >
             <span>Get Started</span>
@@ -68,9 +64,8 @@ export default function Hero({ onOpenAuthPreview }: HeroProps) {
           </Link>
 
           {/* Secondary Auth Preview: Continue with Google */}
-          <button
-            type="button"
-            onClick={() => onOpenAuthPreview("Google")}
+          <Link
+            href="/auth?provider=google"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 rounded-xl border border-slate-300/80 bg-white px-5 py-3.5 text-sm font-semibold text-slate-700 shadow-xs transition-all hover:bg-slate-50 hover:border-slate-400 active:scale-[0.98] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-750 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 cursor-pointer"
           >
             <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
@@ -92,12 +87,11 @@ export default function Hero({ onOpenAuthPreview }: HeroProps) {
               />
             </svg>
             <span>Continue with Google</span>
-          </button>
+          </Link>
 
           {/* Secondary Auth Preview: Continue with Email */}
-          <button
-            type="button"
-            onClick={() => onOpenAuthPreview("Email")}
+          <Link
+            href="/auth?provider=email"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300/80 bg-white px-5 py-3.5 text-sm font-semibold text-slate-700 shadow-xs transition-all hover:bg-slate-50 hover:border-slate-400 active:scale-[0.98] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-750 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 cursor-pointer"
           >
             <svg
@@ -115,7 +109,7 @@ export default function Hero({ onOpenAuthPreview }: HeroProps) {
               <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
             </svg>
             <span>Continue with Email</span>
-          </button>
+          </Link>
         </div>
 
         {/* Concise trust line */}
