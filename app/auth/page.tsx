@@ -27,6 +27,8 @@ export default function AuthPage() {
   const [resendCooldown, setResendCooldown] = useState(0);
   const [resendMessage, setResendMessage] = useState("");
 
+  const [currentYear] = useState<number>(() => new Date().getFullYear());
+
   // Countdown timer for resend
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -150,7 +152,7 @@ export default function AuthPage() {
         </div>
         
         <div className="relative z-10 text-sm text-slate-500 dark:text-slate-500 font-medium">
-          &copy; {new Date().getFullYear()} Medicine Tracker
+          &copy; {currentYear} Medicine Tracker
         </div>
       </div>
 
