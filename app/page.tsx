@@ -48,6 +48,24 @@ const initialMedicines: Medicine[] = [
   },
 ];
 
+function timeTo24Hour(timeStr: string): string {
+  if (!timeStr) return "08:00";
+  const trimmed = timeStr.trim();
+  if (/^\d{2}:\d{2}$/.test(trimmed)) return trimmed;
+
+  const match = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (!match) return "08:00";
+
+  let hour = parseInt(match[1], 10);
+  const minute = match[2];
+  const ampm = match[3]?.toUpperCase();
+
+  if (ampm === "PM" && hour < 12) hour += 12;
+  if (ampm === "AM" && hour === 12) hour = 0;
+
+  return `${hour.toString().padStart(2, "0")}:${minute}`;
+}
+
 function formatTimeDisplay(timeStr: string): string {
   if (!timeStr) return "";
   if (timeStr.includes("AM") || timeStr.includes("PM")) return timeStr;
@@ -80,6 +98,9 @@ export default function Home() {
   const [medicines, setMedicines] = useState<Medicine[]>(initialMedicines);
   const [filter, setFilter] = useState<"all" | "pending" | "taken">("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingMedicineId, setEditingMedicineId] = useState<string | null>(null);
+  const [deletingMedicine, setDeletingMedicine] = useState<Medicine | null>(null);
+  const [openMenuMedId, setOpenMenuMedId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const [todayDate, setTodayDate] = useState("");
@@ -87,6 +108,17 @@ export default function Home() {
   useEffect(() => {
     const today = new Date().toISOString().split("T")[0];
     setTodayDate(today || "");
+  }, []);
+
+  // Close open dropdown menu on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpenMenuMedId(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   // Form Fields State
@@ -130,12 +162,31 @@ export default function Home() {
     setFormErrors({});
   };
 
-  const handleOpenModal = () => {
+  const handleOpenAddModal = () => {
+    setOpenMenuMedId(null);
+    setEditingMedicineId(null);
     resetForm();
     setIsModalOpen(true);
   };
 
+  const handleOpenEditModal = (med: Medicine) => {
+    setOpenMenuMedId(null);
+    setEditingMedicineId(med.id);
+    setFormData({
+      name: med.name,
+      dosage: med.dosage,
+      time: timeTo24Hour(med.time),
+      frequency: med.frequency || "Daily",
+      startDate: med.startDate || todayDate,
+      endDate: med.endDate || "",
+      instructions: med.instructions || "",
+    });
+    setFormErrors({});
+    setIsModalOpen(true);
+  };
+
   const handleCloseModal = () => {
+    setEditingMedicineId(null);
     resetForm();
     setIsModalOpen(false);
   };
@@ -190,23 +241,68 @@ export default function Home() {
       return;
     }
 
-    const newMed: Medicine = {
-      id: `med-${Date.now()}`,
-      name: formData.name.trim(),
-      dosage: formData.dosage.trim(),
-      time: formatTimeDisplay(formData.time),
-      frequency: formData.frequency,
-      startDate: formData.startDate,
-      endDate: formData.endDate ? formData.endDate : undefined,
-      instructions: formData.instructions.trim() || undefined,
-      taken: false,
-    };
+    if (editingMedicineId) {
+      // Edit existing medicine
+      setMedicines((prev) =>
+        prev.map((med) => {
+          if (med.id !== editingMedicineId) return med;
+          return {
+            ...med,
+            name: formData.name.trim(),
+            dosage: formData.dosage.trim(),
+            time: formatTimeDisplay(formData.time),
+            frequency: formData.frequency,
+            startDate: formData.startDate,
+            endDate: formData.endDate ? formData.endDate : undefined,
+            instructions: formData.instructions.trim() || undefined,
+          };
+        })
+      );
+      setToastMessage(`"${formData.name.trim()}" was updated successfully.`);
+    } else {
+      // Add new medicine
+      const newMed: Medicine = {
+        id: `med-${Date.now()}`,
+        name: formData.name.trim(),
+        dosage: formData.dosage.trim(),
+        time: formatTimeDisplay(formData.time),
+        frequency: formData.frequency,
+        startDate: formData.startDate,
+        endDate: formData.endDate ? formData.endDate : undefined,
+        instructions: formData.instructions.trim() || undefined,
+        taken: false,
+      };
 
-    setMedicines((prev) => [newMed, ...prev]);
+      setMedicines((prev) => [newMed, ...prev]);
+      setToastMessage(`"${newMed.name}" was added to today's schedule.`);
+    }
+
     setIsModalOpen(false);
+    setEditingMedicineId(null);
     resetForm();
 
-    setToastMessage(`"${newMed.name}" was added to today's schedule.`);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 4000);
+  };
+
+  // Delete flow handlers
+  const handleRequestDelete = (med: Medicine) => {
+    setOpenMenuMedId(null);
+    setDeletingMedicine(med);
+  };
+
+  const handleCancelDelete = () => {
+    setDeletingMedicine(null);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deletingMedicine) return;
+    const name = deletingMedicine.name;
+    setMedicines((prev) => prev.filter((m) => m.id !== deletingMedicine.id));
+    setDeletingMedicine(null);
+    setToastMessage(`"${name}" was deleted from your schedule.`);
+
     setTimeout(() => {
       setToastMessage(null);
     }, 4000);
@@ -254,7 +350,7 @@ export default function Home() {
           </p>
           <button
             onClick={() => setToastMessage(null)}
-            className="ml-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+            className="ml-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
           >
             ✕
           </button>
@@ -292,7 +388,7 @@ export default function Home() {
 
           <div className="flex items-center gap-3">
             <button
-              onClick={handleOpenModal}
+              onClick={handleOpenAddModal}
               className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-teal-600/20 transition-all hover:bg-teal-500 hover:shadow-lg hover:shadow-teal-500/25 active:scale-95 cursor-pointer"
             >
               <svg
@@ -360,7 +456,7 @@ export default function Home() {
               Today's Medicines
             </h2>
             <p className="text-xs text-slate-500 sm:text-sm dark:text-slate-400">
-              Click any medication card to toggle between Taken and Not Taken.
+              Manage your schedule, track doses, or edit details anytime.
             </p>
           </div>
 
@@ -448,7 +544,7 @@ export default function Home() {
             </p>
             <div className="mt-6 flex gap-3">
               <button
-                onClick={handleOpenModal}
+                onClick={handleOpenAddModal}
                 className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-500"
               >
                 <svg
@@ -488,75 +584,125 @@ export default function Home() {
                 }`}
               >
                 <div>
-                  {/* Card Header: Timing and Status Badge */}
+                  {/* Card Top Row: Timing / Frequency Badge + Three-dot More Menu (⋯) */}
                   <div className="flex items-center justify-between gap-2">
-                    <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400"
-                      >
-                        <circle cx="12" cy="12" r="10" />
-                        <polyline points="12 6 12 12 16 14" />
-                      </svg>
-                      {med.time}
-                    </span>
-
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                        med.taken
-                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300"
-                          : "bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300"
-                      }`}
-                    >
-                      {med.taken ? (
-                        <>
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="3"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="h-3 w-3"
-                          >
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                          Taken
-                        </>
-                      ) : (
-                        <>
-                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                          Not Taken
-                        </>
-                      )}
-                    </span>
-                  </div>
-
-                  {/* Medicine Name and Dosage */}
-                  <div className="mt-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3
-                        className={`text-lg font-bold tracking-tight ${
-                          med.taken
-                            ? "text-slate-700 line-through decoration-slate-400/80 dark:text-slate-300"
-                            : "text-slate-900 dark:text-white"
-                        }`}
-                      >
-                        {med.name}
-                      </h3>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400"
+                        >
+                          <circle cx="12" cy="12" r="10" />
+                          <polyline points="12 6 12 12 16 14" />
+                        </svg>
+                        {med.time}
+                      </span>
                       {med.frequency && (
                         <span className="rounded-md bg-teal-50 px-2 py-0.5 text-[11px] font-semibold text-teal-700 ring-1 ring-teal-600/10 dark:bg-teal-950/60 dark:text-teal-300 dark:ring-teal-500/20">
                           {med.frequency}
                         </span>
                       )}
                     </div>
+
+                    {/* Three-dot "More" Menu Button (⋯) */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenMenuMedId((prev) => (prev === med.id ? null : med.id));
+                        }}
+                        aria-label={`Options for ${med.name}`}
+                        className="cursor-pointer flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 transition-colors"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="h-4 w-4"
+                        >
+                          <circle cx="12" cy="12" r="1" fill="currentColor" />
+                          <circle cx="19" cy="12" r="1" fill="currentColor" />
+                          <circle cx="5" cy="12" r="1" fill="currentColor" />
+                        </svg>
+                      </button>
+
+                      {/* Dropdown Menu Popup */}
+                      {openMenuMedId === med.id && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-30"
+                            onClick={() => setOpenMenuMedId(null)}
+                          />
+                          <div className="absolute right-0 top-full mt-1.5 z-40 w-44 rounded-xl border border-slate-200 bg-white py-1 shadow-xl shadow-slate-900/10 dark:border-slate-800 dark:bg-slate-900 dark:shadow-black/50">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditModal(med)}
+                              className="w-full cursor-pointer flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800 transition-colors"
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className="h-3.5 w-3.5 text-slate-400"
+                              >
+                                <path d="M12 20h9" />
+                                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                              </svg>
+                              Edit Medicine
+                            </button>
+                            <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+                            <button
+                              type="button"
+                              onClick={() => handleRequestDelete(med)}
+                              className="w-full cursor-pointer flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40 transition-colors"
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className="h-3.5 w-3.5 text-rose-500"
+                              >
+                                <polyline points="3 6 5 6 21 6" />
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                              </svg>
+                              Delete Medicine
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Medicine Name and Dosage */}
+                  <div className="mt-3.5">
+                    <h3
+                      className={`text-lg font-bold tracking-tight ${
+                        med.taken
+                          ? "text-slate-700 line-through decoration-slate-400/80 dark:text-slate-300"
+                          : "text-slate-900 dark:text-white"
+                      }`}
+                    >
+                      {med.name}
+                    </h3>
                     <p className="mt-1 text-sm font-medium text-teal-600 dark:text-teal-400">
                       {med.dosage}
                     </p>
@@ -592,51 +738,55 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* Card Action Button */}
-                <div className="mt-5 pt-3 border-t border-slate-100 dark:border-slate-800/80">
-                  <button
-                    onClick={() => toggleStatus(med.id)}
-                    className={`w-full cursor-pointer flex items-center justify-center gap-2 rounded-xl py-2 px-3 text-xs font-semibold transition-all ${
-                      med.taken
-                        ? "bg-slate-200/70 text-slate-700 hover:bg-slate-300/70 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                        : "bg-teal-600 text-white shadow-xs hover:bg-teal-500 active:scale-98"
-                    }`}
-                  >
-                    {med.taken ? (
-                      <>
+                {/* Primary Dose Action: "Mark as Taken" or "Dose Taken (Undo)" */}
+                <div className="mt-5 border-t border-slate-100 pt-3 dark:border-slate-800/80">
+                  {med.taken ? (
+                    <div className="flex items-center justify-between rounded-xl bg-emerald-100/70 dark:bg-emerald-950/60 px-3.5 py-2.5 border border-emerald-200/80 dark:border-emerald-900/50">
+                      <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300 font-semibold text-xs sm:text-sm">
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
                           viewBox="0 0 24 24"
                           fill="none"
                           stroke="currentColor"
-                          strokeWidth="2"
+                          strokeWidth="3"
                           strokeLinecap="round"
                           strokeLinejoin="round"
-                          className="h-3.5 w-3.5"
-                        >
-                          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                          <path d="M3 3v5h5" />
-                        </svg>
-                        Mark as Not Taken
-                      </>
-                    ) : (
-                      <>
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="h-3.5 w-3.5"
+                          className="h-4 w-4 text-emerald-600 dark:text-emerald-400"
                         >
                           <polyline points="20 6 9 17 4 12" />
                         </svg>
-                        Mark as Taken
-                      </>
-                    )}
-                  </button>
+                        <span>Dose Taken</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleStatus(med.id)}
+                        className="cursor-pointer text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 underline underline-offset-2 transition-colors"
+                        title="Mark back as not taken if clicked by mistake"
+                      >
+                        Undo
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => toggleStatus(med.id)}
+                      className="w-full cursor-pointer flex items-center justify-center gap-2 rounded-xl py-2.5 px-4 text-xs sm:text-sm font-semibold text-white bg-teal-600 hover:bg-teal-500 shadow-sm shadow-teal-600/20 active:scale-98 transition-all"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="h-4 w-4"
+                      >
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      <span>Mark as Taken</span>
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -644,7 +794,7 @@ export default function Home() {
         )}
       </main>
 
-      {/* Add Medicine Modal Dialog */}
+      {/* Add / Edit Medicine Modal Dialog */}
       {isModalOpen && (
         <div
           role="dialog"
@@ -672,10 +822,12 @@ export default function Home() {
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                    Add Medicine
+                    {editingMedicineId ? "Edit Medicine" : "Add Medicine"}
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Schedule and track your daily prescription or vitamin doses.
+                    {editingMedicineId
+                      ? "Update your medication schedule, dosage, or instructions."
+                      : "Schedule and track your daily prescription or vitamin doses."}
                   </p>
                 </div>
               </div>
@@ -879,7 +1031,7 @@ export default function Home() {
                 />
               </div>
 
-              {/* Action Buttons: Cancel and Save Medicine */}
+              {/* Action Buttons: Cancel and Save / Update Medicine */}
               <div className="mt-6 flex items-center justify-end gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
                 <button
                   type="button"
@@ -904,10 +1056,101 @@ export default function Home() {
                   >
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
-                  <span>Save Medicine</span>
+                  <span>{editingMedicineId ? "Update Medicine" : "Save Medicine"}</span>
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {deletingMedicine && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs"
+        >
+          <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl transition-all dark:border-slate-800 dark:bg-slate-900">
+            {/* Header / Warning icon */}
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-600 dark:bg-rose-950/80 dark:text-rose-400">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-6 w-6"
+                >
+                  <path d="M3 6h18" />
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                  <line x1="10" x2="10" y1="11" y2="17" />
+                  <line x1="14" x2="14" y1="11" y2="17" />
+                </svg>
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                  Delete this medicine?
+                </h3>
+                <p className="text-sm text-slate-600 dark:text-slate-300">
+                  Are you sure you want to remove this medicine from your schedule?
+                </p>
+              </div>
+            </div>
+
+            {/* Medicine details preview card */}
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-xs text-slate-700 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-300">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-sm text-slate-900 dark:text-white">
+                  {deletingMedicine.name}
+                </span>
+                <span className="rounded-md bg-teal-100/70 px-2 py-0.5 font-semibold text-teal-800 dark:bg-teal-950 dark:text-teal-300">
+                  {deletingMedicine.dosage}
+                </span>
+              </div>
+              <p className="mt-1 text-slate-500 dark:text-slate-400">
+                Scheduled at {deletingMedicine.time} • {deletingMedicine.frequency}
+              </p>
+            </div>
+
+            <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+              This action is destructive and cannot be undone.
+            </p>
+
+            {/* Confirmation actions: Cancel & Delete */}
+            <div className="mt-6 flex items-center justify-end gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={handleCancelDelete}
+                className="cursor-pointer rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                className="cursor-pointer inline-flex items-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-rose-600/20 transition-all hover:bg-rose-500 hover:shadow-lg hover:shadow-rose-500/25 active:scale-98"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-4 w-4"
+                >
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                </svg>
+                <span>Delete</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
