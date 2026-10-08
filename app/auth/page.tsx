@@ -2,7 +2,6 @@
 
 import { useState, useEffect, FormEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 type AuthStep =
   | "initial"
@@ -15,7 +14,6 @@ type AuthStep =
   | "success-existing";
 
 export default function AuthPage() {
-  const router = useRouter();
   const [step, setStep] = useState<AuthStep>("initial");
   
   const [email, setEmail] = useState("");
@@ -27,7 +25,13 @@ export default function AuthPage() {
   const [resendCooldown, setResendCooldown] = useState(0);
   const [resendMessage, setResendMessage] = useState("");
 
-  const [currentYear] = useState<number>(() => new Date().getFullYear());
+  const [currentYear, setCurrentYear] = useState<number | null>(null);
+
+  useEffect(() => {
+    // Defer the local clock read until after prerendering.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCurrentYear(new Date().getFullYear());
+  }, []);
 
   // Countdown timer for resend
   useEffect(() => {
@@ -134,7 +138,7 @@ export default function AuthPage() {
               </svg>
             </div>
             <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
-              Medicine Tracker
+              ChillDose
             </span>
           </Link>
         </div>
@@ -152,7 +156,7 @@ export default function AuthPage() {
         </div>
         
         <div className="relative z-10 text-sm text-slate-500 dark:text-slate-500 font-medium">
-          &copy; {currentYear} Medicine Tracker
+          &copy; {currentYear} ChillDose
         </div>
       </div>
 
@@ -165,7 +169,7 @@ export default function AuthPage() {
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
               <path d="m15 18-6-6 6-6"/>
             </svg>
-            Back to Medicine Tracker
+            Back to ChillDose
           </Link>
 
           {/* Initial / Google Loading / Google Success states */}
@@ -179,7 +183,7 @@ export default function AuthPage() {
               </div>
 
               <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-                {step === "google-success" ? "Signed in successfully" : "Welcome to Medicine Tracker"}
+                {step === "google-success" ? "Signed in successfully" : "Welcome to ChillDose"}
               </h2>
               <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
                 {step === "google-success" ? "Taking you to your dashboard..." : "Sign in to manage your medication routine."}
@@ -383,10 +387,10 @@ export default function AuthPage() {
                 </svg>
               </div>
               <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-                You're all set.
+                You&apos;re all set.
               </h2>
               <p className="mt-2 text-base text-slate-600 dark:text-slate-400">
-                Welcome to Medicine Tracker. Let's get your medication routine set up.
+                Welcome to ChillDose. Let&apos;s get your medication routine set up.
               </p>
               
               <div className="mt-8">

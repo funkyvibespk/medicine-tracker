@@ -15,7 +15,7 @@ export default function Privacy() {
         </h2>
 
         <p className="mt-4 mx-auto max-w-xl text-base leading-relaxed text-slate-600 dark:text-slate-400">
-          Medicine Tracker is designed so your medication data belongs to your account
+          ChillDose is designed so your medication data belongs to your account
           and stays separate from other users. We believe your health information
           should stay yours.
         </p>

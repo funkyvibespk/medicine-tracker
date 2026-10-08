@@ -5,6 +5,15 @@ import { usePathname } from "next/navigation";
 
 const navItems = [
   {
+    href: "/",
+    label: "Home",
+    icon: (active: boolean) => (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
+        <path d="m3 10 9-7 9 7" /><path d="M5 9v12h14V9M9 21v-7h6v7" />
+      </svg>
+    ),
+  },
+  {
     href: "/dashboard",
     label: "Today",
     icon: (active: boolean) => (

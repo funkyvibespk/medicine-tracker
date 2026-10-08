@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useMedicine, Medicine } from "@/contexts/MedicineContext";
 import MedicineForm from "@/components/dashboard/MedicineForm";
 import BottomNav from "@/components/dashboard/BottomNav";
+import { estimatedDosesPerDay } from "@/lib/schedule";
+import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
 
 export default function MedicinesPage() {
   const { medicines, addMedicine, updateMedicine, deleteMedicine, isHydrated } = useMedicine();
@@ -11,6 +13,7 @@ export default function MedicinesPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingMedicine, setEditingMedicine] = useState<Medicine | null>(null);
   const [deletingMedicine, setDeletingMedicine] = useState<Medicine | null>(null);
+  useDialogFocusRestore(Boolean(isAddModalOpen || editingMedicine || deletingMedicine));
   const [searchQuery, setSearchQuery] = useState("");
 
   if (!isHydrated) return <div className="min-h-screen bg-slate-50 dark:bg-slate-950" />;
@@ -53,6 +56,7 @@ export default function MedicinesPage() {
             <p className="text-xs text-slate-500 dark:text-slate-400">{medicines.length} medication{medicines.length !== 1 ? "s" : ""} tracked</p>
           </div>
           <button
+            aria-label="Add medicine"
             onClick={() => setIsAddModalOpen(true)}
             className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-teal-600/20 transition-all hover:bg-teal-500 active:scale-95"
           >
@@ -104,7 +108,7 @@ export default function MedicinesPage() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="py-16 text-center">
-            <p className="text-slate-500 dark:text-slate-400">No medicines match <strong>"{searchQuery}"</strong></p>
+            <p className="text-slate-500 dark:text-slate-400">No medicines match <strong>&quot;{searchQuery}&quot;</strong></p>
             <button onClick={() => setSearchQuery("")} className="mt-3 text-sm font-medium text-teal-600 hover:underline dark:text-teal-400">Clear search</button>
           </div>
         ) : (
@@ -112,10 +116,19 @@ export default function MedicinesPage() {
             {filtered.map((med) => {
               const isLow = med.inventoryAmount <= med.lowStockThreshold && med.inventoryAmount > 0;
               const isOut = med.inventoryAmount === 0;
-              const dosesPerDay = med.scheduleTimes.length;
-              const daysLeft = dosesPerDay > 0 && med.doseAmount > 0
+              const dosesPerDay = estimatedDosesPerDay(med);
+              const daysLeft = dosesPerDay !== null && dosesPerDay > 0 && med.doseAmount > 0
                 ? Math.floor(med.inventoryAmount / (dosesPerDay * med.doseAmount))
                 : null;
+              const scheduleLabel = med.frequency === "As needed (PRN)"
+                ? "As needed"
+                : med.frequency === "Every X hours"
+                ? `Every ${med.intervalHours || 8} hours, starting at ${med.scheduleTimes[0] || "—"}`
+                : `${med.frequency}${med.scheduleTimes.length ? ` · ${med.scheduleTimes.map((time) => {
+                  const [hourText, minute] = time.split(":");
+                  const hour = Number(hourText);
+                  return `${hour % 12 || 12}:${minute} ${hour >= 12 ? "PM" : "AM"}`;
+                }).join(", ")}` : ""}`;
 
               return (
                 <div
@@ -152,13 +165,7 @@ export default function MedicinesPage() {
                       {med.strength || "—"} · {med.doseAmount} {getUnit(med.type)} per dose
                     </p>
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
-                      <span>
-                        <span className="font-medium text-slate-700 dark:text-slate-300">{med.scheduleTimes.length}×</span> daily at {med.scheduleTimes.map(t => {
-                          const [h, m] = t.split(":");
-                          const hour = parseInt(h, 10);
-                          return `${hour % 12 || 12}:${m} ${hour >= 12 ? "PM" : "AM"}`;
-                        }).join(", ")}
-                      </span>
+                        <span><span className="font-medium text-slate-700 dark:text-slate-300">{scheduleLabel}</span></span>
                       <span>
                         Stock: <span className={`font-medium ${isOut ? "text-rose-600 dark:text-rose-400" : isLow ? "text-amber-600 dark:text-amber-400" : "text-slate-700 dark:text-slate-300"}`}>
                           {med.inventoryAmount} {getUnit(med.type)}
@@ -204,11 +211,12 @@ export default function MedicinesPage() {
       {/* Add/Edit Modal */}
       {(isAddModalOpen || editingMedicine) && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-xs">
-          <div className="relative my-8 w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
-            <h2 className="text-xl font-bold mb-4 text-slate-900 dark:text-white">
+          <div role="dialog" aria-modal="true" aria-labelledby="medicine-dialog-title" onKeyDown={keepDialogFocusInside} className="relative my-8 w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+            <h2 id="medicine-dialog-title" className="text-xl font-bold mb-4 text-slate-900 dark:text-white">
               {editingMedicine ? "Edit Medicine" : "Add Medicine"}
             </h2>
             <MedicineForm
+              key={editingMedicine?.id ?? "new-medicine"}
               initialData={editingMedicine}
               onSave={(med) => {
                 if (editingMedicine) {
@@ -228,16 +236,16 @@ export default function MedicinesPage() {
       {/* Delete Confirmation */}
       {deletingMedicine && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
-          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900 text-center">
+          <div role="dialog" aria-modal="true" aria-labelledby="delete-medicine-title" onKeyDown={keepDialogFocusInside} className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900 text-center">
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-950/60">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 text-rose-600 dark:text-rose-400">
                 <path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
                 <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
               </svg>
             </div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Delete "{deletingMedicine.name}"?</h3>
+            <h3 id="delete-medicine-title" className="text-lg font-bold text-slate-900 dark:text-white">Delete &quot;{deletingMedicine.name}&quot;?</h3>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-              This will remove the medicine and all associated dose history. This action cannot be undone.
+              This removes the medicine from your list. Recorded doses remain in History.
             </p>
             <div className="mt-6 flex justify-center gap-3">
               <button

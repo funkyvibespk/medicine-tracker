@@ -58,7 +58,7 @@ export default function Header() {
           </div>
           <div className="flex items-center gap-2">
             <span className="text-lg font-bold tracking-tight text-slate-900 dark:text-white sm:text-xl">
-              Medicine Tracker
+              ChillDose
             </span>
             <span className="hidden sm:inline-flex items-center rounded-full bg-teal-50 px-2 py-0.5 text-[11px] font-semibold text-teal-700 ring-1 ring-inset ring-teal-600/20 dark:bg-teal-950/60 dark:text-teal-300 dark:ring-teal-500/30">
               Public Preview

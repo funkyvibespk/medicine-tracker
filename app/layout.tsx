@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Medicine Tracker — Simple, Smart Medication Routine & Doses",
-  description: "Keep track of your medicines, doses, schedules, reminders, and stock — all in one calm, private place.",
+  title: "ChillDose — Take your dose with chill",
+  description: "Keep track of medicines, doses, schedules, and stock in one calm place.",
 };
 
 export default function RootLayout({
@@ -26,6 +26,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      data-scroll-behavior="smooth"
       className={`${geistSans.variable} ${geistMono.variable} h-full scroll-smooth antialiased`}
     >
       <body className="min-h-full flex flex-col">

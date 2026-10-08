@@ -3,11 +3,14 @@
 import { useState } from "react";
 import { useMedicine } from "@/contexts/MedicineContext";
 import BottomNav from "@/components/dashboard/BottomNav";
+import { estimatedDosesPerDay } from "@/lib/schedule";
+import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
 
 export default function InventoryPage() {
   const { medicines, addStock, isHydrated } = useMedicine();
   const [addingStockMedId, setAddingStockMedId] = useState<string | null>(null);
   const [stockToAdd, setStockToAdd] = useState<number>(0);
+  useDialogFocusRestore(Boolean(addingStockMedId));
 
   if (!isHydrated) return <div className="min-h-screen bg-slate-50 dark:bg-slate-950" />;
 
@@ -26,9 +29,9 @@ export default function InventoryPage() {
 
   // Compute stock status for each medicine
   const withStatus = medicines.map((med) => {
-    const dosesPerDay = med.scheduleTimes.length;
+    const dosesPerDay = estimatedDosesPerDay(med);
     const daysLeft =
-      dosesPerDay > 0 && med.doseAmount > 0
+      dosesPerDay !== null && dosesPerDay > 0 && med.doseAmount > 0
         ? Math.floor(med.inventoryAmount / (dosesPerDay * med.doseAmount))
         : null;
     const isOut = med.inventoryAmount === 0;
@@ -81,7 +84,7 @@ export default function InventoryPage() {
                   : `${lowCount} medicine${lowCount > 1 ? "s" : ""} running low`}
               </p>
               <p className={`mt-0.5 text-xs ${outCount > 0 ? "text-rose-700 dark:text-rose-400" : "text-amber-700 dark:text-amber-400"}`}>
-                Tap "Add Stock" on any medicine to update the quantity.
+                Tap &quot;Add Stock&quot; on any medicine to update the quantity.
               </p>
             </div>
           </div>
@@ -164,7 +167,9 @@ export default function InventoryPage() {
                     </div>
 
                     <div className="mt-3 space-y-1 text-xs text-slate-500 dark:text-slate-400">
-                      <div>Dose: {med.doseAmount} {getUnit(med.type)} × {med.scheduleTimes.length}/day</div>
+                      <div>{estimatedDosesPerDay(med) === null
+                        ? `Dose: ${med.doseAmount} ${getUnit(med.type)} · As needed`
+                        : `Dose: ${med.doseAmount} ${getUnit(med.type)} × ${estimatedDosesPerDay(med)!.toFixed(2)}/day`}</div>
                       {daysLeft !== null && !isOut && (
                         <div>
                           Estimated: <span className={`font-semibold ${isLow ? "text-amber-600 dark:text-amber-400" : "text-slate-700 dark:text-slate-300"}`}>
@@ -199,8 +204,8 @@ export default function InventoryPage() {
       {/* Add Stock Modal */}
       {addingMed && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
-          <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1">Add Stock</h3>
+          <div role="dialog" aria-modal="true" aria-labelledby="inventory-add-stock-title" onKeyDown={keepDialogFocusInside} className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+            <h3 id="inventory-add-stock-title" className="text-lg font-bold text-slate-900 dark:text-white mb-1">Add Stock</h3>
             <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">
               {addingMed.name} · Current: {addingMed.inventoryAmount} {getUnit(addingMed.type)}
             </p>
@@ -214,12 +219,13 @@ export default function InventoryPage() {
                 }
               }}
             >
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              <label htmlFor="inventory-stock-quantity" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 Quantity to add ({getUnit(addingMed.type)})
               </label>
               <input
+                id="inventory-stock-quantity"
                 type="number"
-                step={addingMed.type === "Syrup" ? "5" : "1"}
+                step="1"
                 min="1"
                 value={stockToAdd || ""}
                 onChange={(e) => setStockToAdd(parseFloat(e.target.value) || 0)}
@@ -229,7 +235,7 @@ export default function InventoryPage() {
 
               {/* Quick amounts */}
               <div className="flex gap-2 mb-5">
-                {(addingMed.type === "Syrup" ? [50, 100, 200] : [7, 14, 30]).map((val) => (
+                {[1, 5, 10].map((val) => (
                   <button
                     key={val}
                     type="button"

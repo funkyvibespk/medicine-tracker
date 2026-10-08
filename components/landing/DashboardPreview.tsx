@@ -50,7 +50,7 @@ export default function DashboardPreview() {
                       <path d="m8.5 8.5 7 7" />
                     </svg>
                   </div>
-                  <span className="text-sm font-bold text-slate-900 dark:text-white">Medicine Tracker</span>
+                  <span className="text-sm font-bold text-slate-900 dark:text-white">ChillDose</span>
                   <span className="rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-medium text-teal-700 dark:bg-teal-900/50 dark:text-teal-300">Dashboard</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -68,7 +68,7 @@ export default function DashboardPreview() {
               <div className="rounded-xl border border-teal-100 bg-gradient-to-r from-teal-500/10 via-emerald-500/5 to-transparent p-4 sm:p-5 dark:border-teal-900/40 dark:from-teal-950/40">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div>
-                    <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">Medicine Tracker</h3>
+                    <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">ChillDose</h3>
                     <p className="text-xs text-slate-600 dark:text-slate-300">Welcome back! Stay on schedule with your daily doses.</p>
                   </div>
                   <div className="rounded-lg bg-white px-3 py-2 shadow-xs ring-1 ring-slate-200/70 dark:bg-slate-800 dark:ring-slate-700">

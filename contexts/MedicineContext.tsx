@@ -11,6 +11,7 @@ export interface Medicine {
   strength: string;
   doseAmount: number;
   frequency: string;
+  intervalHours?: number;
   scheduleTimes: string[]; // ["08:00", "20:00"]
   startDate: string; // YYYY-MM-DD
   endDate?: string;
@@ -32,6 +33,10 @@ export interface DoseRecord {
   scheduledTime: string; // HH:mm
   actualTakenTime?: string; // ISO
   status: DoseStatus; // mostly used if taken, otherwise calculated dynamically
+  isPrn?: boolean;
+  medicineName?: string;
+  medicineType?: MedicineType;
+  medicineStrength?: string;
 }
 
 interface MedicineContextType {
@@ -59,6 +64,8 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
     try {
       const storedMeds = localStorage.getItem("medTracker_medicines");
       const storedDoses = localStorage.getItem("medTracker_doses");
+      // localStorage can only be read after hydration; restore saved client state here.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (storedMeds) setMedicines(JSON.parse(storedMeds));
       if (storedDoses) setDoseRecords(JSON.parse(storedDoses));
     } catch (e) {
@@ -83,22 +90,33 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteMedicine = (id: string) => {
+    const medicine = medicines.find((item) => item.id === id);
+    if (medicine) {
+      setDoseRecords((prev) => prev.map((record) => record.medicineId === id
+        ? {
+            ...record,
+            medicineName: record.medicineName ?? medicine.name,
+            medicineType: record.medicineType ?? medicine.type,
+            medicineStrength: record.medicineStrength ?? medicine.strength,
+          }
+        : record));
+    }
     setMedicines((prev) => prev.filter((m) => m.id !== id));
-    setDoseRecords((prev) => prev.filter((d) => d.medicineId !== id));
   };
 
   const recordDose = (record: DoseRecord) => {
     setDoseRecords((prev) => {
       // replace if existing for same scheduled date and time
-      const filtered = prev.filter(
-        (r) =>
-          !(
-            r.medicineId === record.medicineId &&
-            r.scheduledDate === record.scheduledDate &&
-            r.scheduledTime === record.scheduledTime
-          )
-      );
-      return [...filtered, record];
+      const medicine = medicines.find((item) => item.id === record.medicineId);
+      const filtered = record.isPrn
+        ? prev
+        : prev.filter((r) => !(r.medicineId === record.medicineId && r.scheduledDate === record.scheduledDate && r.scheduledTime === record.scheduledTime && !r.isPrn));
+      return [...filtered, {
+        ...record,
+        medicineName: medicine?.name ?? record.medicineName,
+        medicineType: medicine?.type ?? record.medicineType,
+        medicineStrength: medicine?.strength ?? record.medicineStrength,
+      }];
     });
   };
 
@@ -119,7 +137,7 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
     setMedicines((prev) =>
       prev.map((m) => {
         if (m.id !== medicineId) return m;
-        return { ...m, inventoryAmount: m.inventoryAmount + amountToAdd };
+        return { ...m, inventoryAmount: Math.max(0, m.inventoryAmount + amountToAdd) };
       })
     );
   };

@@ -14,7 +14,7 @@ export default function Footer() {
                   <path d="m8.5 8.5 7 7" />
                 </svg>
               </div>
-              <span className="text-base font-bold text-slate-900 dark:text-white">Medicine Tracker</span>
+              <span className="text-base font-bold text-slate-900 dark:text-white">ChillDose</span>
             </Link>
             <p className="mt-3 max-w-xs text-sm leading-relaxed text-slate-600 dark:text-slate-400">
               A simple, private way to keep track of your daily medicines, doses, and schedules.
@@ -87,7 +87,7 @@ export default function Footer() {
         {/* Bottom Bar */}
         <div className="mt-10 border-t border-slate-200 pt-6 dark:border-slate-800">
           <p className="text-center text-xs text-slate-500 dark:text-slate-500">
-            © 2026 Medicine Tracker. Built with care for your daily routine.
+            © 2026 ChillDose. Built with care for your daily routine.
           </p>
         </div>
       </div>

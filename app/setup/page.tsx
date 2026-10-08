@@ -33,7 +33,7 @@ export default function SetupPage() {
             </svg>
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
-            Let's set up your medicines
+            Let&apos;s set up your medicines
           </h1>
           <p className="mt-4 text-lg text-slate-600 dark:text-slate-400">
             Add your first medication and schedule it to start tracking your daily routine and inventory.

@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMedicine } from "@/contexts/MedicineContext";
 import BottomNav from "@/components/dashboard/BottomNav";
+import { getScheduledTimesForDate, localDateString } from "@/lib/schedule";
 
 const pad = (n: number) => n.toString().padStart(2, "0");
 
@@ -25,11 +26,19 @@ function formatIso12(isoStr: string) {
 
 export default function HistoryPage() {
   const { medicines, doseRecords, isHydrated } = useMedicine();
+  const [now, setNow] = useState<Date | null>(null);
+
+  useEffect(() => {
+    // Defer reading the local clock until after prerendering.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNow(new Date());
+    const timer = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   const todayStr = useMemo(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-  }, []);
+    return now ? localDateString(now) : "";
+  }, [now]);
 
   // Build historical log: group taken doses by date (exclude today for clarity, show today too)
   const grouped = useMemo(() => {
@@ -47,7 +56,7 @@ export default function HistoryPage() {
 
   // Overall adherence stats (last 7 days)
   const stats = useMemo(() => {
-    const now = new Date();
+    if (!now) return { totalScheduled: 0, totalTaken: 0, pct: null };
     const days: string[] = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
@@ -59,17 +68,12 @@ export default function HistoryPage() {
 
     for (const dayStr of days) {
       for (const med of medicines) {
-        if (med.startDate > dayStr) continue;
-        if (med.endDate && med.endDate < dayStr) continue;
-
-        // If today, only count past scheduled times
-        let timesToCount = med.scheduleTimes;
+        let timesToCount = getScheduledTimesForDate(med, dayStr);
         if (dayStr === todayStr) {
-          const now2 = new Date();
-          timesToCount = med.scheduleTimes.filter((t) => {
+            timesToCount = timesToCount.filter((t) => {
             const [h, m] = t.split(":").map(Number);
-            const sched = new Date(now2.getFullYear(), now2.getMonth(), now2.getDate(), h, m);
-            return sched <= now2;
+              const sched = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m);
+              return sched <= now;
           });
         }
 
@@ -84,9 +88,9 @@ export default function HistoryPage() {
     }
 
     return { totalScheduled, totalTaken, pct: totalScheduled > 0 ? Math.round((totalTaken / totalScheduled) * 100) : null };
-  }, [medicines, doseRecords, todayStr]);
+  }, [medicines, doseRecords, todayStr, now]);
 
-  if (!isHydrated) return <div className="min-h-screen bg-slate-50 dark:bg-slate-950" />;
+  if (!isHydrated || !now) return <div className="min-h-screen bg-slate-50 dark:bg-slate-950" />;
 
   const getMed = (id: string) => medicines.find((m) => m.id === id);
 
@@ -173,7 +177,7 @@ export default function HistoryPage() {
                     .sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime))
                     .map((record) => {
                       const med = getMed(record.medicineId);
-                      if (!med) return null;
+                      const medicineName = record.medicineName ?? med?.name ?? "Deleted medicine";
                       const { text, cls } = statusLabel(record.status);
 
                       return (
@@ -187,9 +191,9 @@ export default function HistoryPage() {
                             </svg>
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate font-semibold text-slate-900 dark:text-white text-sm">{med.name}</p>
+                            <p className="truncate font-semibold text-slate-900 dark:text-white text-sm">{medicineName}</p>
                             <p className="text-xs text-slate-500 dark:text-slate-400">
-                              Scheduled {format12Hour(record.scheduledTime)}
+                              {record.isPrn ? "As needed" : `Scheduled ${format12Hour(record.scheduledTime)}`}
                               {record.actualTakenTime && (
                                 <> · Taken {formatIso12(record.actualTakenTime)}</>
                               )}
