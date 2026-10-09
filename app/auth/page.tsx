@@ -2,6 +2,7 @@
 
 import { useState, useEffect, FormEvent } from "react";
 import Link from "next/link";
+import { BrandLogo } from "@/components/BrandLogo";
 
 type AuthStep =
   | "initial"
@@ -131,15 +132,11 @@ export default function AuthPage() {
         
         <div className="relative z-10">
           <Link href="/" className="inline-flex items-center gap-2.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 rounded-xl">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-teal-600 to-emerald-500 text-white shadow-md shadow-teal-600/20">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
-                <path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z" />
-                <path d="m8.5 8.5 7 7" />
-              </svg>
-            </div>
-            <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
-              ChillDose
-            </span>
+            <BrandLogo
+              markClassName="h-10 w-10 rounded-xl"
+              iconClassName="h-5 w-5"
+              wordmarkClassName="text-xl font-bold tracking-tight"
+            />
           </Link>
         </div>
         
@@ -175,11 +172,12 @@ export default function AuthPage() {
           {/* Initial / Google Loading / Google Success states */}
           {(step === "initial" || step === "google-loading" || step === "google-success" || step === "email-loading") && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="lg:hidden mb-6 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-teal-600 to-emerald-500 text-white shadow-md">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
-                  <path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z" />
-                  <path d="m8.5 8.5 7 7" />
-                </svg>
+              <div className="lg:hidden mb-6">
+                <BrandLogo
+                  markClassName="h-10 w-10 rounded-xl"
+                  iconClassName="h-5 w-5"
+                  wordmarkClassName="sr-only"
+                />
               </div>
 
               <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
