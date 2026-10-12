@@ -594,17 +594,17 @@ export default function MedicineForm({ initialData, onSave, onCancel }: Medicine
       </div>
 
       {/* ── Submit / Cancel ─────────────────────────────────────────────────── */}
-      <div className="pt-4 flex items-center justify-end gap-3">
+      <div className="pt-4 flex flex-col min-[360px]:flex-row items-center justify-center gap-3 sm:justify-end">
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+          className="min-h-11 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
         >
           Cancel
         </button>
         <button
           type="submit"
-          className="rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-teal-500 active:scale-95"
+          className="min-h-11 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-teal-500 active:scale-95"
         >
           {initialData ? "Save Changes" : "Add Medicine"}
         </button>

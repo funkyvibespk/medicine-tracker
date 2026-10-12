@@ -105,14 +105,8 @@ export default function Header() {
           </Link>
         </div>
 
-        {/* Mobile controls (Compact Get Started + Hamburger Menu) */}
-        <div className="flex sm:hidden items-center gap-2">
-          <Link
-            href="/auth?mode=signup"
-            className="whitespace-nowrap rounded-lg bg-teal-700 px-2.5 py-2 text-[11px] font-semibold text-white shadow-xs hover:bg-teal-600 active:scale-95 transition-all"
-          >
-            Get Started
-          </Link>
+        {/* Mobile menu control */}
+        <div className="flex sm:hidden items-center">
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
