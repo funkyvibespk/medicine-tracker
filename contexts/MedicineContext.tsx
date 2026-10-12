@@ -1,6 +1,14 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import {
+  ACTIVE_DEMO_EMAIL_KEY,
+  ACTIVE_DEMO_SESSION_KEY,
+  demoProfileStorageKey,
+  loadDemoProfile,
+  normalizeDemoEmail,
+  serializeDemoProfile,
+} from "@/lib/demoProfiles";
 
 export type MedicineType = "Tablet" | "Capsule" | "Syrup" | "Sachet" | "Injection";
 
@@ -51,6 +59,9 @@ interface MedicineContextType {
   addStock: (medicineId: string, amount: number) => void;
   isHydrated: boolean;
   clearAll: () => void;
+  activeProfileEmail: string | null;
+  activateProfile: (email: string, options?: { migrateLegacy?: boolean }) => void;
+  deactivateProfile: () => void;
 }
 
 const MedicineContext = createContext<MedicineContextType | undefined>(undefined);
@@ -59,27 +70,54 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [doseRecords, setDoseRecords] = useState<DoseRecord[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [activeProfileEmail, setActiveProfileEmail] = useState<string | null>(null);
+
+  const activateProfile = (emailInput: string, options?: { migrateLegacy?: boolean }) => {
+    const email = normalizeDemoEmail(emailInput);
+    const profile = loadDemoProfile(localStorage, email, options);
+    setIsHydrated(false);
+    setMedicines(profile.medicines as Medicine[]);
+    setDoseRecords(profile.doseRecords as DoseRecord[]);
+    setActiveProfileEmail(email);
+    setIsHydrated(true);
+  };
+
+  const deactivateProfile = () => {
+    setIsHydrated(false);
+    setMedicines([]);
+    setDoseRecords([]);
+    setActiveProfileEmail(null);
+    setIsHydrated(true);
+  };
 
   useEffect(() => {
     try {
-      const storedMeds = localStorage.getItem("medTracker_medicines");
-      const storedDoses = localStorage.getItem("medTracker_doses");
-      // localStorage can only be read after hydration; restore saved client state here.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (storedMeds) setMedicines(JSON.parse(storedMeds));
-      if (storedDoses) setDoseRecords(JSON.parse(storedDoses));
+      const sessionActive = sessionStorage.getItem(ACTIVE_DEMO_SESSION_KEY) === "active";
+      const email = sessionActive ? normalizeDemoEmail(sessionStorage.getItem(ACTIVE_DEMO_EMAIL_KEY) ?? "") : "";
+      if (email) {
+        const profile = loadDemoProfile(localStorage, email, {
+          migrateLegacy: email !== "google-demo@chilldose.invalid",
+        });
+        // localStorage can only be read after hydration; restore saved client state here.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setMedicines(profile.medicines as Medicine[]);
+        setDoseRecords(profile.doseRecords as DoseRecord[]);
+        setActiveProfileEmail(email);
+      }
     } catch (e) {
-      console.error("Failed to parse local storage", e);
+      console.error("Failed to load the local demo profile safely", e);
     }
     setIsHydrated(true);
   }, []);
 
   useEffect(() => {
-    if (isHydrated) {
-      localStorage.setItem("medTracker_medicines", JSON.stringify(medicines));
-      localStorage.setItem("medTracker_doses", JSON.stringify(doseRecords));
+    if (isHydrated && activeProfileEmail) {
+      localStorage.setItem(
+        demoProfileStorageKey(activeProfileEmail),
+        serializeDemoProfile({ email: activeProfileEmail, medicines, doseRecords }),
+      );
     }
-  }, [medicines, doseRecords, isHydrated]);
+  }, [medicines, doseRecords, isHydrated, activeProfileEmail]);
 
   const addMedicine = (med: Medicine) => {
     setMedicines((prev) => [...prev, med]);
@@ -161,6 +199,9 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
         addStock,
         isHydrated,
         clearAll,
+        activeProfileEmail,
+        activateProfile,
+        deactivateProfile,
       }}
     >
       {children}

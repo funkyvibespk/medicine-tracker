@@ -36,7 +36,7 @@ export default function Footer() {
                 </a>
               </li>
               <li>
-                <Link href="/dashboard" className="text-sm text-slate-600 hover:text-teal-600 transition-colors dark:text-slate-400 dark:hover:text-teal-400">
+                <Link href="/#product-demo" className="text-sm text-slate-600 hover:text-teal-600 transition-colors dark:text-slate-400 dark:hover:text-teal-400">
                   Product Demo
                 </Link>
               </li>

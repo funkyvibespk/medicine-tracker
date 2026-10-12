@@ -4,6 +4,8 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BrandLogo } from "@/components/BrandLogo";
+import { useMedicine } from "@/contexts/MedicineContext";
+import { ACTIVE_DEMO_EMAIL_KEY, ACTIVE_DEMO_SESSION_KEY, GOOGLE_DEMO_EMAIL, normalizeDemoEmail } from "@/lib/demoProfiles";
 
 type AuthMode = "login" | "signup";
 type AuthExperienceProps = { initialMode: AuthMode };
@@ -21,6 +23,7 @@ function GoogleMark() {
 
 export default function AuthExperience({ initialMode }: AuthExperienceProps) {
   const router = useRouter();
+  const { activateProfile } = useMedicine();
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [showPassword, setShowPassword] = useState(false);
   const [showSignupForm, setShowSignupForm] = useState(false);
@@ -34,15 +37,18 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
     window.history.replaceState(null, "", `/auth?mode=${nextMode}`);
   };
 
-  const continueToLocalTracker = (destination: "/dashboard" | "/setup") => {
-    sessionStorage.setItem("chilldose_demo_session", "active");
-    router.push(destination);
+  const continueToLocalTracker = (destination: "/dashboard" | "/setup", email: string, migrateLegacy = true, delayMs = 0) => {
+    activateProfile(email, { migrateLegacy });
+    sessionStorage.setItem(ACTIVE_DEMO_EMAIL_KEY, normalizeDemoEmail(email));
+    sessionStorage.setItem(ACTIVE_DEMO_SESSION_KEY, "active");
+    if (delayMs > 0) window.setTimeout(() => router.push(destination), delayMs);
+    else router.push(destination);
   };
 
   const handleEmailSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    const email = String(formData.get("email") ?? "").trim();
+    const email = normalizeDemoEmail(String(formData.get("email") ?? ""));
     const password = String(formData.get("password") ?? "");
     if (!email || !password) {
       setFeedback("Enter your email and password to continue.");
@@ -52,14 +58,21 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
       setFeedback("Enter a valid email address.");
       return;
     }
-    setFeedback("");
-    continueToLocalTracker(mode === "signup" ? "/setup" : "/dashboard");
+    try {
+      continueToLocalTracker(mode === "signup" ? "/setup" : "/dashboard", email);
+      setFeedback("");
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Could not open this local demo profile safely.");
+    }
   };
 
   const handleGoogleDemo = () => {
-    setFeedback("Google sign-in is not connected in this local prototype. Continuing opens the local tracker.");
-    sessionStorage.setItem("chilldose_demo_session", "active");
-    window.setTimeout(() => router.push(mode === "signup" ? "/setup" : "/dashboard"), 900);
+    setFeedback("Google sign-in is not connected. Continuing opens a separate local-only demo profile.");
+    try {
+      continueToLocalTracker(mode === "signup" ? "/setup" : "/dashboard", GOOGLE_DEMO_EMAIL, false, 900);
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Could not open the local demo profile safely.");
+    }
   };
 
   return (
@@ -151,7 +164,7 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
           {feedback && <p role="status" className="mt-4 rounded-xl border border-teal-100 bg-teal-50 px-4 py-3 text-sm leading-relaxed text-teal-900 dark:border-teal-900/60 dark:bg-teal-950/40 dark:text-teal-200">{feedback}</p>}
 
           <p className="mt-6 rounded-xl bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-500 dark:bg-slate-900 dark:text-slate-400">
-            This is a frontend prototype. Email and password are only checked in this form; credentials are not sent, verified, or saved. Medicine data remains local to this browser and is not separated by account.
+            This is a frontend prototype. Email and password are not sent to a server or authenticated. Your normalized email is stored in this browser to select its local profile; passwords are not saved. Existing tracker records are copied to the first email profile used, and the original local data is retained.
           </p>
 
           <p className="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">

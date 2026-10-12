@@ -1,37 +1,18 @@
-import Link from "next/link";
 import { BrandLogo } from "@/components/BrandLogo";
 
-const sampleDoses = [
-  {
-    time: "8:00 AM",
-    name: "Calan",
-    detail: "Tablet · 40 mg · 1 tablet",
-    stock: "30 tablets remaining",
-    status: "Taken at 8:05 AM",
-    tone: "taken",
-  },
-  {
-    time: "2:00 PM",
-    name: "Vitamin D",
-    detail: "Capsule · 1000 IU · 1 capsule",
-    stock: "18 capsules remaining",
-    status: "Upcoming",
-    tone: "upcoming",
-  },
-  {
-    time: "8:00 PM",
-    name: "Omeprazole",
-    detail: "Capsule · 20 mg · 1 capsule",
-    stock: "4 capsules remaining · Low stock",
-    status: "Upcoming",
-    tone: "upcoming",
-  },
+const overviewCards = [
+  { label: "Today’s doses", value: "—", note: "Your schedule" },
+  { label: "Active medicines", value: "—", note: "Your medicine list" },
+  { label: "Stock alerts", value: "—", note: "Inventory status" },
+  { label: "Adherence", value: "—", note: "Your recent progress" },
 ];
+
+const workspaceLinks = ["Overview", "Medicines", "Inventory", "History"];
 
 export default function DashboardPreview() {
   return (
-    <section className="relative z-20 -mt-28 scroll-mt-24 px-3 pb-14 sm:-mt-36 sm:px-6 sm:pb-20 lg:-mt-40 lg:px-8 lg:pb-24">
-      <div className="mx-auto max-w-5xl overflow-hidden rounded-2xl border border-white/90 bg-white shadow-[0_28px_90px_-32px_rgba(15,23,42,0.28)] ring-1 ring-slate-200/70 sm:rounded-3xl dark:border-slate-800 dark:bg-slate-900 dark:ring-slate-700/70">
+    <section id="product-demo" aria-labelledby="product-demo-title" className="relative z-20 -mt-28 scroll-mt-24 px-3 pb-14 sm:-mt-36 sm:px-6 sm:pb-20 lg:-mt-40 lg:px-8 lg:pb-24">
+      <div className="mx-auto max-w-6xl overflow-hidden rounded-2xl border border-white/90 bg-white shadow-[0_28px_90px_-32px_rgba(15,23,42,0.28)] ring-1 ring-slate-200/70 sm:rounded-3xl dark:border-slate-800 dark:bg-slate-900 dark:ring-slate-700/70">
         <header className="flex items-center justify-between gap-3 border-b border-slate-200/80 bg-white px-4 py-3 sm:px-6 dark:border-slate-800 dark:bg-slate-900">
           <div className="flex min-w-0 items-center gap-3">
             <BrandLogo markClassName="h-9 w-9" wordmarkClassName="text-base font-bold" />
@@ -39,59 +20,75 @@ export default function DashboardPreview() {
               Dashboard
             </span>
           </div>
-          <span className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-teal-600 px-3 py-2 text-xs font-semibold text-white shadow-sm sm:px-4 sm:text-sm">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="h-4 w-4" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
-            <span className="hidden sm:inline">Add Medicine</span>
-            <span className="sm:hidden">Add</span>
+          <span className="shrink-0 rounded-full border border-teal-100 bg-teal-50 px-3 py-1.5 text-[11px] font-semibold text-teal-800 dark:border-teal-900/50 dark:bg-teal-950/50 dark:text-teal-300">
+            Read-only preview
           </span>
         </header>
 
-        <div className="bg-slate-50/70 p-4 sm:p-6 lg:p-8 dark:bg-slate-950/50">
-          <div className="mb-5 rounded-2xl border border-teal-100 bg-gradient-to-r from-teal-500/10 via-emerald-500/5 to-transparent p-4 shadow-sm sm:p-6 dark:border-teal-900/40 dark:from-teal-950/40 dark:via-emerald-950/20">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 bg-slate-50/70 dark:bg-slate-950/50">
+          <aside className="hidden w-52 shrink-0 border-r border-slate-200 bg-white px-3 py-6 lg:block dark:border-slate-800 dark:bg-slate-900/40" aria-label="Preview workspace navigation">
+            <p className="px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Workspace</p>
+            <ul className="mt-3 space-y-1">
+              {workspaceLinks.map((label, index) => (
+                <li key={label} className={`rounded-xl px-3 py-2.5 text-xs font-semibold ${index === 0 ? "bg-teal-50 text-teal-800 dark:bg-teal-950/50 dark:text-teal-200" : "text-slate-500 dark:text-slate-400"}`}>
+                  {label}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-10 rounded-2xl bg-teal-50 p-3 text-xs text-teal-900 dark:bg-teal-950/40 dark:text-teal-200">
+              Your tracker data stays in your browser.
+            </div>
+          </aside>
+
+          <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-teal-700 dark:text-teal-300">Today&apos;s Schedule</p>
-                <h2 className="mt-1 text-xl font-bold tracking-tight text-slate-950 sm:text-2xl dark:text-white">Your daily doses</h2>
-                <p className="mt-1 text-xs text-slate-500 sm:text-sm dark:text-slate-400">A clear view of what&apos;s taken and what&apos;s coming up.</p>
+                <h2 id="product-demo-title" className="text-lg font-bold tracking-tight text-slate-950 sm:text-xl dark:text-white">Your dashboard</h2>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">A calm overview of your medicine routine.</p>
               </div>
-              <div className="min-w-44 rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200/70 dark:bg-slate-900 dark:ring-slate-800">
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Today&apos;s adherence</span>
-                  <span className="text-lg font-extrabold text-teal-700 dark:text-teal-300">33%</span>
+              <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">Illustrative layout</span>
+            </div>
+
+            <section aria-label="Preview overview cards" className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+              {overviewCards.map((card) => (
+                <article key={card.label} className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4 dark:border-slate-800 dark:bg-slate-900">
+                  <p className="truncate text-[11px] font-semibold text-slate-500 sm:text-xs dark:text-slate-400">{card.label}</p>
+                  <p className="mt-2 text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">{card.value}</p>
+                  <p className="mt-1 truncate text-[10px] text-slate-500 dark:text-slate-400">{card.note}</p>
+                </article>
+              ))}
+            </section>
+
+            <div className="grid min-w-0 gap-4 xl:grid-cols-[1.25fr_1fr]">
+              <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 dark:border-slate-800 dark:bg-slate-900" aria-labelledby="preview-schedule-title">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 id="preview-schedule-title" className="text-sm font-bold text-slate-900 dark:text-white">Today&apos;s schedule</h3>
+                    <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Scheduled doses appear here.</p>
+                  </div>
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">Today</span>
                 </div>
-                <p className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">1 of 3 doses taken</p>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                  <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-teal-500 to-emerald-400" />
+                <div className="mt-4 flex min-h-28 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 text-center text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-950/50 dark:text-slate-400">
+                  Add a medicine to see its schedule in your dashboard.
                 </div>
+              </section>
+
+              <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-1">
+                <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 dark:border-slate-800 dark:bg-slate-900" aria-labelledby="preview-adherence-title">
+                  <h3 id="preview-adherence-title" className="text-sm font-bold text-slate-900 dark:text-white">Adherence this week</h3>
+                  <div className="mt-4 flex h-20 items-center justify-center rounded-xl bg-slate-50 text-xs text-slate-500 dark:bg-slate-950/50 dark:text-slate-400">No tracker data in this preview</div>
+                </section>
+                <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 dark:border-slate-800 dark:bg-slate-900" aria-labelledby="preview-activity-title">
+                  <h3 id="preview-activity-title" className="text-sm font-bold text-slate-900 dark:text-white">Recent activity</h3>
+                  <div className="mt-4 flex h-12 items-center rounded-xl bg-slate-50 px-3 text-xs text-slate-500 dark:bg-slate-950/50 dark:text-slate-400">Activity from your profile would appear here.</div>
+                </section>
               </div>
             </div>
-          </div>
-
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 sm:text-base dark:text-white">Scheduled medicines</h3>
-              <p className="mt-0.5 text-[11px] text-slate-500 sm:text-xs dark:text-slate-400">Each dose has its own time and status.</p>
-            </div>
-            <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-500 sm:text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">Sample data</span>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {sampleDoses.map((dose) => (
-              <article key={dose.name} className={`flex min-w-0 flex-col rounded-2xl border p-4 shadow-sm ${dose.tone === "taken" ? "border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/50 dark:bg-emerald-950/20" : "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"}`}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200">{dose.time}</span>
-                  <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${dose.tone === "taken" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300" : "bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300"}`}>{dose.status}</span>
-                </div>
-                <h4 className="mt-4 text-base font-bold text-slate-950 dark:text-white">{dose.name}</h4>
-                <p className="mt-1 text-xs font-medium text-teal-700 dark:text-teal-300">{dose.detail}</p>
-                <p className={`mt-3 text-[11px] ${dose.stock.includes("Low stock") ? "font-semibold text-amber-700 dark:text-amber-300" : "text-slate-500 dark:text-slate-400"}`}>{dose.stock}</p>
-              </article>
-            ))}
-          </div>
+          </main>
         </div>
       </div>
       <p className="mx-auto mt-4 max-w-3xl px-4 text-center text-xs text-slate-500 dark:text-slate-400">
-        Sample screen for illustration. <Link href="/dashboard" className="font-semibold text-teal-700 underline decoration-teal-300 underline-offset-4 hover:text-teal-800 dark:text-teal-300">Open your live dashboard</Link> to use your saved medicine and dose data.
+        This preview is static and does not read or change your medicines, dose history, or inventory.
       </p>
     </section>
   );

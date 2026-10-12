@@ -8,6 +8,7 @@ import MedicineForm from "@/components/dashboard/MedicineForm";
 import BottomNav from "@/components/dashboard/BottomNav";
 import WorkspaceNav from "@/components/dashboard/WorkspaceNav";
 import { BrandLogo } from "@/components/BrandLogo";
+import { ACTIVE_DEMO_EMAIL_KEY, ACTIVE_DEMO_SESSION_KEY } from "@/lib/demoProfiles";
 import { formatDuration, getScheduledTimesForDate, isPrnMedicine, localDateString } from "@/lib/schedule";
 import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
 
@@ -38,6 +39,8 @@ export default function DashboardPage() {
     deleteMedicine,
     addStock,
     isHydrated,
+    deactivateProfile,
+    activeProfileEmail,
   } = useMedicine();
 
   const [now, setNow] = useState<Date>(new Date(0));
@@ -209,7 +212,9 @@ export default function DashboardPage() {
   const upcomingDoses = todaysDoses.filter((dose) => dose.status === "upcoming").sort((a, b) => a.scheduledDateObj.getTime() - b.scheduledDateObj.getTime()).slice(0, 4);
 
   const handleLogout = () => {
-    sessionStorage.removeItem("chilldose_demo_session");
+    sessionStorage.removeItem(ACTIVE_DEMO_SESSION_KEY);
+    sessionStorage.removeItem(ACTIVE_DEMO_EMAIL_KEY);
+    deactivateProfile();
     router.push("/auth?mode=login");
   };
 
@@ -375,8 +380,9 @@ export default function DashboardPage() {
               <button type="button" aria-label="Close profile menu" onClick={() => setProfileMenuOpen(false)} className="fixed inset-0 z-10 cursor-default" />
               <div role="menu" className="absolute right-0 top-12 z-20 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900">
                 <div className="border-b border-slate-100 px-3 py-3 dark:border-slate-800">
-                  <p className="text-sm font-semibold text-slate-900 dark:text-white">Local demo</p>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">Medicine data is stored in this browser and is not linked to an account.</p>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">Local demo profile</p>
+                  <p className="mt-1 break-all text-xs leading-relaxed text-slate-500 dark:text-slate-400">{activeProfileEmail ?? "No email profile selected"}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">Tracker data stays in this browser and is not linked to an account.</p>
                 </div>
                 <button type="button" role="menuitem" onClick={handleLogout} className="mt-2 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-rose-700 transition hover:bg-rose-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 dark:text-rose-300 dark:hover:bg-rose-950/40">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true"><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg>
