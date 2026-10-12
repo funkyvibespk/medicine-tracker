@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMedicine, Medicine, DoseRecord, DoseStatus } from "@/contexts/MedicineContext";
 import MedicineForm from "@/components/dashboard/MedicineForm";
 import BottomNav from "@/components/dashboard/BottomNav";
@@ -23,7 +24,19 @@ type ScheduledDose = {
   scheduledDateObj: Date;
 };
 
+type DoseFilter = "all" | "pending" | "taken";
+type WorkspaceDestination = "/dashboard" | "/medicines" | "/inventory" | "/history";
+
+function WorkspaceIcon({ destination }: { destination: WorkspaceDestination }) {
+  const common = { className: "h-5 w-5", "aria-hidden": true as const };
+  if (destination === "/dashboard") return <svg {...common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>;
+  if (destination === "/medicines") return <svg {...common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></svg>;
+  if (destination === "/inventory") return <svg {...common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3 9 5v8l-9 5-9-5V8l9-5Z"/><path d="m3.5 7.5 8.5 5 8.5-5M12 21v-8.5"/></svg>;
+  return <svg {...common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>;
+}
+
 export default function DashboardPage() {
+  const router = useRouter();
   const {
     medicines,
     doseRecords,
@@ -46,6 +59,8 @@ export default function DashboardPage() {
   const [takingEarly, setTakingEarly] = useState<(ScheduledDose & { earlyBy: number }) | null>(null);
   const [addingStockMed, setAddingStockMed] = useState<Medicine | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [doseFilter, setDoseFilter] = useState<DoseFilter>("all");
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   useDialogFocusRestore(Boolean(isAddModalOpen || editingMedicine || deletingMedicine || changingDose || takingEarly || addingStockMed));
   
   // Form states for dialogs
@@ -67,6 +82,7 @@ export default function DashboardPage() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setOpenMenuId(null);
+        setProfileMenuOpen(false);
         setIsAddModalOpen(false);
         setEditingMedicine(null);
         setDeletingMedicine(null);
@@ -158,8 +174,53 @@ export default function DashboardPage() {
 
   const overdueCount = todaysDoses.filter((d) => d.status === "overdue").length;
   const takenCount = todaysDoses.filter((d) => d.status.startsWith("taken")).length;
-  const progressPercent = todaysDoses.length > 0 ? Math.round((takenCount / todaysDoses.length) * 100) : 0;
   const prnMedicines = medicines.filter((med) => isPrnMedicine(med) && med.startDate <= todayStr && (!med.endDate || med.endDate >= todayStr));
+
+  const activeMedicines = medicines.filter((medicine) => medicine.startDate <= todayStr && (!medicine.endDate || medicine.endDate >= todayStr));
+  const stockAlerts = medicines.filter((medicine) => medicine.inventoryAmount <= medicine.lowStockThreshold);
+  const filteredDoses = todaysDoses.filter((dose) => {
+    if (doseFilter === "taken") return dose.status.startsWith("taken");
+    if (doseFilter === "pending") return !dose.status.startsWith("taken");
+    return true;
+  });
+
+  const weeklyAdherence = useMemo(() => {
+    if (now.getTime() === 0) return [];
+    return Array.from({ length: 7 }, (_, index) => {
+      const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (6 - index));
+      const date = localDateString(day);
+      let expected = 0;
+      let taken = 0;
+      for (const medicine of medicines) {
+        const times = getScheduledTimesForDate(medicine, date).filter((time) => {
+          if (date !== todayStr) return true;
+          const [hours, minutes] = time.split(":").map(Number);
+          return new Date(day.getFullYear(), day.getMonth(), day.getDate(), hours, minutes) <= now;
+        });
+        for (const time of times) {
+          expected++;
+          if (doseRecords.some((record) => record.medicineId === medicine.id && record.scheduledDate === date && record.scheduledTime === time && Boolean(record.actualTakenTime) && !record.isPrn)) taken++;
+        }
+      }
+      return { date, label: day.toLocaleDateString(undefined, { weekday: "short" }), expected, taken, percent: expected ? Math.round((taken / expected) * 100) : null };
+    });
+  }, [medicines, doseRecords, now, todayStr]);
+
+  const recentActivity = useMemo(() => doseRecords
+    .filter((record) => Boolean(record.actualTakenTime))
+    .slice()
+    .sort((a, b) => new Date(b.actualTakenTime!).getTime() - new Date(a.actualTakenTime!).getTime())
+    .slice(0, 5), [doseRecords]);
+
+  const weeklyExpected = weeklyAdherence.reduce((total, day) => total + day.expected, 0);
+  const weeklyTaken = weeklyAdherence.reduce((total, day) => total + day.taken, 0);
+  const weeklyPercent = weeklyExpected ? Math.round((weeklyTaken / weeklyExpected) * 100) : null;
+  const upcomingDoses = todaysDoses.filter((dose) => dose.status === "upcoming").sort((a, b) => a.scheduledDateObj.getTime() - b.scheduledDateObj.getTime()).slice(0, 4);
+
+  const handleLogout = () => {
+    sessionStorage.removeItem("chilldose_demo_session");
+    router.push("/auth?mode=login");
+  };
 
   // Handlers
 
@@ -288,11 +349,11 @@ export default function DashboardPage() {
   if (!isHydrated || now.getTime() === 0) return <div className="min-h-screen bg-slate-50 dark:bg-slate-950" />;
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-100 pb-20">
+      <div className="min-h-screen bg-slate-50 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-100 pb-20">
       
       {/* Top Navigation */}
       <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/80 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/80">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3.5 sm:px-6">
+        <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4 px-4 py-3.5 sm:px-6 lg:px-8">
           <div className="flex items-center gap-2.5">
             <Link href="/" aria-label="ChillDose home" className="rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">
               <BrandLogo markClassName="h-9 w-9" />
@@ -315,11 +376,52 @@ export default function DashboardPage() {
             </svg>
             <span className="hidden sm:inline">Add Medicine</span>
           </button>
+          <div className="relative z-20">
+            <button type="button" onClick={() => setProfileMenuOpen((open) => !open)} aria-label="Open local profile menu" aria-haspopup="menu" aria-expanded={profileMenuOpen} className="flex h-10 w-10 items-center justify-center rounded-full bg-teal-100 text-sm font-bold text-teal-800 ring-2 ring-white transition hover:bg-teal-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:bg-teal-900/60 dark:text-teal-200 dark:ring-slate-900 dark:hover:bg-teal-900">
+              CD
+            </button>
+            {profileMenuOpen && <>
+              <button type="button" aria-label="Close profile menu" onClick={() => setProfileMenuOpen(false)} className="fixed inset-0 z-10 cursor-default" />
+              <div role="menu" className="absolute right-0 top-12 z-20 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+                <div className="border-b border-slate-100 px-3 py-3 dark:border-slate-800">
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">Local demo</p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">Medicine data is stored in this browser and is not linked to an account.</p>
+                </div>
+                <button type="button" role="menuitem" onClick={handleLogout} className="mt-2 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-rose-700 transition hover:bg-rose-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 dark:text-rose-300 dark:hover:bg-rose-950/40">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true"><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg>
+                  Log Out
+                </button>
+              </div>
+            </>}
+          </div>
         </div>
       </header>
 
-      {/* Main Content Area */}
-      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+      <div className="mx-auto flex w-full max-w-[1440px]">
+        <aside className="hidden w-60 shrink-0 border-r border-slate-200 bg-white px-4 py-6 lg:block dark:border-slate-800 dark:bg-slate-900/40">
+          <p className="px-3 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Workspace</p>
+          <nav className="mt-3 space-y-1" aria-label="Dashboard navigation">
+            {([
+              ["/dashboard", "Overview"],
+              ["/medicines", "Medicines"],
+              ["/inventory", "Inventory"],
+              ["/history", "History"],
+            ] as [WorkspaceDestination, string][]).map(([href, label]) => <Link key={href} href={href} aria-current={href === "/dashboard" ? "page" : undefined} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${href === "/dashboard" ? "bg-teal-50 text-teal-800 dark:bg-teal-950/50 dark:text-teal-200" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"}`}><WorkspaceIcon destination={href} />{label}</Link>)}
+          </nav>
+          <div className="mt-10 rounded-2xl border border-teal-100 bg-gradient-to-br from-teal-50 to-white p-4 dark:border-teal-900/50 dark:from-teal-950/40 dark:to-slate-900">
+            <p className="text-sm font-semibold text-slate-900 dark:text-white">Stay on track</p>
+            <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">Your medicines and dose history stay in this browser.</p>
+          </div>
+        </aside>
+
+      <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl dark:text-white">Your dashboard</h1>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">A clear overview of your medicine routine for {now.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}.</p>
+          </div>
+          <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300"><span className="h-1.5 w-1.5 rounded-full bg-amber-500"/>Local prototype</span>
+        </div>
         
         {/* Overdue Alert */}
         {overdueCount > 0 && (
@@ -331,38 +433,55 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Welcome Hero Banner */}
-        <section className="mb-8 rounded-2xl border border-teal-100 bg-gradient-to-r from-teal-500/10 via-emerald-500/5 to-transparent p-6 shadow-sm dark:border-teal-900/40 dark:from-teal-950/40 dark:via-emerald-950/20 sm:p-8">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-1.5">
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl dark:text-white">
-                Today&apos;s Schedule
-              </h1>
-              <p className="text-sm text-slate-600 sm:text-base dark:text-slate-300">
-                {now.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
-              </p>
+        <section aria-label="Medicine overview" className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            { label: "Today’s doses", value: `${takenCount} / ${todaysDoses.length}`, note: "Completed", href: "#todays-schedule", tone: "teal" },
+            { label: "Active medicines", value: activeMedicines.length, note: "In your schedule", href: "/medicines", tone: "blue" },
+            { label: "Stock alerts", value: stockAlerts.length, note: stockAlerts.length ? "Need attention" : "Stock looks good", href: "/inventory", tone: "amber" },
+            { label: "Adherence", value: weeklyPercent === null ? "—" : `${weeklyPercent}%`, note: weeklyExpected ? `${weeklyTaken} of ${weeklyExpected} scheduled doses this week` : "No scheduled doses recorded this week", href: "/history", tone: "violet" },
+          ].map((card) => <Link key={card.label} href={card.href} className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-teal-800">
+            <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">{card.label}</p>
+            <p className="mt-2 text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">{card.value}</p>
+            <p className="mt-1 min-h-5 text-xs text-slate-500 dark:text-slate-400">{card.note}</p>
+          </Link>)}
+        </section>
+
+        <section className="mb-6 grid gap-4 xl:grid-cols-[1.35fr_1fr]">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-start justify-between gap-3">
+              <div><h2 className="font-bold text-slate-900 dark:text-white">Adherence this week</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Based on scheduled doses in your current medicine list.</p></div>
+              {weeklyPercent !== null && <span className="rounded-lg bg-teal-50 px-2.5 py-1 text-sm font-bold text-teal-700 dark:bg-teal-950/50 dark:text-teal-300">{weeklyPercent}%</span>}
             </div>
-            <div className="flex items-center gap-3 self-start sm:self-auto">
-              <div className="rounded-xl bg-white px-4 py-3 shadow-xs ring-1 ring-slate-200/70 dark:bg-slate-900 dark:ring-slate-800">
-                <p className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Adherence
-                </p>
-                <div className="mt-1 flex items-baseline gap-2">
-                  <span className="text-2xl font-extrabold text-teal-600 dark:text-teal-400">
-                    {progressPercent}%
-                  </span>
-                  <span className="text-xs text-slate-500 dark:text-slate-400">
-                    ({takenCount}/{todaysDoses.length} taken)
-                  </span>
-                </div>
-              </div>
-            </div>
+            {weeklyExpected === 0 ? <div className="mt-6 flex min-h-32 items-center justify-center rounded-xl bg-slate-50 px-4 text-center text-sm text-slate-500 dark:bg-slate-950/50 dark:text-slate-400">No scheduled doses to chart for the last 7 days.</div> : <div className="mt-6 grid h-36 grid-cols-7 items-end gap-2" aria-label={`Weekly adherence ${weeklyPercent} percent`}>
+              {weeklyAdherence.map((day) => <div key={day.date} className="flex h-full flex-col items-center justify-end gap-2" title={`${day.date}: ${day.taken} of ${day.expected} scheduled doses taken`}>
+                <span className="text-[10px] font-medium text-slate-500">{day.percent === null ? "—" : `${day.percent}%`}</span>
+                <div className="flex h-24 w-full items-end overflow-hidden rounded-t-lg bg-slate-100 dark:bg-slate-800"><div className="w-full rounded-t-lg bg-gradient-to-t from-teal-600 to-emerald-400 transition-all" style={{ height: `${day.percent ?? 0}%`, minHeight: day.percent === 0 ? 3 : undefined }} /></div>
+                <span className="text-[10px] font-medium text-slate-500">{day.label}</span>
+              </div>)}
+            </div>}
           </div>
-          <div className="mt-5 h-2 w-full overflow-hidden rounded-full bg-slate-200/80 dark:bg-slate-800">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-teal-500 to-emerald-400 transition-all duration-500"
-              style={{ width: `${progressPercent}%` }}
-            />
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center justify-between gap-2"><div><h2 className="font-bold text-slate-900 dark:text-white">Recent activity</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Recorded dose events</p></div><Link href="/history" className="rounded text-xs font-semibold text-teal-700 hover:text-teal-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:text-teal-300">View history</Link></div>
+            {recentActivity.length === 0 ? <p className="mt-5 rounded-xl bg-slate-50 px-4 py-5 text-center text-sm text-slate-500 dark:bg-slate-950/50 dark:text-slate-400">Taken doses will appear here.</p> : <ul className="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
+              {recentActivity.map((record) => {
+                const medicineName = record.medicineName ?? medicines.find((medicine) => medicine.id === record.medicineId)?.name ?? "Deleted medicine";
+                const takenAt = record.actualTakenTime ? new Date(record.actualTakenTime) : null;
+                return <li key={record.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"><div className="flex min-w-0 items-center gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" aria-hidden="true">✓</span><div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{medicineName} taken</p><p className="text-xs text-slate-500 dark:text-slate-400">{record.isPrn ? "As needed" : `Scheduled ${format12Hour(record.scheduledTime)}`}</p></div></div><span className="shrink-0 text-[11px] text-slate-500 dark:text-slate-400">{takenAt && !Number.isNaN(takenAt.getTime()) ? takenAt.toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" }) : "Recorded"}</span></li>;
+              })}
+            </ul>}
+          </div>
+        </section>
+
+        <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-bold text-slate-900 dark:text-white">Upcoming doses</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">The next scheduled doses today</p></div><Link href="#todays-schedule" className="text-xs font-semibold text-teal-700 hover:text-teal-600 dark:text-teal-300">Open today&apos;s schedule →</Link></div>
+          {upcomingDoses.length === 0 ? <p className="mt-4 rounded-xl bg-slate-50 px-4 py-4 text-sm text-slate-500 dark:bg-slate-950/50 dark:text-slate-400">No upcoming scheduled doses today.</p> : <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{upcomingDoses.map((dose) => <div key={dose.id} className="flex min-w-0 items-center gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-950/50"><span className="shrink-0 rounded-lg bg-white px-2 py-1 text-xs font-bold text-teal-700 shadow-sm dark:bg-slate-800 dark:text-teal-300">{format12Hour(dose.time)}</span><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900 dark:text-white">{dose.med.name}</span><span className="block text-xs text-slate-500 dark:text-slate-400">{dose.med.doseAmount} {getUnit(dose.med.type)}</span></span></div>)}</div>}
+        </section>
+
+        <section id="todays-schedule" className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div><h2 className="text-xl font-bold text-slate-900 dark:text-white">Today&apos;s schedule</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Scheduled doses and their current status.</p></div>
+          <div className="inline-flex rounded-xl bg-slate-100 p-1 dark:bg-slate-900" role="group" aria-label="Filter today's doses">
+            {(["all", "pending", "taken"] as DoseFilter[]).map((filter) => <button key={filter} type="button" onClick={() => setDoseFilter(filter)} aria-pressed={doseFilter === filter} className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${doseFilter === filter ? "bg-white text-teal-800 shadow-sm dark:bg-slate-800 dark:text-teal-200" : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"}`}>{filter === "all" ? `All ${todaysDoses.length}` : filter === "pending" ? `Pending ${todaysDoses.length - takenCount}` : `Taken ${takenCount}`}</button>)}
           </div>
         </section>
 
@@ -385,12 +504,12 @@ export default function DashboardPage() {
               </button>
             </div>
           </div>
-        ) : todaysDoses.length === 0 && prnMedicines.length === 0 ? (
-          <div className="text-center py-12 text-slate-500">No doses scheduled for today.</div>
+        ) : filteredDoses.length === 0 && prnMedicines.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">{doseFilter === "taken" ? "No doses marked as taken today." : doseFilter === "pending" ? "All scheduled doses are marked as taken." : "No doses scheduled for today."}</div>
         ) : (
           <div className="space-y-5">
-          {todaysDoses.length > 0 && <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {todaysDoses.map((dose) => (
+          {filteredDoses.length > 0 && <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {filteredDoses.map((dose) => (
               <div
                 key={dose.id}
                 className={`group relative flex flex-col justify-between rounded-2xl border p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
@@ -531,6 +650,7 @@ export default function DashboardPage() {
               </div>
             ))}
           </div>}
+          {filteredDoses.length === 0 && prnMedicines.length > 0 && <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500 dark:bg-slate-900">No scheduled doses match this filter.</p>}
           {prnMedicines.length > 0 && <section>
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">As needed</h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -554,6 +674,7 @@ export default function DashboardPage() {
           </div>
         )}
       </main>
+      </div>
 
       {/* Modals */}
       
@@ -689,7 +810,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <BottomNav />
+      <BottomNav desktopHidden />
     </div>
   );
 }

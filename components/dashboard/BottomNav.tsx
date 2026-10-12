@@ -120,12 +120,12 @@ const navItems = [
   },
 ];
 
-export default function BottomNav() {
+export default function BottomNav({ desktopHidden = false }: { desktopHidden?: boolean }) {
   const pathname = usePathname();
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200/80 bg-white/90 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/90"
+      className={`fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200/80 bg-white/90 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/90${desktopHidden ? " lg:hidden" : ""}`}
       aria-label="Main navigation"
     >
       <div className="mx-auto flex max-w-lg items-center justify-around px-2 py-1.5 pb-safe">

@@ -18,7 +18,7 @@ export default function FinalCTA() {
         </p>
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link
-            href="/dashboard"
+            href="/auth?mode=signup"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-white px-6 py-3.5 text-base font-semibold text-teal-700 shadow-lg shadow-teal-900/30 transition-all hover:bg-teal-50 hover:shadow-xl active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
           >
             <span>Get Started</span>
@@ -28,7 +28,7 @@ export default function FinalCTA() {
             </svg>
           </Link>
           <Link
-            href="/auth"
+            href="/auth?mode=login"
             className="w-full sm:w-auto inline-flex items-center justify-center rounded-xl border border-white/30 px-6 py-3.5 text-sm font-semibold text-white backdrop-blur-xs transition-all hover:bg-white/10 hover:border-white/50 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
           >
             Sign In
