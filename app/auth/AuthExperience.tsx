@@ -37,7 +37,7 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
     window.history.replaceState(null, "", `/auth?mode=${nextMode}`);
   };
 
-  const continueToLocalTracker = (destination: "/dashboard" | "/setup", email: string, migrateLegacy = true, delayMs = 0) => {
+  const continueToLocalTracker = (destination: "/dashboard" | "/setup", email: string, migrateLegacy = false, delayMs = 0) => {
     activateProfile(email, { migrateLegacy });
     sessionStorage.setItem(ACTIVE_DEMO_EMAIL_KEY, normalizeDemoEmail(email));
     sessionStorage.setItem(ACTIVE_DEMO_SESSION_KEY, "active");
@@ -164,7 +164,7 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
           {feedback && <p role="status" className="mt-4 rounded-xl border border-teal-100 bg-teal-50 px-4 py-3 text-sm leading-relaxed text-teal-900 dark:border-teal-900/60 dark:bg-teal-950/40 dark:text-teal-200">{feedback}</p>}
 
           <p className="mt-6 rounded-xl bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-500 dark:bg-slate-900 dark:text-slate-400">
-            This is a frontend prototype. Email and password are not sent to a server or authenticated. Your normalized email is stored in this browser to select its local profile; passwords are not saved. Existing tracker records are copied to the first email profile used, and the original local data is retained.
+            This is a frontend prototype. Email and password are not sent to a server or authenticated. Your normalized email is stored in this browser to select its local profile; passwords are not saved. Older tracker records without an assigned profile remain preserved until you choose which local profile should receive them.
           </p>
 
           <p className="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">

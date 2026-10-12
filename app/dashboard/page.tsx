@@ -27,6 +27,15 @@ type ScheduledDose = {
 };
 
 type DoseFilter = "all" | "pending" | "taken";
+
+function profileInitials(email: string | null) {
+  const localPart = email?.split("@")[0] ?? "";
+  const parts = localPart.split(/[._-]+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return "U";
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const {
@@ -351,7 +360,7 @@ export default function DashboardPage() {
       <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/80 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/80">
         <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4 px-4 py-3.5 sm:px-6 lg:px-8">
           <div className="flex items-center gap-2.5">
-            <Link href="/" aria-label="ChillDose home" className="rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">
+            <Link href="/dashboard" aria-label="ChillDose dashboard" className="rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">
               <BrandLogo markClassName="h-9 w-9" />
             </Link>
             <div>
@@ -374,7 +383,7 @@ export default function DashboardPage() {
           </button>
           <div className="relative z-20">
             <button type="button" onClick={() => setProfileMenuOpen((open) => !open)} aria-label="Open local profile menu" aria-haspopup="menu" aria-expanded={profileMenuOpen} className="flex h-10 w-10 items-center justify-center rounded-full bg-teal-100 text-sm font-bold text-teal-800 ring-2 ring-white transition hover:bg-teal-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:bg-teal-900/60 dark:text-teal-200 dark:ring-slate-900 dark:hover:bg-teal-900">
-              CD
+              {profileInitials(activeProfileEmail)}
             </button>
             {profileMenuOpen && <>
               <button type="button" aria-label="Close profile menu" onClick={() => setProfileMenuOpen(false)} className="fixed inset-0 z-10 cursor-default" />
@@ -663,7 +672,7 @@ export default function DashboardPage() {
       
       {/* Add/Edit Modal */}
       {(isAddModalOpen || editingMedicine) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/60 p-4 backdrop-blur-xs overflow-y-auto">
           <div role="dialog" aria-modal="true" aria-labelledby="medicine-dialog-title" onKeyDown={keepDialogFocusInside} className="relative w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900 my-8">
             <h2 id="medicine-dialog-title" className="text-xl font-bold mb-4">{editingMedicine ? "Edit Medicine" : "Add Medicine"}</h2>
             <MedicineForm
