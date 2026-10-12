@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMedicine } from "@/contexts/MedicineContext";
 import BottomNav from "@/components/dashboard/BottomNav";
+import WorkspaceNav from "@/components/dashboard/WorkspaceNav";
 import { getScheduledTimesForDate, localDateString } from "@/lib/schedule";
 
 const pad = (n: number) => n.toString().padStart(2, "0");
@@ -114,7 +115,9 @@ export default function HistoryPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 space-y-6">
+      <div className="mx-auto flex w-full max-w-[1440px]">
+      <WorkspaceNav />
+      <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8 space-y-6">
 
         {/* 7-day Adherence Summary */}
         <section className="rounded-2xl border border-teal-100 bg-gradient-to-r from-teal-500/10 via-emerald-500/5 to-transparent p-5 shadow-sm dark:border-teal-900/40 dark:from-teal-950/40 dark:via-emerald-950/20">
@@ -211,6 +214,7 @@ export default function HistoryPage() {
           </div>
         )}
       </main>
+      </div>
 
       <BottomNav />
     </div>

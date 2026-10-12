@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useMedicine } from "@/contexts/MedicineContext";
 import BottomNav from "@/components/dashboard/BottomNav";
+import WorkspaceNav from "@/components/dashboard/WorkspaceNav";
 import { estimatedDosesPerDay } from "@/lib/schedule";
 import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
 
@@ -67,7 +68,9 @@ export default function InventoryPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+      <div className="mx-auto flex w-full max-w-[1440px]">
+      <WorkspaceNav />
+      <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
 
         {/* Alert banner */}
         {(outCount > 0 || lowCount > 0) && (
@@ -200,6 +203,7 @@ export default function InventoryPage() {
           </div>
         )}
       </main>
+      </div>
 
       {/* Add Stock Modal */}
       {addingMed && (

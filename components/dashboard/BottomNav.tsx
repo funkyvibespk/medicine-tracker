@@ -120,7 +120,7 @@ const navItems = [
   },
 ];
 
-export default function BottomNav({ desktopHidden = false }: { desktopHidden?: boolean }) {
+export default function BottomNav({ desktopHidden = true }: { desktopHidden?: boolean }) {
   const pathname = usePathname();
 
   return (

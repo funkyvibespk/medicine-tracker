@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMedicine, Medicine } from "@/contexts/MedicineContext";
 import MedicineForm from "@/components/dashboard/MedicineForm";
 import BottomNav from "@/components/dashboard/BottomNav";
+import WorkspaceNav from "@/components/dashboard/WorkspaceNav";
 import { estimatedDosesPerDay } from "@/lib/schedule";
 import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
 
@@ -68,7 +69,9 @@ export default function MedicinesPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+      <div className="mx-auto flex w-full max-w-[1440px]">
+      <WorkspaceNav />
+      <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
 
         {/* Search */}
         {medicines.length > 0 && (
@@ -207,6 +210,7 @@ export default function MedicinesPage() {
           </div>
         )}
       </main>
+      </div>
 
       {/* Add/Edit Modal */}
       {(isAddModalOpen || editingMedicine) && (
