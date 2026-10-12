@@ -44,7 +44,7 @@ function HeroNote({
 
 export default function Hero() {
   return (
-    <section className="relative isolate overflow-hidden bg-[radial-gradient(ellipse_at_50%_42%,rgba(20,184,166,0.08),transparent_57%)] pb-0 pt-8 sm:pt-10 lg:pt-3">
+    <section className="relative isolate overflow-hidden bg-[radial-gradient(ellipse_at_50%_42%,rgba(20,184,166,0.08),transparent_57%)] pb-28 pt-8 sm:pb-36 sm:pt-10 lg:pb-40 lg:pt-3">
       <div className="pointer-events-none absolute -left-44 top-40 -z-10 h-96 w-96 rounded-full bg-teal-100/40 blur-3xl dark:bg-teal-900/20" aria-hidden="true" />
       <div className="pointer-events-none absolute -right-48 top-12 -z-10 h-[30rem] w-[30rem] rounded-full bg-emerald-100/40 blur-3xl dark:bg-emerald-900/15" aria-hidden="true" />
 

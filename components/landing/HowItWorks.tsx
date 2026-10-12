@@ -28,7 +28,7 @@ export default function HowItWorks() {
     {
       number: "3",
       title: "Track your progress",
-      description: "See your adherence over days and weeks — stay consistent.",
+      description: "Review recorded doses and compare scheduled times with when you took them.",
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6" aria-hidden="true">
           <path d="M3 3v18h18" />
@@ -39,7 +39,7 @@ export default function HowItWorks() {
   ];
 
   return (
-    <section id="how-it-works" className="py-16 sm:py-20 lg:py-24 bg-slate-50/50 dark:bg-slate-950/50">
+    <section id="how-it-works" className="flex min-h-[calc(100svh-4.5rem)] scroll-mt-20 flex-col justify-center py-16 sm:scroll-mt-24 sm:py-20 lg:py-24">
       <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-10 sm:mb-14">
           <h2 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl dark:text-white">

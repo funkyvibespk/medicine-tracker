@@ -69,7 +69,7 @@ export default function Features() {
   };
 
   return (
-    <section id="features" className="py-16 sm:py-20 lg:py-24">
+    <section id="features" className="flex min-h-[calc(100svh-4.5rem)] scroll-mt-20 flex-col justify-center py-16 sm:scroll-mt-24 sm:py-20 lg:py-24">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-10 sm:mb-14">
           <h2 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl dark:text-white">

@@ -36,9 +36,9 @@ export default function Footer() {
                 </a>
               </li>
               <li>
-                <a href="#preview" className="text-sm text-slate-600 hover:text-teal-600 transition-colors dark:text-slate-400 dark:hover:text-teal-400">
+                <Link href="/dashboard" className="text-sm text-slate-600 hover:text-teal-600 transition-colors dark:text-slate-400 dark:hover:text-teal-400">
                   Product Demo
-                </a>
+                </Link>
               </li>
             </ul>
           </div>

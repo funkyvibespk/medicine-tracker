@@ -122,8 +122,8 @@ export default function MobileProductPreview() {
                   </p>
                 </div>
                 <div className="flex items-center gap-1 rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-medium backdrop-blur-xs">
-                  <span>🔥</span>
-                  <span>7d streak</span>
+                  <span aria-hidden="true">✓</span>
+                  <span>Today</span>
                 </div>
               </div>
               <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-black/20">
@@ -146,7 +146,7 @@ export default function MobileProductPreview() {
                 </div>
               </div>
               <span className="rounded-md bg-amber-200/70 px-1.5 py-0.5 text-[10px] font-bold text-amber-900 dark:bg-amber-900/80 dark:text-amber-100">
-                Refill
+                Low stock
               </span>
             </div>
           </div>
