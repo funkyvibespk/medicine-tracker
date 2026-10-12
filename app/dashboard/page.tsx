@@ -293,7 +293,7 @@ export default function DashboardPage() {
       <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/80 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/80">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3.5 sm:px-6">
           <div className="flex items-center gap-2.5">
-            <BrandLogo markClassName="h-9 w-9 rounded-xl" />
+            <BrandLogo markClassName="h-9 w-9" />
             <div>
               <span className="ml-2 inline-flex items-center rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-800 dark:bg-teal-900/50 dark:text-teal-300">
                 Dashboard

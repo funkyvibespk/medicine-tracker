@@ -133,8 +133,7 @@ export default function AuthPage() {
         <div className="relative z-10">
           <Link href="/" className="inline-flex items-center gap-2.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 rounded-xl">
             <BrandLogo
-              markClassName="h-10 w-10 rounded-xl"
-              iconClassName="h-5 w-5"
+              markClassName="h-10 w-10"
               wordmarkClassName="text-xl font-bold tracking-tight"
             />
           </Link>
@@ -174,8 +173,7 @@ export default function AuthPage() {
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="lg:hidden mb-6">
                 <BrandLogo
-                  markClassName="h-10 w-10 rounded-xl"
-                  iconClassName="h-5 w-5"
+                  markClassName="h-10 w-10"
                   wordmarkClassName="sr-only"
                 />
               </div>

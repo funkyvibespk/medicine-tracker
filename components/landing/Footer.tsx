@@ -10,8 +10,7 @@ export default function Footer() {
           <div className="sm:col-span-2 lg:col-span-1">
             <Link href="/" className="inline-flex items-center gap-2.5 group">
               <BrandLogo
-                markClassName="h-8 w-8 rounded-lg transition-transform group-hover:scale-105"
-                iconClassName="h-4 w-4"
+                markClassName="h-8 w-8 transition-transform group-hover:scale-105"
                 wordmarkClassName="text-base font-bold"
               />
             </Link>
@@ -70,7 +69,7 @@ export default function Footer() {
             </h3>
             <ul className="mt-3 space-y-2">
               <li>
-                <Link href="/dashboard" className="text-sm text-slate-600 hover:text-teal-600 transition-colors dark:text-slate-400 dark:hover:text-teal-400">
+                <Link href="/auth" className="text-sm text-slate-600 hover:text-teal-600 transition-colors dark:text-slate-400 dark:hover:text-teal-400">
                   Sign In
                 </Link>
               </li>

@@ -11,13 +11,11 @@ export default function Privacy() {
         </div>
 
         <h2 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl dark:text-white">
-          Your medicines are personal
+          Your medicine data stays on this device
         </h2>
 
         <p className="mt-4 mx-auto max-w-xl text-base leading-relaxed text-slate-600 dark:text-slate-400">
-          ChillDose is designed so your medication data belongs to your account
-          and stays separate from other users. We believe your health information
-          should stay yours.
+          This local tracker saves medicine and dose records in your browser. It does not sync your data to a server, so your information stays with this device and browser.
         </p>
 
         <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -29,9 +27,9 @@ export default function Privacy() {
                 <path d="M12 8h.01" />
               </svg>
             </div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white">Your Data, Your Account</h3>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">Saved in this browser</h3>
             <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
-              Medication records are tied to your personal account and are not shared.
+              Your medicine list and dose history use this browser&apos;s local storage.
             </p>
           </div>
 
@@ -42,9 +40,9 @@ export default function Privacy() {
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
             </div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white">Separate & Protected</h3>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">No cloud sync</h3>
             <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
-              Each account&apos;s data is kept separate and access-controlled by design.
+              This version has no backend or shared account database.
             </p>
           </div>
 
@@ -55,9 +53,9 @@ export default function Privacy() {
                 <circle cx="12" cy="12" r="3" />
               </svg>
             </div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white">Transparent Approach</h3>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">You stay in control</h3>
             <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
-              No hidden data usage. What you enter is only used to help you track your routine.
+              Clearing this browser&apos;s site data can remove locally saved tracker records.
             </p>
           </div>
         </div>

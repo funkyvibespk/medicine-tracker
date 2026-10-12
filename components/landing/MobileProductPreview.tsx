@@ -46,7 +46,7 @@ const initialMobileMeds: DemoMedicine[] = [
 
 export default function MobileProductPreview() {
   const [meds, setMeds] = useState<DemoMedicine[]>(initialMobileMeds);
-  const [activeTab, setActiveTab] = useState<"today" | "meds" | "stock" | "profile">("today");
+  const [activeTab, setActiveTab] = useState<"today" | "meds" | "stock" | "history">("today");
 
   const toggleMed = (id: string) => {
     setMeds((prev) =>
@@ -98,14 +98,14 @@ export default function MobileProductPreview() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-teal-600 dark:text-teal-400">
-                  Wednesday, Oct 7
+                  Sample schedule
                 </p>
                 <h3 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">
-                  Good morning, Sarah
+                  Your daily overview
                 </h3>
               </div>
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-tr from-teal-500 to-emerald-400 text-xs font-bold text-white shadow-xs">
-                S
+                CD
               </div>
             </div>
 
@@ -289,9 +289,9 @@ export default function MobileProductPreview() {
               <span>Stock</span>
             </button>
             <button
-              onClick={() => setActiveTab("profile")}
+              onClick={() => setActiveTab("history")}
               className={`flex flex-col items-center gap-0.5 text-[10px] font-semibold transition-colors ${
-                activeTab === "profile"
+                activeTab === "history"
                   ? "text-teal-600 dark:text-teal-400"
                   : "text-slate-400 hover:text-slate-600"
               }`}
@@ -301,10 +301,10 @@ export default function MobileProductPreview() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth="2"
-                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"
                 />
               </svg>
-              <span>Profile</span>
+              <span>History</span>
             </button>
           </div>
         </div>

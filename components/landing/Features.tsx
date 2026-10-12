@@ -1,12 +1,12 @@
 export default function Features() {
   const features = [
     {
-      title: "Smart Reminders",
-      description: "Get notified when it's time for your next dose.",
+      title: "Dose Schedules",
+      description: "Set daily or recurring dose times and track each dose independently.",
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6" aria-hidden="true">
-          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-          <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+          <rect width="18" height="18" x="3" y="4" rx="2" />
+          <path d="M16 2v4M8 2v4M3 10h18" />
         </svg>
       ),
       color: "teal" as const,
@@ -22,8 +22,8 @@ export default function Features() {
       color: "amber" as const,
     },
     {
-      title: "Easy Reports",
-      description: "See your medication progress with simple daily, weekly and monthly reports.",
+      title: "Dose History",
+      description: "Review logged doses with their scheduled and actual taken times.",
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6" aria-hidden="true">
           <path d="M3 3v18h18" />
@@ -33,8 +33,8 @@ export default function Features() {
       color: "blue" as const,
     },
     {
-      title: "Private & Secure",
-      description: "Your personal medication data stays protected.",
+      title: "Local by design",
+      description: "Your medicine and dose records are saved in this browser on this device.",
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6" aria-hidden="true">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" />
