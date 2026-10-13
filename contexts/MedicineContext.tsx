@@ -66,37 +66,28 @@ interface MedicineContextType {
 
 const MedicineContext = createContext<MedicineContextType | undefined>(undefined);
 
-interface TrackerState {
-  medicines: Medicine[];
-  doseRecords: DoseRecord[];
-  isHydrated: boolean;
-  activeProfileEmail: string | null;
-}
-
 export function MedicineProvider({ children }: { children: ReactNode }) {
-  const [tracker, setTracker] = useState<TrackerState>({
-    medicines: [],
-    doseRecords: [],
-    isHydrated: false,
-    activeProfileEmail: null,
-  });
-  const { medicines, doseRecords, isHydrated, activeProfileEmail } = tracker;
+  const [medicines, setMedicines] = useState<Medicine[]>([]);
+  const [doseRecords, setDoseRecords] = useState<DoseRecord[]>([]);
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [activeProfileEmail, setActiveProfileEmail] = useState<string | null>(null);
 
   const activateProfile = (emailInput: string, options?: { migrateLegacy?: boolean }) => {
     const email = normalizeDemoEmail(emailInput);
     const profile = loadDemoProfile(localStorage, email, options);
-    // Swap identity and data in one state update so persistence can never pair
-    // the previous profile's records with the newly selected email.
-    setTracker({
-      medicines: profile.medicines as Medicine[],
-      doseRecords: profile.doseRecords as DoseRecord[],
-      isHydrated: true,
-      activeProfileEmail: email,
-    });
+    setIsHydrated(false);
+    setMedicines(profile.medicines as Medicine[]);
+    setDoseRecords(profile.doseRecords as DoseRecord[]);
+    setActiveProfileEmail(email);
+    setIsHydrated(true);
   };
 
   const deactivateProfile = () => {
-    setTracker({ medicines: [], doseRecords: [], isHydrated: true, activeProfileEmail: null });
+    setIsHydrated(false);
+    setMedicines([]);
+    setDoseRecords([]);
+    setActiveProfileEmail(null);
+    setIsHydrated(true);
   };
 
   useEffect(() => {
@@ -105,115 +96,93 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
       const email = sessionActive ? normalizeDemoEmail(sessionStorage.getItem(ACTIVE_DEMO_EMAIL_KEY) ?? "") : "";
       if (email) {
         const profile = loadDemoProfile(localStorage, email, {
-          migrateLegacy: false,
+          migrateLegacy: email !== "google-demo@chilldose.invalid",
         });
-        // This effect restores browser-only state after the server render.
+        // localStorage can only be read after hydration; restore saved client state here.
         // eslint-disable-next-line react-hooks/set-state-in-effect
-        setTracker((current) => current.activeProfileEmail ? current : ({
-          medicines: profile.medicines as Medicine[],
-          doseRecords: profile.doseRecords as DoseRecord[],
-          isHydrated: true,
-          activeProfileEmail: email,
-        }));
-      } else {
-        setTracker((current) => current.activeProfileEmail ? current : ({ ...current, isHydrated: true }));
+        setMedicines(profile.medicines as Medicine[]);
+        setDoseRecords(profile.doseRecords as DoseRecord[]);
+        setActiveProfileEmail(email);
       }
     } catch (e) {
       console.error("Failed to load the local demo profile safely", e);
-      setTracker((current) => current.activeProfileEmail ? current : ({ ...current, isHydrated: true }));
     }
+    setIsHydrated(true);
   }, []);
 
   useEffect(() => {
-    if (tracker.isHydrated && tracker.activeProfileEmail) {
-      try {
-        localStorage.setItem(
-          demoProfileStorageKey(tracker.activeProfileEmail),
-          serializeDemoProfile({ email: tracker.activeProfileEmail, medicines: tracker.medicines, doseRecords: tracker.doseRecords }),
-        );
-      } catch (e) {
-        console.error("Failed to save the local demo profile", e);
-      }
+    if (isHydrated && activeProfileEmail) {
+      localStorage.setItem(
+        demoProfileStorageKey(activeProfileEmail),
+        serializeDemoProfile({ email: activeProfileEmail, medicines, doseRecords }),
+      );
     }
-  }, [tracker]);
+  }, [medicines, doseRecords, isHydrated, activeProfileEmail]);
 
   const addMedicine = (med: Medicine) => {
-    setTracker((prev) => ({ ...prev, medicines: [...prev.medicines, med] }));
+    setMedicines((prev) => [...prev, med]);
   };
 
   const updateMedicine = (id: string, updates: Partial<Medicine>) => {
-    setTracker((prev) => ({
-      ...prev,
-      medicines: prev.medicines.map((m) => (m.id === id ? { ...m, ...updates } : m)),
-    }));
+    setMedicines((prev) => prev.map((m) => (m.id === id ? { ...m, ...updates } : m)));
   };
 
   const deleteMedicine = (id: string) => {
-    setTracker((prev) => {
-      const medicine = prev.medicines.find((item) => item.id === id);
-      return {
-        ...prev,
-        medicines: prev.medicines.filter((medicineItem) => medicineItem.id !== id),
-        doseRecords: medicine
-          ? prev.doseRecords.map((record) => record.medicineId === id
-            ? {
-                ...record,
-                medicineName: record.medicineName ?? medicine.name,
-                medicineType: record.medicineType ?? medicine.type,
-                medicineStrength: record.medicineStrength ?? medicine.strength,
-              }
-            : record)
-          : prev.doseRecords,
-      };
-    });
+    const medicine = medicines.find((item) => item.id === id);
+    if (medicine) {
+      setDoseRecords((prev) => prev.map((record) => record.medicineId === id
+        ? {
+            ...record,
+            medicineName: record.medicineName ?? medicine.name,
+            medicineType: record.medicineType ?? medicine.type,
+            medicineStrength: record.medicineStrength ?? medicine.strength,
+          }
+        : record));
+    }
+    setMedicines((prev) => prev.filter((m) => m.id !== id));
   };
 
   const recordDose = (record: DoseRecord) => {
-    setTracker((prev) => {
+    setDoseRecords((prev) => {
       // replace if existing for same scheduled date and time
-      const medicine = prev.medicines.find((item) => item.id === record.medicineId);
+      const medicine = medicines.find((item) => item.id === record.medicineId);
       const filtered = record.isPrn
-        ? prev.doseRecords
-        : prev.doseRecords.filter((r) => !(r.medicineId === record.medicineId && r.scheduledDate === record.scheduledDate && r.scheduledTime === record.scheduledTime && !r.isPrn));
-      return {
-        ...prev,
-        doseRecords: [...filtered, {
-          ...record,
-          medicineName: medicine?.name ?? record.medicineName,
-          medicineType: medicine?.type ?? record.medicineType,
-          medicineStrength: medicine?.strength ?? record.medicineStrength,
-        }],
-      };
+        ? prev
+        : prev.filter((r) => !(r.medicineId === record.medicineId && r.scheduledDate === record.scheduledDate && r.scheduledTime === record.scheduledTime && !r.isPrn));
+      return [...filtered, {
+        ...record,
+        medicineName: medicine?.name ?? record.medicineName,
+        medicineType: medicine?.type ?? record.medicineType,
+        medicineStrength: medicine?.strength ?? record.medicineStrength,
+      }];
     });
   };
 
   const updateDoseRecord = (id: string, updates: Partial<DoseRecord>) => {
-    setTracker((prev) => ({
-      ...prev,
-      doseRecords: prev.doseRecords.map((d) => (d.id === id ? { ...d, ...updates } : d)),
-    }));
+    setDoseRecords((prev) => prev.map((d) => (d.id === id ? { ...d, ...updates } : d)));
   };
 
   const updateInventory = (medicineId: string, amount: number) => {
-    setTracker((prev) => ({
-      ...prev,
-      medicines: prev.medicines.map((medicine) => medicine.id === medicineId
-        ? { ...medicine, inventoryAmount: Math.max(0, amount) }
-        : medicine),
-    }));
+    setMedicines((prev) =>
+      prev.map((m) => {
+        if (m.id !== medicineId) return m;
+        return { ...m, inventoryAmount: Math.max(0, amount) };
+      })
+    );
   };
 
   const addStock = (medicineId: string, amountToAdd: number) => {
-    setTracker((prev) => ({
-      ...prev,
-      medicines: prev.medicines.map((medicine) => medicine.id === medicineId
-        ? { ...medicine, inventoryAmount: Math.max(0, medicine.inventoryAmount + amountToAdd) }
-        : medicine),
-    }));
+    setMedicines((prev) =>
+      prev.map((m) => {
+        if (m.id !== medicineId) return m;
+        return { ...m, inventoryAmount: Math.max(0, m.inventoryAmount + amountToAdd) };
+      })
+    );
   };
 
   const clearAll = () => {
-    setTracker((prev) => ({ ...prev, medicines: [], doseRecords: [] }));
+    setMedicines([]);
+    setDoseRecords([]);
   };
 
   return (

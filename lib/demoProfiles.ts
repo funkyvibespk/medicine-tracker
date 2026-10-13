@@ -81,10 +81,7 @@ export function loadDemoProfile(
 
   const migrationRaw = storage.getItem(PROFILE_MIGRATION_STORAGE_KEY);
   const assignment = migrationRaw === null ? null : parseAssignment(migrationRaw);
-  // Unscoped records have no reliable owner. Keep them untouched until an
-  // explicit owner choice is supplied. Honor an assignment already recorded
-  // by an earlier successful migration so an interrupted copy can be resumed.
-  const mayImportLegacy = assignment?.ownerEmail === email || (assignment === null && options.migrateLegacy === true);
+  const mayImportLegacy = options.migrateLegacy !== false && (assignment === null || assignment.ownerEmail === email);
 
   if (!mayImportLegacy) {
     return { email, medicines: [], doseRecords: [] };

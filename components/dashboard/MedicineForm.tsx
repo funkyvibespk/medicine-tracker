@@ -594,7 +594,7 @@ export default function MedicineForm({ initialData, onSave, onCancel }: Medicine
       </div>
 
       {/* ── Submit / Cancel ─────────────────────────────────────────────────── */}
-      <div className="pt-4 flex flex-col min-[360px]:flex-row items-center justify-center gap-3">
+      <div className="pt-4 flex flex-col min-[360px]:flex-row items-center justify-center gap-3 sm:justify-end">
         <button
           type="button"
           onClick={onCancel}
