@@ -15,14 +15,40 @@ export default function WorkspaceHeader() {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState<{ text: string; success: boolean } | null>(null);
+  const [passwordToast, setPasswordToast] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   useDialogFocusRestore(changePasswordOpen);
 
   useEffect(() => {
-    if (!changePasswordOpen) return;
+    if (!profileMenuOpen) return;
+    const closeWhenOutside = (event: PointerEvent | FocusEvent) => {
+      if (event.target instanceof Node && !profileMenuRef.current?.contains(event.target)) setProfileMenuOpen(false);
+    };
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !isChangingPassword) setChangePasswordOpen(false);
+      if (event.key === "Escape") setProfileMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", closeWhenOutside);
+    document.addEventListener("focusin", closeWhenOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeWhenOutside);
+      document.removeEventListener("focusin", closeWhenOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [profileMenuOpen]);
+
+  useEffect(() => {
+    if (!passwordToast) return;
+    const timeout = window.setTimeout(() => setPasswordToast(false), 3000);
+    return () => window.clearTimeout(timeout);
+  }, [passwordToast]);
+
+  useEffect(() => {
+    if (!changePasswordOpen || isChangingPassword) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setChangePasswordOpen(false);
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
@@ -54,7 +80,9 @@ export default function WorkspaceHeader() {
     try {
       await changeDemoPassword(window.localStorage, activeProfileEmail, currentPassword, newPassword);
       formRef.current?.reset();
-      setPasswordMessage({ text: "Password changed. Your session is still active.", success: true });
+      setPasswordMessage(null);
+      setChangePasswordOpen(false);
+      setPasswordToast(true);
     } catch (error) {
       setPasswordMessage({
         text: error instanceof Error ? error.message : "The password could not be changed. Please try again.",
@@ -70,7 +98,7 @@ export default function WorkspaceHeader() {
       <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/80 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/80">
         <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4 px-4 py-3.5 sm:px-6 lg:px-8">
           <BrandLogo href="/dashboard" ariaLabel="ChillDose dashboard" markClassName="h-9 w-9" />
-          <div className="relative z-20">
+          <div ref={profileMenuRef} className="relative z-20">
             <button
               type="button"
               onClick={() => setProfileMenuOpen((open) => !open)}
@@ -82,14 +110,13 @@ export default function WorkspaceHeader() {
               {getDemoAvatarInitials(activeProfileEmail)}
             </button>
             {profileMenuOpen && <>
-              <button type="button" aria-label="Close profile menu" onClick={() => setProfileMenuOpen(false)} className="fixed inset-0 z-10 cursor-default" />
               <div role="menu" className="absolute right-0 top-12 z-20 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900">
                 <div className="border-b border-slate-100 px-3 py-3 dark:border-slate-800">
                   <p className="text-sm font-semibold text-slate-900 dark:text-white">Local demo profile</p>
                   <p className="mt-1 break-all text-xs leading-relaxed text-slate-500 dark:text-slate-400">{activeProfileEmail ?? "No email profile selected"}</p>
                   <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">Tracker data stays in this browser and is not linked to an account.</p>
                 </div>
-                <button type="button" role="menuitem" onClick={() => { setProfileMenuOpen(false); setPasswordMessage(null); setChangePasswordOpen(true); }} className="mt-2 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:text-slate-200 dark:hover:bg-slate-800">
+                <button type="button" role="menuitem" onClick={() => { setProfileMenuOpen(false); setPasswordMessage(null); setPasswordToast(false); setChangePasswordOpen(true); }} className="mt-2 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:text-slate-200 dark:hover:bg-slate-800">
                   Change Password
                 </button>
                 <button type="button" role="menuitem" onClick={handleLogout} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-rose-700 transition hover:bg-rose-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 dark:text-rose-300 dark:hover:bg-rose-950/40">
@@ -101,6 +128,10 @@ export default function WorkspaceHeader() {
           </div>
         </div>
       </header>
+
+      {passwordToast && !changePasswordOpen && <div role="status" aria-live="polite" aria-atomic="true" className="fixed right-4 top-20 z-40 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 shadow-lg dark:border-emerald-900/60 dark:bg-emerald-950 dark:text-emerald-200">
+        Password changed successfully.
+      </div>}
 
       {changePasswordOpen && <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/50 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && !isChangingPassword) setChangePasswordOpen(false); }}>
         <div role="dialog" aria-modal="true" aria-labelledby="change-password-title" onKeyDown={keepDialogFocusInside} className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
