@@ -96,7 +96,7 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
       const email = sessionActive ? normalizeDemoEmail(sessionStorage.getItem(ACTIVE_DEMO_EMAIL_KEY) ?? "") : "";
       if (email) {
         const profile = loadDemoProfile(localStorage, email, {
-          migrateLegacy: email !== "google-demo@chilldose.invalid",
+          migrateLegacy: false,
         });
         // localStorage can only be read after hydration; restore saved client state here.
         // eslint-disable-next-line react-hooks/set-state-in-effect

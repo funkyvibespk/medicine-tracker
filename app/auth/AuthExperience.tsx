@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useMedicine } from "@/contexts/MedicineContext";
 import { ACTIVE_DEMO_EMAIL_KEY, ACTIVE_DEMO_SESSION_KEY, GOOGLE_DEMO_EMAIL, normalizeDemoEmail } from "@/lib/demoProfiles";
+import { DemoAccountAlreadyExistsError, DemoAccountNotFoundError, registerDemoAccount, verifyDemoAccount } from "@/lib/demoAuth";
 
 type AuthMode = "login" | "signup";
 type AuthExperienceProps = { initialMode: AuthMode };
@@ -28,16 +29,21 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [showSignupForm, setShowSignupForm] = useState(false);
   const [feedback, setFeedback] = useState("");
+  const [suggestedMode, setSuggestedMode] = useState<AuthMode | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const goToMode = (nextMode: AuthMode) => {
     setMode(nextMode);
     setShowPassword(false);
     setShowSignupForm(false);
     setFeedback("");
+    setSuggestedMode(null);
     window.history.replaceState(null, "", `/auth?mode=${nextMode}`);
   };
 
-  const continueToLocalTracker = (destination: "/dashboard" | "/setup", email: string, migrateLegacy = true, delayMs = 0) => {
+  const continueToLocalTracker = (destination: "/dashboard" | "/setup", email: string, delayMs = 0) => {
+    // Legacy data with no known owner remains untouched unless a user explicitly chooses an owner.
+    const migrateLegacy = false;
     activateProfile(email, { migrateLegacy });
     sessionStorage.setItem(ACTIVE_DEMO_EMAIL_KEY, normalizeDemoEmail(email));
     sessionStorage.setItem(ACTIVE_DEMO_SESSION_KEY, "active");
@@ -45,7 +51,7 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
     else router.push(destination);
   };
 
-  const handleEmailSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleEmailSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const email = normalizeDemoEmail(String(formData.get("email") ?? ""));
@@ -58,18 +64,27 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
       setFeedback("Enter a valid email address.");
       return;
     }
+    setIsSubmitting(true);
+    setFeedback("");
+    setSuggestedMode(null);
     try {
-      continueToLocalTracker(mode === "signup" ? "/setup" : "/dashboard", email);
-      setFeedback("");
+      const authenticatedEmail = mode === "signup"
+        ? await registerDemoAccount(localStorage, email, password)
+        : await verifyDemoAccount(localStorage, email, password);
+      continueToLocalTracker(mode === "signup" ? "/setup" : "/dashboard", authenticatedEmail);
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "Could not open this local demo profile safely.");
+      if (error instanceof DemoAccountAlreadyExistsError) setSuggestedMode("login");
+      if (error instanceof DemoAccountNotFoundError) setSuggestedMode("signup");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleGoogleDemo = () => {
-    setFeedback("Google sign-in is not connected. Continuing opens a separate local-only demo profile.");
+    setFeedback("Google is not connected. This opens the shared local Google demo profile; no Google account is used.");
     try {
-      continueToLocalTracker(mode === "signup" ? "/setup" : "/dashboard", GOOGLE_DEMO_EMAIL, false, 900);
+      continueToLocalTracker(mode === "signup" ? "/setup" : "/dashboard", GOOGLE_DEMO_EMAIL, 900);
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "Could not open the local demo profile safely.");
     }
@@ -134,7 +149,7 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
                 <span className="w-full border-t border-slate-200 dark:border-slate-800" />
                 <span className="absolute bg-white px-3 text-xs text-slate-500 dark:bg-slate-950">or</span>
               </div>
-              <button type="button" onClick={() => { setShowSignupForm(true); setFeedback("Email sign-up is a local prototype. Your password will not be saved."); }} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-700 to-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:from-teal-600 hover:to-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2">
+              <button type="button" onClick={() => { setShowSignupForm(true); setFeedback(""); }} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-700 to-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:from-teal-600 hover:to-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2">
                 Continue with Email
               </button>
             </div>
@@ -155,16 +170,21 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
                   </button>
                 </div>
               </div>
-              <button type="submit" className="inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-teal-700 to-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:from-teal-600 hover:to-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2">
-                {mode === "login" ? "Log In" : "Continue to local tracker"}
+              <button type="submit" disabled={isSubmitting} className="inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-teal-700 to-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:from-teal-600 hover:to-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-70">
+                {isSubmitting ? "Checking locally…" : mode === "login" ? "Log In" : "Create local account"}
               </button>
             </form>
           )}
 
-          {feedback && <p role="status" className="mt-4 rounded-xl border border-teal-100 bg-teal-50 px-4 py-3 text-sm leading-relaxed text-teal-900 dark:border-teal-900/60 dark:bg-teal-950/40 dark:text-teal-200">{feedback}</p>}
+          {feedback && <div className="mt-4 rounded-xl border border-teal-100 bg-teal-50 px-4 py-3 text-sm leading-relaxed text-teal-900 dark:border-teal-900/60 dark:bg-teal-950/40 dark:text-teal-200">
+            <p role="alert">{feedback}</p>
+            {suggestedMode && <button type="button" onClick={() => goToMode(suggestedMode)} className="mt-2 font-semibold underline underline-offset-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">
+              {suggestedMode === "login" ? "Go to Log In" : "Go to Get Started"}
+            </button>}
+          </div>}
 
           <p className="mt-6 rounded-xl bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-500 dark:bg-slate-900 dark:text-slate-400">
-            This is a frontend prototype. Email and password are not sent to a server or authenticated. Your normalized email is stored in this browser to select its local profile; passwords are not saved. Existing tracker records are copied to the first email profile used, and the original local data is retained.
+            This is a local demo only, not secure authentication. Email and a salted PBKDF2 password hash are stored in this browser; passwords are never stored in plain text or sent to a server. Tracker data without an assigned profile remains unassigned.
           </p>
 
           <p className="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">

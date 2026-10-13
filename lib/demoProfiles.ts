@@ -81,7 +81,9 @@ export function loadDemoProfile(
 
   const migrationRaw = storage.getItem(PROFILE_MIGRATION_STORAGE_KEY);
   const assignment = migrationRaw === null ? null : parseAssignment(migrationRaw);
-  const mayImportLegacy = options.migrateLegacy !== false && (assignment === null || assignment.ownerEmail === email);
+  // Unowned legacy data is imported only after an explicit ownership choice.
+  // Previously recorded ownership can be resumed for that same profile only.
+  const mayImportLegacy = assignment?.ownerEmail === email || (assignment === null && options.migrateLegacy === true);
 
   if (!mayImportLegacy) {
     return { email, medicines: [], doseRecords: [] };
