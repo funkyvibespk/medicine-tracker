@@ -249,7 +249,10 @@ export default function DashboardPage() {
   };
 
   const recordPrnDose = (med: Medicine) => {
-    if (med.inventoryAmount < med.doseAmount) return;
+    if (
+      med.inventoryAmount < med.doseAmount ||
+      doseRecords.some((record) => record.isPrn && record.medicineId === med.id && record.scheduledDate === todayStr && Boolean(record.actualTakenTime))
+    ) return;
     const takenTime = new Date();
     const time = `${pad(takenTime.getHours())}:${pad(takenTime.getMinutes())}`;
     recordDose({
@@ -583,8 +586,9 @@ export default function DashboardPage() {
           {prnMedicines.length > 0 && <section>
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">As needed</h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {prnMedicines.map((med) => (
-                <div key={med.id} className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+              {prnMedicines.map((med) => {
+                const prnTakenToday = doseRecords.some((record) => record.isPrn && record.medicineId === med.id && record.scheduledDate === todayStr && Boolean(record.actualTakenTime));
+                return <div key={med.id} className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
                   <div>
                     <h3 className="text-lg font-bold text-slate-900 dark:text-white">{med.name}</h3>
                     <p className="mt-1 text-sm font-medium text-teal-600 dark:text-teal-400">{med.type}{med.strength ? ` · ${med.strength}` : ""}</p>
@@ -595,9 +599,9 @@ export default function DashboardPage() {
                       <p key={record.id} className="mt-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">Taken at {record.actualTakenTime ? formatIsoTo12Hour(record.actualTakenTime) : "—"}</p>
                     ))}
                   </div>
-                  <button type="button" disabled={med.inventoryAmount < med.doseAmount} onClick={() => recordPrnDose(med)} className="mt-5 w-full rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-50">Log dose</button>
-                </div>
-              ))}
+                  <button type="button" disabled={prnTakenToday || med.inventoryAmount < med.doseAmount} onClick={() => recordPrnDose(med)} className="mt-5 w-full rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-50">{prnTakenToday ? "Taken ✓" : "Mark as Taken"}</button>
+                </div>;
+              })}
             </div>
           </section>}
           </div>

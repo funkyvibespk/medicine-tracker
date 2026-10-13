@@ -463,7 +463,7 @@ export default function MedicineForm({ initialData, onSave, onCancel }: Medicine
         )}
 
         {formData.frequency === "As needed (PRN)" ? (
-          <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-300">As needed medicines do not create scheduled doses. You can log each dose from Today.</p>
+          <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-300">As needed medicines do not create scheduled doses. You can mark a dose as taken from Today.</p>
         ) : (
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
