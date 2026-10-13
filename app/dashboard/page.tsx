@@ -2,13 +2,12 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useMedicine, Medicine, DoseRecord, DoseStatus } from "@/contexts/MedicineContext";
 import MedicineForm from "@/components/dashboard/MedicineForm";
 import BottomNav from "@/components/dashboard/BottomNav";
 import WorkspaceNav from "@/components/dashboard/WorkspaceNav";
-import { BrandLogo } from "@/components/BrandLogo";
-import { clearDemoSession } from "@/lib/demoSession";
+import WorkspaceHeader from "@/components/dashboard/WorkspaceHeader";
+import WorkspacePageHeading from "@/components/dashboard/WorkspacePageHeading";
 import { formatDuration, getScheduledTimesForDate, isPrnMedicine, localDateString } from "@/lib/schedule";
 import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
 
@@ -28,7 +27,6 @@ type ScheduledDose = {
 
 type DoseFilter = "all" | "pending" | "taken";
 export default function DashboardPage() {
-  const router = useRouter();
   const {
     medicines,
     doseRecords,
@@ -39,8 +37,6 @@ export default function DashboardPage() {
     deleteMedicine,
     addStock,
     isHydrated,
-    deactivateProfile,
-    activeProfileEmail,
   } = useMedicine();
 
   const [now, setNow] = useState<Date>(new Date(0));
@@ -54,7 +50,6 @@ export default function DashboardPage() {
   const [addingStockMed, setAddingStockMed] = useState<Medicine | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [doseFilter, setDoseFilter] = useState<DoseFilter>("all");
-  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   useDialogFocusRestore(Boolean(isAddModalOpen || editingMedicine || deletingMedicine || changingDose || takingEarly || addingStockMed));
   
   // Form states for dialogs
@@ -76,7 +71,6 @@ export default function DashboardPage() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setOpenMenuId(null);
-        setProfileMenuOpen(false);
         setIsAddModalOpen(false);
         setEditingMedicine(null);
         setDeletingMedicine(null);
@@ -211,12 +205,6 @@ export default function DashboardPage() {
   const weeklyPercent = weeklyExpected ? Math.round((weeklyTaken / weeklyExpected) * 100) : null;
   const upcomingDoses = todaysDoses.filter((dose) => dose.status === "upcoming").sort((a, b) => a.scheduledDateObj.getTime() - b.scheduledDateObj.getTime()).slice(0, 4);
 
-  const handleLogout = () => {
-    clearDemoSession();
-    deactivateProfile();
-    router.replace("/");
-  };
-
   // Handlers
 
   const handleTakeDose = (dose: ScheduledDose) => {
@@ -346,64 +334,23 @@ export default function DashboardPage() {
   return (
       <div className="min-h-screen bg-slate-50 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-100 pb-20">
       
-      {/* Top Navigation */}
-      <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/80 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/80">
-        <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4 px-4 py-3.5 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-2.5">
-            <Link href="/dashboard" aria-label="ChillDose dashboard" className="rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">
-              <BrandLogo markClassName="h-9 w-9" />
-            </Link>
-            <div>
-              <span className="ml-2 inline-flex items-center rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-800 dark:bg-teal-900/50 dark:text-teal-300">
-                Dashboard
-              </span>
-            </div>
-          </div>
-
-          <button
-            aria-label="Add medicine"
-            onClick={() => setIsAddModalOpen(true)}
-            className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-teal-600/20 transition-all hover:bg-teal-500 active:scale-95"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-              <path d="M5 12h14" />
-              <path d="M12 5v14" />
-            </svg>
-            <span className="hidden sm:inline">Add Medicine</span>
-          </button>
-          <div className="relative z-20">
-            <button type="button" onClick={() => setProfileMenuOpen((open) => !open)} aria-label="Open local profile menu" aria-haspopup="menu" aria-expanded={profileMenuOpen} className="flex h-10 w-10 items-center justify-center rounded-full bg-teal-100 text-sm font-bold text-teal-800 ring-2 ring-white transition hover:bg-teal-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:bg-teal-900/60 dark:text-teal-200 dark:ring-slate-900 dark:hover:bg-teal-900">
-              CD
-            </button>
-            {profileMenuOpen && <>
-              <button type="button" aria-label="Close profile menu" onClick={() => setProfileMenuOpen(false)} className="fixed inset-0 z-10 cursor-default" />
-              <div role="menu" className="absolute right-0 top-12 z-20 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900">
-                <div className="border-b border-slate-100 px-3 py-3 dark:border-slate-800">
-                  <p className="text-sm font-semibold text-slate-900 dark:text-white">Local demo profile</p>
-                  <p className="mt-1 break-all text-xs leading-relaxed text-slate-500 dark:text-slate-400">{activeProfileEmail ?? "No email profile selected"}</p>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">Tracker data stays in this browser and is not linked to an account.</p>
-                </div>
-                <button type="button" role="menuitem" onClick={handleLogout} className="mt-2 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-rose-700 transition hover:bg-rose-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 dark:text-rose-300 dark:hover:bg-rose-950/40">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true"><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg>
-                  Log Out
-                </button>
-              </div>
-            </>}
-          </div>
-        </div>
-      </header>
+      <WorkspaceHeader />
 
       <div className="mx-auto flex w-full max-w-[1440px]">
         <WorkspaceNav />
 
       <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl dark:text-white">Your dashboard</h1>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">A clear overview of your medicine routine for {now.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}.</p>
-          </div>
-          <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300"><span className="h-1.5 w-1.5 rounded-full bg-amber-500"/>Local prototype</span>
-        </div>
+        <WorkspacePageHeading
+          title="Your Dashboard"
+          description={`A clear overview of your medicine routine for ${now.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}.`}
+          action={<>
+            <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300"><span className="h-1.5 w-1.5 rounded-full bg-amber-500"/>Local prototype</span>
+            <button aria-label="Add medicine" onClick={() => setIsAddModalOpen(true)} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-teal-600/20 transition-all hover:bg-teal-500 active:scale-95">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="M5 12h14" /><path d="M12 5v14" /></svg>
+              <span className="hidden sm:inline">Add Medicine</span>
+            </button>
+          </>}
+        />
         
         {/* Overdue Alert */}
         {overdueCount > 0 && (

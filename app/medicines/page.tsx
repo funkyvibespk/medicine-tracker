@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useMedicine, Medicine } from "@/contexts/MedicineContext";
 import MedicineForm from "@/components/dashboard/MedicineForm";
 import BottomNav from "@/components/dashboard/BottomNav";
 import WorkspaceNav from "@/components/dashboard/WorkspaceNav";
-import { BrandLogo } from "@/components/BrandLogo";
+import WorkspaceHeader from "@/components/dashboard/WorkspaceHeader";
+import WorkspacePageHeading from "@/components/dashboard/WorkspacePageHeading";
 import { estimatedDosesPerDay } from "@/lib/schedule";
 import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
 
@@ -51,34 +51,20 @@ export default function MedicinesPage() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-100 pb-24">
 
-      {/* Header */}
-      <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/80 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/80">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3.5 sm:px-6">
-          <div className="flex min-w-0 items-center gap-3">
-            <Link href="/dashboard" aria-label="ChillDose dashboard" className="shrink-0 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">
-              <BrandLogo markClassName="h-8 w-8" wordmarkClassName="text-sm font-bold tracking-tight" />
-            </Link>
-            <div className="min-w-0">
-              <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">My Medicines</h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400">{medicines.length} medication{medicines.length !== 1 ? "s" : ""} tracked</p>
-            </div>
-          </div>
-          <button
-            aria-label="Add medicine"
-            onClick={() => setIsAddModalOpen(true)}
-            className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-teal-600/20 transition-all hover:bg-teal-500 active:scale-95"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-              <path d="M5 12h14" /><path d="M12 5v14" />
-            </svg>
-            <span className="hidden sm:inline">Add Medicine</span>
-          </button>
-        </div>
-      </header>
+      <WorkspaceHeader />
 
       <div className="mx-auto flex w-full max-w-[1440px]">
       <WorkspaceNav />
       <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
+
+        <WorkspacePageHeading
+          title="My Medicines"
+          description={`${medicines.length} medication${medicines.length !== 1 ? "s" : ""} tracked`}
+          action={<button aria-label="Add medicine" onClick={() => setIsAddModalOpen(true)} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-teal-600/20 transition-all hover:bg-teal-500 active:scale-95">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="M5 12h14" /><path d="M12 5v14" /></svg>
+            <span>Add Medicine</span>
+          </button>}
+        />
 
         {/* Search */}
         {medicines.length > 0 && (

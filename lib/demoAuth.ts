@@ -6,6 +6,7 @@ const REGISTRY_VERSION = 1 as const;
 const PBKDF2_ITERATIONS = 600_000;
 const DERIVED_KEY_BITS = 256;
 const SALT_BYTES = 16;
+export const DEMO_PASSWORD_MIN_LENGTH = 8;
 
 interface DemoAccount {
   email: string;
@@ -107,7 +108,7 @@ function equalHash(left: string, right: string): boolean {
 export async function registerDemoAccount(storage: StorageLike, emailInput: string, password: string): Promise<string> {
   const email = normalizeDemoEmail(emailInput);
   if (!email) throw new Error("Enter an email address to create a local account.");
-  if (password.length < 8) throw new Error("Choose a password with at least 8 characters.");
+  if (password.length < DEMO_PASSWORD_MIN_LENGTH) throw new Error(`Choose a password with at least ${DEMO_PASSWORD_MIN_LENGTH} characters.`);
   if (readRegistry(storage).accounts.some((account) => account.email === email)) {
     throw new DemoAccountAlreadyExistsError();
   }
@@ -132,5 +133,40 @@ export async function verifyDemoAccount(storage: StorageLike, emailInput: string
 
   const suppliedHash = await hashPassword(password, fromHex(account.salt));
   if (!equalHash(suppliedHash, account.passwordHash)) throw new DemoPasswordMismatchError();
+  return email;
+}
+
+export async function changeDemoPassword(
+  storage: StorageLike,
+  emailInput: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<string> {
+  const email = normalizeDemoEmail(emailInput);
+  if (!email) throw new DemoAccountNotFoundError();
+  if (newPassword.length < DEMO_PASSWORD_MIN_LENGTH) {
+    throw new Error(`Choose a password with at least ${DEMO_PASSWORD_MIN_LENGTH} characters.`);
+  }
+
+  const originalRegistry = readRegistry(storage);
+  const originalAccount = originalRegistry.accounts.find((candidate) => candidate.email === email);
+  if (!originalAccount) throw new DemoAccountNotFoundError();
+
+  const currentHash = await hashPassword(currentPassword, fromHex(originalAccount.salt));
+  if (!equalHash(currentHash, originalAccount.passwordHash)) throw new DemoPasswordMismatchError();
+
+  const salt = globalThis.crypto.getRandomValues(new Uint8Array(SALT_BYTES));
+  const passwordHash = await hashPassword(newPassword, salt);
+
+  // Re-read after hashing. Update only the matching credential if it is still unchanged.
+  const registry = readRegistry(storage);
+  const account = registry.accounts.find((candidate) => candidate.email === email);
+  if (!account) throw new DemoAccountNotFoundError();
+  if (account.salt !== originalAccount.salt || !equalHash(account.passwordHash, originalAccount.passwordHash)) {
+    throw new Error("This local account changed during the update. Please try again.");
+  }
+  account.salt = toHex(salt);
+  account.passwordHash = passwordHash;
+  storage.setItem(DEMO_ACCOUNT_REGISTRY_KEY, JSON.stringify(registry));
   return email;
 }
