@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useMedicine, Medicine } from "@/contexts/MedicineContext";
 import MedicineForm from "@/components/dashboard/MedicineForm";
 import BottomNav from "@/components/dashboard/BottomNav";
 import WorkspaceNav from "@/components/dashboard/WorkspaceNav";
+import { BrandLogo } from "@/components/BrandLogo";
 import { estimatedDosesPerDay } from "@/lib/schedule";
 import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
 
@@ -52,9 +54,14 @@ export default function MedicinesPage() {
       {/* Header */}
       <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/80 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/80">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3.5 sm:px-6">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">My Medicines</h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400">{medicines.length} medication{medicines.length !== 1 ? "s" : ""} tracked</p>
+          <div className="flex min-w-0 items-center gap-3">
+            <Link href="/dashboard" aria-label="ChillDose dashboard" className="shrink-0 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">
+              <BrandLogo markClassName="h-8 w-8" wordmarkClassName="text-sm font-bold tracking-tight" />
+            </Link>
+            <div className="min-w-0">
+              <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">My Medicines</h1>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{medicines.length} medication{medicines.length !== 1 ? "s" : ""} tracked</p>
+            </div>
           </div>
           <button
             aria-label="Add medicine"

@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useMedicine } from "@/contexts/MedicineContext";
 import BottomNav from "@/components/dashboard/BottomNav";
 import WorkspaceNav from "@/components/dashboard/WorkspaceNav";
+import { BrandLogo } from "@/components/BrandLogo";
 import { getScheduledTimesForDate, localDateString } from "@/lib/schedule";
 
 const pad = (n: number) => n.toString().padStart(2, "0");
@@ -109,9 +111,14 @@ export default function HistoryPage() {
 
       {/* Header */}
       <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/80 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/80">
-        <div className="mx-auto max-w-5xl px-4 py-3.5 sm:px-6">
-          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">History</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Dose adherence log</p>
+        <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3.5 sm:px-6">
+          <Link href="/dashboard" aria-label="ChillDose dashboard" className="shrink-0 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">
+            <BrandLogo markClassName="h-8 w-8" wordmarkClassName="text-sm font-bold tracking-tight" />
+          </Link>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">History</h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Dose adherence log</p>
+          </div>
         </div>
       </header>
 

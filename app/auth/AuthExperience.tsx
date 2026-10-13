@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useMedicine } from "@/contexts/MedicineContext";
-import { ACTIVE_DEMO_EMAIL_KEY, ACTIVE_DEMO_SESSION_KEY, GOOGLE_DEMO_EMAIL, normalizeDemoEmail } from "@/lib/demoProfiles";
+import { GOOGLE_DEMO_EMAIL, normalizeDemoEmail } from "@/lib/demoProfiles";
 import { DemoAccountAlreadyExistsError, DemoAccountNotFoundError, registerDemoAccount, verifyDemoAccount } from "@/lib/demoAuth";
+import { writeDemoSession } from "@/lib/demoSession";
 
 type AuthMode = "login" | "signup";
 type AuthExperienceProps = { initialMode: AuthMode };
@@ -45,8 +46,7 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
     // Legacy data with no known owner remains untouched unless a user explicitly chooses an owner.
     const migrateLegacy = false;
     activateProfile(email, { migrateLegacy });
-    sessionStorage.setItem(ACTIVE_DEMO_EMAIL_KEY, normalizeDemoEmail(email));
-    sessionStorage.setItem(ACTIVE_DEMO_SESSION_KEY, "active");
+    writeDemoSession(email);
     if (delayMs > 0) window.setTimeout(() => router.push(destination), delayMs);
     else router.push(destination);
   };
@@ -184,7 +184,7 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
           </div>}
 
           <p className="mt-6 rounded-xl bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-500 dark:bg-slate-900 dark:text-slate-400">
-            This is a local demo only, not secure authentication. Email and a salted PBKDF2 password hash are stored in this browser; passwords are never stored in plain text or sent to a server. Tracker data without an assigned profile remains unassigned.
+            This is a local demo only, not secure authentication. Email and a salted PBKDF2 password hash are stored in this browser; passwords are never stored in plain text or sent to a server. Your local session stays active on this device until you log out. Tracker data without an assigned profile remains unassigned.
           </p>
 
           <p className="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">

@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { MedicineProvider } from "@/contexts/MedicineContext";
 import BackToTop from "@/components/BackToTop";
+import DemoSessionBoundary from "@/components/DemoSessionBoundary";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,7 +33,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <MedicineProvider>
-          {children}
+          <DemoSessionBoundary>{children}</DemoSessionBoundary>
           <BackToTop />
         </MedicineProvider>
       </body>

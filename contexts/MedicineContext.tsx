@@ -2,13 +2,12 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import {
-  ACTIVE_DEMO_EMAIL_KEY,
-  ACTIVE_DEMO_SESSION_KEY,
   demoProfileStorageKey,
   loadDemoProfile,
   normalizeDemoEmail,
   serializeDemoProfile,
 } from "@/lib/demoProfiles";
+import { readDemoSession } from "@/lib/demoSession";
 
 export type MedicineType = "Tablet" | "Capsule" | "Syrup" | "Sachet" | "Injection";
 
@@ -92,17 +91,16 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     try {
-      const sessionActive = sessionStorage.getItem(ACTIVE_DEMO_SESSION_KEY) === "active";
-      const email = sessionActive ? normalizeDemoEmail(sessionStorage.getItem(ACTIVE_DEMO_EMAIL_KEY) ?? "") : "";
-      if (email) {
-        const profile = loadDemoProfile(localStorage, email, {
+      const session = readDemoSession();
+      if (session) {
+        const profile = loadDemoProfile(localStorage, session.email, {
           migrateLegacy: false,
         });
         // localStorage can only be read after hydration; restore saved client state here.
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setMedicines(profile.medicines as Medicine[]);
         setDoseRecords(profile.doseRecords as DoseRecord[]);
-        setActiveProfileEmail(email);
+        setActiveProfileEmail(session.email);
       }
     } catch (e) {
       console.error("Failed to load the local demo profile safely", e);

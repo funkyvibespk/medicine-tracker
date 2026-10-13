@@ -8,7 +8,7 @@ import MedicineForm from "@/components/dashboard/MedicineForm";
 import BottomNav from "@/components/dashboard/BottomNav";
 import WorkspaceNav from "@/components/dashboard/WorkspaceNav";
 import { BrandLogo } from "@/components/BrandLogo";
-import { ACTIVE_DEMO_EMAIL_KEY, ACTIVE_DEMO_SESSION_KEY } from "@/lib/demoProfiles";
+import { clearDemoSession } from "@/lib/demoSession";
 import { formatDuration, getScheduledTimesForDate, isPrnMedicine, localDateString } from "@/lib/schedule";
 import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
 
@@ -212,10 +212,9 @@ export default function DashboardPage() {
   const upcomingDoses = todaysDoses.filter((dose) => dose.status === "upcoming").sort((a, b) => a.scheduledDateObj.getTime() - b.scheduledDateObj.getTime()).slice(0, 4);
 
   const handleLogout = () => {
-    sessionStorage.removeItem(ACTIVE_DEMO_SESSION_KEY);
-    sessionStorage.removeItem(ACTIVE_DEMO_EMAIL_KEY);
+    clearDemoSession();
     deactivateProfile();
-    router.push("/auth?mode=login");
+    router.replace("/");
   };
 
   // Handlers
@@ -351,7 +350,7 @@ export default function DashboardPage() {
       <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/80 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/80">
         <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4 px-4 py-3.5 sm:px-6 lg:px-8">
           <div className="flex items-center gap-2.5">
-            <Link href="/" aria-label="ChillDose home" className="rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">
+            <Link href="/dashboard" aria-label="ChillDose dashboard" className="rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">
               <BrandLogo markClassName="h-9 w-9" />
             </Link>
             <div>
