@@ -154,6 +154,9 @@ export async function changeDemoPassword(
 
   const currentHash = await hashPassword(currentPassword, fromHex(originalAccount.salt));
   if (!equalHash(currentHash, originalAccount.passwordHash)) throw new DemoPasswordMismatchError();
+  if (newPassword === currentPassword) {
+    throw new Error("Your new password must be different from your current password.");
+  }
 
   const salt = globalThis.crypto.getRandomValues(new Uint8Array(SALT_BYTES));
   const passwordHash = await hashPassword(newPassword, salt);
