@@ -9,8 +9,19 @@ import {
 } from "@/lib/demoProfiles";
 import { readDemoSession } from "@/lib/demoSession";
 import { applyTakenDose } from "@/lib/medicineLogic";
+import { reconcileHistoricalMissedOccurrences } from "@/lib/missedDoses";
+import { localDateString } from "@/lib/schedule";
 
 export type MedicineType = "Tablet" | "Capsule" | "Syrup" | "Sachet" | "Injection";
+
+export interface MedicineScheduleRevision {
+  effectiveAt: string;
+  frequency: string;
+  intervalHours?: number;
+  scheduleTimes: string[];
+  startDate: string;
+  endDate?: string;
+}
 
 export interface Medicine {
   id: string;
@@ -24,6 +35,8 @@ export interface Medicine {
   startDate: string; // YYYY-MM-DD
   createdAt?: string; // creation timestamp for suppressing same-day doses before the medicine existed
   endDate?: string;
+  /** Optional additive history. Missing history means the earlier schedule is unknown. */
+  scheduleRevisions?: MedicineScheduleRevision[];
   instructions?: string;
   notes?: string;
   doseUnit?: string;
@@ -37,13 +50,15 @@ export interface Medicine {
   lowStockThresholdUnit?: string;
 }
 
-export type DoseStatus = "upcoming" | "due" | "overdue" | "taken_early" | "taken_on_time" | "taken_late";
+export type DoseStatus = "upcoming" | "due" | "overdue" | "missed" | "taken_early" | "taken_on_time" | "taken_late";
 
 export interface DoseRecord {
   id: string;
   medicineId: string;
   scheduledDate: string; // YYYY-MM-DD
   scheduledTime: string; // HH:mm
+  /** Absolute instant for elapsed-interval schedules; absent on legacy and fixed-time records. */
+  scheduledInstant?: string;
   actualTakenTime?: string; // ISO
   status: DoseStatus; // mostly used if taken, otherwise calculated dynamically
   isPrn?: boolean;
@@ -79,10 +94,23 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
   const [isHydrated, setIsHydrated] = useState(false);
   const [activeProfileEmail, setActiveProfileEmail] = useState<string | null>(null);
 
+  const addScheduleBaseline = (savedMedicines: Medicine[], effectiveAt = new Date().toISOString()) =>
+    savedMedicines.map((medicine) => medicine.scheduleRevisions?.length ? medicine : {
+      ...medicine,
+      scheduleRevisions: [{
+        effectiveAt,
+        frequency: medicine.frequency,
+        intervalHours: medicine.intervalHours,
+        scheduleTimes: [...medicine.scheduleTimes],
+        startDate: medicine.startDate,
+        endDate: medicine.endDate,
+      }],
+    });
+
   const activateProfile = (emailInput: string, options?: { migrateLegacy?: boolean }) => {
     const email = normalizeDemoEmail(emailInput);
     const profile = loadDemoProfile(localStorage, email, options);
-    medicinesRef.current = profile.medicines as Medicine[];
+    medicinesRef.current = addScheduleBaseline(profile.medicines as Medicine[]);
     doseRecordsRef.current = profile.doseRecords as DoseRecord[];
     setIsHydrated(false);
     setMedicines(medicinesRef.current);
@@ -109,7 +137,7 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
           migrateLegacy: false,
         });
         // localStorage can only be read after hydration; restore saved client state here.
-        medicinesRef.current = profile.medicines as Medicine[];
+        medicinesRef.current = addScheduleBaseline(profile.medicines as Medicine[]);
         doseRecordsRef.current = profile.doseRecords as DoseRecord[];
         setMedicines(medicinesRef.current);
         setDoseRecords(doseRecordsRef.current);
@@ -130,19 +158,89 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
     }
   }, [medicines, doseRecords, isHydrated, activeProfileEmail]);
 
+  useEffect(() => {
+    if (!isHydrated || !activeProfileEmail) return;
+
+    let scannedLocalDate: string | null = null;
+    const reconcileMissed = () => {
+      const now = new Date();
+      const today = localDateString(now);
+      const fromDate = scannedLocalDate === today
+        ? (() => {
+            const previousDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+            return localDateString(previousDay);
+          })()
+        : undefined;
+      const reconciled = reconcileHistoricalMissedOccurrences(
+        medicinesRef.current,
+        doseRecordsRef.current,
+        now,
+        fromDate,
+      );
+      scannedLocalDate = today;
+      if (reconciled !== doseRecordsRef.current) {
+        doseRecordsRef.current = reconciled;
+        setDoseRecords(reconciled);
+      }
+    };
+
+    reconcileMissed();
+    const timer = setInterval(reconcileMissed, 60000);
+    return () => clearInterval(timer);
+  }, [isHydrated, activeProfileEmail]);
+
   const addMedicine = (med: Medicine) => {
-    medicinesRef.current = [...medicinesRef.current, med];
+    const createdAt = med.createdAt ?? new Date().toISOString();
+    const medicine = {
+      ...med,
+      createdAt,
+      scheduleRevisions: med.scheduleRevisions?.length ? med.scheduleRevisions : [{
+        effectiveAt: createdAt,
+        frequency: med.frequency,
+        intervalHours: med.intervalHours,
+        scheduleTimes: [...med.scheduleTimes],
+        startDate: med.startDate,
+        endDate: med.endDate,
+      }],
+    };
+    medicinesRef.current = [...medicinesRef.current, medicine];
     setMedicines(medicinesRef.current);
   };
 
   const updateMedicine = (id: string, updates: Partial<Medicine>) => {
-    medicinesRef.current = medicinesRef.current.map((m) => (m.id === id ? { ...m, ...updates } : m));
+    const existing = medicinesRef.current.find((medicine) => medicine.id === id);
+    const now = new Date();
+    if (existing && scheduleChanged(existing, updates)) {
+      const reconciled = reconcileHistoricalMissedOccurrences(medicinesRef.current, doseRecordsRef.current, now, undefined, true);
+      if (reconciled !== doseRecordsRef.current) {
+        doseRecordsRef.current = reconciled;
+        setDoseRecords(reconciled);
+      }
+    }
+    medicinesRef.current = medicinesRef.current.map((medicine) => {
+      if (medicine.id !== id) return medicine;
+      const updated = { ...medicine, ...updates };
+      if (!existing || !scheduleChanged(existing, updates)) return updated;
+      return {
+        ...updated,
+        scheduleRevisions: [...(existing.scheduleRevisions ?? []), {
+          effectiveAt: now.toISOString(),
+          frequency: updated.frequency,
+          intervalHours: updated.intervalHours,
+          scheduleTimes: [...updated.scheduleTimes],
+          startDate: updated.startDate,
+          endDate: updated.endDate,
+        }],
+      };
+    });
     setMedicines(medicinesRef.current);
   };
 
   const deleteMedicine = (id: string) => {
     const medicine = medicinesRef.current.find((item) => item.id === id);
     if (medicine) {
+      const reconciled = reconcileHistoricalMissedOccurrences(medicinesRef.current, doseRecordsRef.current, new Date(), undefined, true);
+      doseRecordsRef.current = reconciled;
       doseRecordsRef.current = doseRecordsRef.current.map((record) => record.medicineId === id
         ? {
             ...record,
@@ -223,6 +321,14 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
       {children}
     </MedicineContext.Provider>
   );
+}
+
+function scheduleChanged(medicine: Medicine, updates: Partial<Medicine>) {
+  return (updates.frequency !== undefined && updates.frequency !== medicine.frequency) ||
+    (updates.intervalHours !== undefined && updates.intervalHours !== medicine.intervalHours) ||
+    (updates.scheduleTimes !== undefined && JSON.stringify(updates.scheduleTimes) !== JSON.stringify(medicine.scheduleTimes)) ||
+    (updates.startDate !== undefined && updates.startDate !== medicine.startDate) ||
+    (Object.prototype.hasOwnProperty.call(updates, "endDate") && updates.endDate !== medicine.endDate);
 }
 
 export function useMedicine() {

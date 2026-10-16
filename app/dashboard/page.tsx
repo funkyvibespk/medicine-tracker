@@ -8,9 +8,9 @@ import BottomNav from "@/components/dashboard/BottomNav";
 import WorkspaceNav from "@/components/dashboard/WorkspaceNav";
 import WorkspaceHeader from "@/components/dashboard/WorkspaceHeader";
 import WorkspacePageHeading from "@/components/dashboard/WorkspacePageHeading";
-import { formatDuration, getScheduledTimesForDate, isPrnMedicine, localDateString } from "@/lib/schedule";
+import { formatDuration, getMedicineOccurrencesForDate, isPrnMedicine, localDateString } from "@/lib/schedule";
 import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
-import { doseUnitFor, getStockStatus, inventoryUnitFor, inventoryUnitsCompatible, minutesFromScheduledOccurrence, scheduledOccurrenceId } from "@/lib/medicineLogic";
+import { canonicalizeOccurrenceRecords, doseUnitFor, getOccurrenceTimeStatus, getOutstandingMissedOccurrences, getStockStatus, inventoryUnitFor, inventoryUnitsCompatible, minutesFromScheduledOccurrence, scheduledOccurrenceId, scheduledOccurrenceKey } from "@/lib/medicineLogic";
 
 // Helper to pad numbers
 const pad = (n: number) => n.toString().padStart(2, "0");
@@ -20,6 +20,8 @@ type ScheduledDose = {
   med: Medicine;
   scheduledDate: string;
   time: string;
+  scheduledInstant?: string;
+  identityAmbiguous?: boolean;
   record?: DoseRecord;
   status: DoseStatus;
   minutesDiff: number;
@@ -86,20 +88,28 @@ export default function DashboardPage() {
   }, []);
 
   const todayStr = useMemo(() => localDateString(now), [now]);
+  const canonicalDoseRecords = useMemo(() => canonicalizeOccurrenceRecords(doseRecords), [doseRecords]);
 
   // Compute doses for today
   const todaysDoses = useMemo(() => {
     const doses: ScheduledDose[] = [];
     
     medicines.forEach((med) => {
-      // Check if med is active today
-      if (med.startDate > todayStr) return;
-      if (med.endDate && med.endDate < todayStr) return;
-
-      getScheduledTimesForDate(med, todayStr).forEach((time) => {
-        const id = scheduledOccurrenceId(med.id, todayStr, time);
-        const record = doseRecords.find(
-          (r) => !r.isPrn && r.medicineId === med.id && r.scheduledDate === todayStr && r.scheduledTime === time && Boolean(r.actualTakenTime)
+      const occurrences = getMedicineOccurrencesForDate(med, todayStr);
+      const wallTimeCounts = new Map<string, number>();
+      for (const occurrence of occurrences) wallTimeCounts.set(occurrence.scheduledTime, (wallTimeCounts.get(occurrence.scheduledTime) ?? 0) + 1);
+      occurrences.forEach((occurrence) => {
+        const { scheduledTime: time, scheduledAt: scheduledTimeDate, scheduledInstant } = occurrence;
+        const id = scheduledOccurrenceId(med.id, todayStr, time, scheduledInstant);
+        const occurrenceKey = scheduledOccurrenceKey(med.id, todayStr, time, scheduledInstant);
+        const identityAmbiguous = Boolean(scheduledInstant && (wallTimeCounts.get(time) ?? 0) > 1 && canonicalDoseRecords.some(
+          (item) => !item.isPrn && item.medicineId === med.id && item.scheduledDate === todayStr && item.scheduledTime === time && !item.scheduledInstant,
+        ));
+        const record = canonicalDoseRecords.find(
+          (item) => !item.isPrn && item.medicineId === med.id && item.scheduledDate === todayStr && (
+            scheduledOccurrenceKey(item.medicineId, item.scheduledDate, item.scheduledTime, item.scheduledInstant) === occurrenceKey ||
+            (!item.scheduledInstant && wallTimeCounts.get(time) === 1 && item.scheduledTime === time)
+          )
         );
 
         // Calculate dynamic status
@@ -107,11 +117,8 @@ export default function DashboardPage() {
         let minutesDiff = 0;
         let diffText = "";
         
-        const [schHour, schMin] = time.split(":").map(Number);
-        const scheduledTimeDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), schHour, schMin);
-        
         if (record && record.actualTakenTime) {
-          minutesDiff = minutesFromScheduledOccurrence(todayStr, time, record.actualTakenTime!);
+          minutesDiff = minutesFromScheduledOccurrence(todayStr, time, record.actualTakenTime, scheduledInstant);
           
           if (minutesDiff < -5) {
             status = "taken_early";
@@ -124,12 +131,12 @@ export default function DashboardPage() {
           }
         } else {
           const diffMs = now.getTime() - scheduledTimeDate.getTime();
-          minutesDiff = Math.round(diffMs / 60000);
-          
-          if (minutesDiff >= 5) {
+          minutesDiff = diffMs / 60000;
+          const timeStatus = getOccurrenceTimeStatus(scheduledTimeDate, now);
+          if (timeStatus === "overdue") {
             status = "overdue";
             diffText = `Overdue by ${formatDuration(minutesDiff)}`;
-          } else if (minutesDiff >= 0 && minutesDiff < 5) {
+          } else if (timeStatus === "due") {
             status = "due";
           } else {
             status = "upcoming";
@@ -142,6 +149,8 @@ export default function DashboardPage() {
           med,
           scheduledDate: todayStr,
           time,
+          scheduledInstant,
+          identityAmbiguous,
           record,
           status,
           minutesDiff,
@@ -159,17 +168,19 @@ export default function DashboardPage() {
       }
       return a.scheduledDateObj.getTime() - b.scheduledDateObj.getTime();
     });
-  }, [medicines, doseRecords, now, todayStr]);
+  }, [medicines, canonicalDoseRecords, now, todayStr]);
 
   const overdueCount = todaysDoses.filter((d) => d.status === "overdue").length;
   const takenCount = todaysDoses.filter((d) => d.status.startsWith("taken")).length;
+  const outstandingMisses = getOutstandingMissedOccurrences(doseRecords, todayStr);
   const prnMedicines = medicines.filter((med) => isPrnMedicine(med) && med.startDate <= todayStr && (!med.endDate || med.endDate >= todayStr));
 
   const activeMedicines = medicines.filter((medicine) => medicine.startDate <= todayStr && (!medicine.endDate || medicine.endDate >= todayStr));
   const stockAlerts = medicines.filter((medicine) => {
     const status = getStockStatus(medicine);
-    return status === "out" || status === "low";
+    return status !== "available";
   });
+  const stockNeedsReview = stockAlerts.some((medicine) => getStockStatus(medicine) === "unknown");
   const filteredDoses = todaysDoses.filter((dose) => {
     if (doseFilter === "taken") return dose.status.startsWith("taken");
     if (doseFilter === "pending") return !dose.status.startsWith("taken");
@@ -183,26 +194,48 @@ export default function DashboardPage() {
       const date = localDateString(day);
       let expected = 0;
       let taken = 0;
+      const countedOccurrences = new Set<string>();
+      const countedWallTimes = new Set<string>();
       for (const medicine of medicines) {
-        const times = getScheduledTimesForDate(medicine, date).filter((time) => {
+        const allOccurrences = getMedicineOccurrencesForDate(medicine, date);
+        const wallTimeCounts = new Map<string, number>();
+        for (const occurrence of allOccurrences) wallTimeCounts.set(occurrence.scheduledTime, (wallTimeCounts.get(occurrence.scheduledTime) ?? 0) + 1);
+        const occurrences = allOccurrences.filter((occurrence) => {
           if (date !== todayStr) return true;
-          const [hours, minutes] = time.split(":").map(Number);
-          return new Date(day.getFullYear(), day.getMonth(), day.getDate(), hours, minutes) <= now;
+          return occurrence.scheduledAt <= now;
         });
-        for (const time of times) {
+        for (const occurrence of occurrences) {
+          const key = scheduledOccurrenceKey(medicine.id, date, occurrence.scheduledTime, occurrence.scheduledInstant);
+          if (countedOccurrences.has(key)) continue;
+          countedOccurrences.add(key);
+          countedWallTimes.add(JSON.stringify([medicine.id, date, occurrence.scheduledTime]));
           expected++;
-          if (doseRecords.some((record) => record.medicineId === medicine.id && record.scheduledDate === date && record.scheduledTime === time && Boolean(record.actualTakenTime) && !record.isPrn)) taken++;
+          const wallTimeCount = wallTimeCounts.get(occurrence.scheduledTime) ?? 0;
+          if (canonicalDoseRecords.some((record) => record.medicineId === medicine.id && record.scheduledDate === date && record.scheduledTime === occurrence.scheduledTime && Boolean(record.actualTakenTime) && !record.isPrn && (record.scheduledInstant === occurrence.scheduledInstant || (!record.scheduledInstant && wallTimeCount === 1)))) taken++;
         }
+      }
+      for (const record of canonicalDoseRecords) {
+        if (record.isPrn || record.scheduledDate !== date || (record.status !== "missed" && !record.actualTakenTime)) continue;
+        const key = scheduledOccurrenceKey(record.medicineId, date, record.scheduledTime, record.scheduledInstant);
+        if (countedOccurrences.has(key)) continue;
+        if (countedWallTimes.has(JSON.stringify([record.medicineId, date, record.scheduledTime]))) continue;
+        if (date === todayStr) {
+          const scheduledAt = record.scheduledInstant ? new Date(record.scheduledInstant) : new Date(`${date}T${record.scheduledTime}`);
+          if (scheduledAt > now) continue;
+        }
+        countedOccurrences.add(key);
+        expected++;
+        if (record.actualTakenTime) taken++;
       }
       return { date, label: day.toLocaleDateString(undefined, { weekday: "short" }), expected, taken, percent: expected ? Math.round((taken / expected) * 100) : null };
     });
-  }, [medicines, doseRecords, now, todayStr]);
+  }, [medicines, canonicalDoseRecords, now, todayStr]);
 
-  const recentActivity = useMemo(() => doseRecords
+  const recentActivity = useMemo(() => canonicalDoseRecords
     .filter((record) => Boolean(record.actualTakenTime))
     .slice()
     .sort((a, b) => new Date(b.actualTakenTime!).getTime() - new Date(a.actualTakenTime!).getTime())
-    .slice(0, 5), [doseRecords]);
+    .slice(0, 5), [canonicalDoseRecords]);
 
   const weeklyExpected = weeklyAdherence.reduce((total, day) => total + day.expected, 0);
   const weeklyTaken = weeklyAdherence.reduce((total, day) => total + day.taken, 0);
@@ -214,10 +247,9 @@ export default function DashboardPage() {
   const handleTakeDose = (dose: ScheduledDose) => {
     // If attempting to take >5 minutes early, show confirmation
     const diffMs = now.getTime() - dose.scheduledDateObj.getTime();
-    const minutesDiff = Math.round(diffMs / 60000);
-    
-    if (minutesDiff < -5) {
-      setTakingEarly({ ...dose, earlyBy: Math.abs(minutesDiff) });
+
+    if (diffMs < -5 * 60_000) {
+      setTakingEarly({ ...dose, earlyBy: Math.floor(Math.abs(diffMs) / 60_000) });
       return;
     }
     
@@ -227,16 +259,18 @@ export default function DashboardPage() {
   const confirmTakeDose = (dose: ScheduledDose, takenTime: Date) => {
     // Determine status
     let status: DoseStatus = "taken_on_time";
-    const minutesDiff = minutesFromScheduledOccurrence(dose.scheduledDate, dose.time, takenTime.toISOString());
-    
-    if (minutesDiff < -5) status = "taken_early";
-    else if (minutesDiff > 5) status = "taken_late";
+    const scheduledAt = dose.scheduledInstant ? new Date(dose.scheduledInstant) : dose.scheduledDateObj;
+    const elapsedMs = takenTime.getTime() - scheduledAt.getTime();
+
+    if (elapsedMs < -5 * 60_000) status = "taken_early";
+    else if (elapsedMs > 5 * 60_000) status = "taken_late";
     
     recordTakenDose({
-      id: dose.id,
+      id: dose.record?.id ?? dose.id,
       medicineId: dose.med.id,
       scheduledDate: dose.scheduledDate,
       scheduledTime: dose.time,
+      scheduledInstant: dose.record ? dose.record.scheduledInstant : dose.scheduledInstant,
       actualTakenTime: takenTime.toISOString(),
       status
     }, dose.med.doseAmount);
@@ -312,6 +346,24 @@ export default function DashboardPage() {
     const hr12 = hour % 12 || 12;
     return `${hr12}:${m} ${ampm}`;
   };
+
+  const formatDoseTime = (dose: ScheduledDose) => {
+    const sameWallTime = todaysDoses.filter((candidate) => candidate.time === dose.time && candidate.scheduledInstant).length > 1;
+    if (!sameWallTime || !dose.scheduledInstant) return format12Hour(dose.time);
+    const offset = -new Date(dose.scheduledInstant).getTimezoneOffset();
+    const sign = offset >= 0 ? "+" : "−";
+    const absolute = Math.abs(offset);
+    return `${format12Hour(dose.time)} (UTC${sign}${String(Math.floor(absolute / 60)).padStart(2, "0")}:${String(absolute % 60).padStart(2, "0")})`;
+  };
+
+  const formatMissedTime = (record: DoseRecord) => {
+    const repeated = outstandingMisses.filter((item) => item.medicineId === record.medicineId && item.scheduledDate === record.scheduledDate && item.scheduledTime === record.scheduledTime && item.scheduledInstant).length > 1;
+    if (!record.scheduledInstant || !repeated) return format12Hour(record.scheduledTime);
+    const offset = -new Date(record.scheduledInstant).getTimezoneOffset();
+    const sign = offset >= 0 ? "+" : "−";
+    const absolute = Math.abs(offset);
+    return `${format12Hour(record.scheduledTime)} (UTC${sign}${String(Math.floor(absolute / 60)).padStart(2, "0")}:${String(absolute % 60).padStart(2, "0")})`;
+  };
   
   const formatIsoTo12Hour = (isoStr: string) => {
     const d = new Date(isoStr);
@@ -343,19 +395,43 @@ export default function DashboardPage() {
         
         {/* Overdue Alert */}
         {overdueCount > 0 && (
-          <div className="mb-6 flex items-center gap-3 rounded-xl border border-rose-200 bg-rose-50/50 p-4 shadow-sm dark:border-rose-900/50 dark:bg-rose-950/20">
+          <div role="status" aria-live="polite" className="mb-6 flex items-center gap-3 rounded-xl border border-rose-200 bg-rose-50/50 p-4 shadow-sm dark:border-rose-900/50 dark:bg-rose-950/20">
             <span className="flex h-3 w-3 rounded-full bg-rose-500 animate-pulse" />
             <p className="font-semibold text-rose-800 dark:text-rose-300 text-sm">
-              {overdueCount} medication{overdueCount > 1 ? "s" : ""} overdue
+              {overdueCount} scheduled dose{overdueCount !== 1 ? "s" : ""} overdue
             </p>
           </div>
+        )}
+
+        {outstandingMisses.length > 0 && (
+          <section aria-labelledby="missed-doses-title" className="mb-6 rounded-2xl border border-rose-200 bg-rose-50/60 p-4 shadow-sm dark:border-rose-900/50 dark:bg-rose-950/20">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 id="missed-doses-title" className="font-semibold text-rose-900 dark:text-rose-200">Missed doses from previous days</h2>
+                <p className="mt-1 text-xs text-rose-800/80 dark:text-rose-300/80">{outstandingMisses.length} scheduled occurrence{outstandingMisses.length !== 1 ? "s" : ""} recorded as missed</p>
+              </div>
+              <Link href="/history" className="text-sm font-semibold text-rose-800 underline-offset-4 hover:underline dark:text-rose-200">View history</Link>
+            </div>
+            <ul className="mt-3 divide-y divide-rose-200/70 dark:divide-rose-900/50">
+              {outstandingMisses.slice(0, 3).map((record) => {
+                const medicine = medicines.find((item) => item.id === record.medicineId);
+                const [year, month, date] = record.scheduledDate.split("-").map(Number);
+                const scheduledDate = new Date(year, month - 1, date);
+                return <li key={record.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2 text-sm">
+                  <span className="font-medium text-slate-800 dark:text-slate-100">{record.medicineName ?? medicine?.name ?? "Deleted medicine"}</span>
+                  <span className="text-xs text-slate-600 dark:text-slate-300">{scheduledDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })} · {formatMissedTime(record)}</span>
+                </li>;
+              })}
+            </ul>
+            {outstandingMisses.length > 3 && <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">And {outstandingMisses.length - 3} more in History.</p>}
+          </section>
         )}
 
         <section aria-label="Medicine overview" className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[
             { label: "Today’s doses", value: `${takenCount} / ${todaysDoses.length}`, note: "Completed", href: "#todays-schedule", tone: "teal" },
             { label: "Active medicines", value: activeMedicines.length, note: "In your schedule", href: "/medicines", tone: "blue" },
-            { label: "Stock alerts", value: stockAlerts.length, note: stockAlerts.length ? "Need attention" : "Stock looks good", href: "/inventory", tone: "amber" },
+            { label: "Stock alerts", value: stockAlerts.length, note: stockNeedsReview ? "Review stock units" : stockAlerts.length ? "Need attention" : "Stock looks good", href: "/inventory", tone: "amber" },
             { label: "Adherence", value: weeklyPercent === null ? "—" : `${weeklyPercent}%`, note: weeklyExpected ? `${weeklyTaken} of ${weeklyExpected} scheduled doses this week` : "No scheduled doses recorded this week", href: "/history", tone: "violet" },
           ].map((card) => <Link key={card.label} href={card.href} className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-teal-800">
             <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">{card.label}</p>
@@ -393,7 +469,7 @@ export default function DashboardPage() {
 
         <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-bold text-slate-900 dark:text-white">Upcoming doses</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">The next scheduled doses today</p></div><Link href="#todays-schedule" className="text-xs font-semibold text-teal-700 hover:text-teal-600 dark:text-teal-300">Open today&apos;s schedule →</Link></div>
-          {upcomingDoses.length === 0 ? <p className="mt-4 rounded-xl bg-slate-50 px-4 py-4 text-sm text-slate-500 dark:bg-slate-950/50 dark:text-slate-400">No upcoming scheduled doses today.</p> : <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{upcomingDoses.map((dose) => <div key={dose.id} className="flex min-w-0 items-center gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-950/50"><span className="shrink-0 rounded-lg bg-white px-2 py-1 text-xs font-bold text-teal-700 shadow-sm dark:bg-slate-800 dark:text-teal-300">{format12Hour(dose.time)}</span><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900 dark:text-white">{dose.med.name}</span><span className="block text-xs text-slate-500 dark:text-slate-400">{dose.med.doseAmount} {dose.med.doseUnit ?? doseUnitFor(dose.med)}</span></span></div>)}</div>}
+          {upcomingDoses.length === 0 ? <p className="mt-4 rounded-xl bg-slate-50 px-4 py-4 text-sm text-slate-500 dark:bg-slate-950/50 dark:text-slate-400">No upcoming scheduled doses today.</p> : <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{upcomingDoses.map((dose) => <div key={dose.id} className="flex min-w-0 items-center gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-950/50"><span className="shrink-0 rounded-lg bg-white px-2 py-1 text-xs font-bold text-teal-700 shadow-sm dark:bg-slate-800 dark:text-teal-300">{formatDoseTime(dose)}</span><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900 dark:text-white">{dose.med.name}</span><span className="block text-xs text-slate-500 dark:text-slate-400">{dose.med.doseAmount} {dose.med.doseUnit ?? doseUnitFor(dose.med)}</span></span></div>)}</div>}
         </section>
 
         <section id="todays-schedule" className="mb-4 flex flex-wrap items-end justify-between gap-3">
@@ -452,7 +528,7 @@ export default function DashboardPage() {
                         "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
                       }`}>
                         <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-                        {format12Hour(dose.time)}
+                        {formatDoseTime(dose)}
                       </span>
                       
                       {!dose.status.startsWith("taken") && (
@@ -472,7 +548,7 @@ export default function DashboardPage() {
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === dose.id ? null : dose.id); }}
-                        aria-label={`Medicine actions for ${dose.med.name} at ${format12Hour(dose.time)}`}
+                        aria-label={`Medicine actions for ${dose.med.name} at ${formatDoseTime(dose)}`}
                         aria-expanded={openMenuId === dose.id}
                         className="cursor-pointer flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 transition-colors"
                       >
@@ -559,15 +635,19 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   ) : (
+                    <>
                     <button
                       type="button"
-                      disabled={!unitsCompatible || dose.med.inventoryAmount < dose.med.doseAmount}
+                      disabled={!unitsCompatible || dose.med.inventoryAmount < dose.med.doseAmount || dose.identityAmbiguous}
+                      title={dose.identityAmbiguous ? "An older dose at this repeated local time cannot be safely assigned to either occurrence." : undefined}
                       onClick={() => handleTakeDose(dose)}
                       className="w-full cursor-pointer flex items-center justify-center gap-2 rounded-xl py-2.5 px-4 text-xs sm:text-sm font-semibold text-white bg-teal-600 hover:bg-teal-500 shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><polyline points="20 6 9 17 4 12" /></svg>
                       <span>Not Taken</span>
                     </button>
+                    {dose.identityAmbiguous && <p role="status" className="mt-2 text-xs text-amber-700 dark:text-amber-300">An older dose at this repeated local time cannot be assigned safely.</p>}
+                    </>
                   )}
                 </div>
               </div>
@@ -646,7 +726,7 @@ export default function DashboardPage() {
           <div role="dialog" aria-modal="true" aria-labelledby="early-dose-title" onKeyDown={keepDialogFocusInside} className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900">
             <h3 id="early-dose-title" className="text-lg font-bold text-slate-900 dark:text-white">Take Dose Early?</h3>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-              This dose is scheduled for {format12Hour(takingEarly.time)}. You&apos;re recording it {formatDuration(takingEarly.earlyBy)} early.
+              This dose is scheduled for {formatDoseTime(takingEarly)}. You&apos;re recording it {formatDuration(takingEarly.earlyBy)} early.
             </p>
             <div className="mt-6 flex justify-end gap-3">
               <button onClick={() => setTakingEarly(null)} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Cancel</button>
@@ -662,7 +742,7 @@ export default function DashboardPage() {
           <div role="dialog" aria-modal="true" aria-labelledby="time-correction-title" onKeyDown={keepDialogFocusInside} className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
             <h3 id="time-correction-title" className="text-lg font-bold text-slate-900 dark:text-white mb-4">Correct recorded time</h3>
             <div className="mb-4 text-sm text-slate-600 dark:text-slate-400">
-              <p>Scheduled: {format12Hour(changingDose.time)}</p>
+              <p>Scheduled: {formatDoseTime(changingDose)}</p>
               <p>Recorded: {formatIsoTo12Hour(changingDose.record?.actualTakenTime ?? "")}</p>
             </div>
             <form onSubmit={handleChangeTimeSubmit}>

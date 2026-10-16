@@ -1,4 +1,12 @@
-import type { Medicine } from "@/contexts/MedicineContext";
+import type { Medicine, MedicineScheduleRevision } from "@/contexts/MedicineContext";
+
+export interface ScheduledOccurrence {
+  scheduledDate: string;
+  scheduledTime: string;
+  scheduledAt: Date;
+  /** Present for elapsed-hour schedules so repeated wall-clock times remain distinct. */
+  scheduledInstant?: string;
+}
 
 export function localDateString(date: Date = new Date()) {
   const pad = (value: number) => value.toString().padStart(2, "0");
@@ -24,7 +32,7 @@ export function isPrnMedicine(medicine: Medicine) {
   return medicine.frequency === "As needed (PRN)";
 }
 
-export function getScheduledTimesForDate(medicine: Medicine, dateString: string): string[] {
+function scheduleFromSnapshot(medicine: Medicine, dateString: string): ScheduledOccurrence[] {
   if (!dateIsActive(medicine, dateString) || isPrnMedicine(medicine)) return [];
 
   const frequency = medicine.frequency;
@@ -55,7 +63,7 @@ export function getScheduledTimesForDate(medicine: Medicine, dateString: string)
     const dayStart = new Date(currentYear, currentMonth - 1, currentDate);
     const dayEnd = new Date(dayStart);
     dayEnd.setDate(dayEnd.getDate() + 1);
-    const times: string[] = [];
+    const occurrences: ScheduledOccurrence[] = [];
     const step = intervalHours * 60 * 60 * 1000;
     let occurrence = anchor.getTime();
     if (occurrence < dayStart.getTime()) {
@@ -65,11 +73,12 @@ export function getScheduledTimesForDate(medicine: Medicine, dateString: string)
       const current = new Date(occurrence);
       const createdAt = medicine.createdAt ? new Date(medicine.createdAt) : null;
       if (localDateString(current) === dateString && (!createdAt || Number.isNaN(createdAt.getTime()) || current >= createdAt)) {
-        times.push(`${current.getHours().toString().padStart(2, "0")}:${current.getMinutes().toString().padStart(2, "0")}`);
+        const time = `${current.getHours().toString().padStart(2, "0")}:${current.getMinutes().toString().padStart(2, "0")}`;
+        occurrences.push({ scheduledDate: dateString, scheduledTime: time, scheduledAt: current, scheduledInstant: current.toISOString() });
       }
       occurrence += step;
     }
-    return times;
+    return occurrences;
   }
 
   const createdAt = medicine.createdAt ? new Date(medicine.createdAt) : null;
@@ -78,7 +87,48 @@ export function getScheduledTimesForDate(medicine: Medicine, dateString: string)
     if (!createdAt || Number.isNaN(createdAt.getTime()) || localDateString(createdAt) !== dateString) return true;
     const [hour, minute] = time.split(":").map(Number);
     return new Date(createdAt.getFullYear(), createdAt.getMonth(), createdAt.getDate(), hour, minute) >= createdAt;
-  }).sort();
+  }).sort().map((time) => {
+    const [hour, minute] = time.split(":").map(Number);
+    // Native local Date resolution deterministically shifts nonexistent spring-forward
+    // wall times forward by the DST gap (for example, 02:30 becomes 03:30).
+    const scheduledAt = new Date(Number(dateString.slice(0, 4)), Number(dateString.slice(5, 7)) - 1, Number(dateString.slice(8, 10)), hour, minute);
+    const scheduledTime = `${scheduledAt.getHours().toString().padStart(2, "0")}:${scheduledAt.getMinutes().toString().padStart(2, "0")}`;
+    return { scheduledDate: localDateString(scheduledAt), scheduledTime, scheduledAt };
+  });
+}
+
+function withScheduleRevision(medicine: Medicine, revision: MedicineScheduleRevision): Medicine {
+  return {
+    ...medicine,
+    frequency: revision.frequency,
+    intervalHours: revision.intervalHours,
+    scheduleTimes: revision.scheduleTimes,
+    startDate: revision.startDate,
+    endDate: revision.endDate,
+  };
+}
+
+/** Generate occurrences using only schedule revisions known to have been active then. */
+export function getMedicineOccurrencesForDate(medicine: Medicine, dateString: string): ScheduledOccurrence[] {
+  const revisions = medicine.scheduleRevisions?.slice().sort((a, b) => a.effectiveAt.localeCompare(b.effectiveAt));
+  if (!revisions?.length) return scheduleFromSnapshot(medicine, dateString);
+
+  const occurrences: ScheduledOccurrence[] = [];
+  revisions.forEach((revision, index) => {
+    const revisionStart = new Date(revision.effectiveAt).getTime();
+    const revisionEnd = revisions[index + 1] ? new Date(revisions[index + 1].effectiveAt).getTime() : Number.POSITIVE_INFINITY;
+    if (!Number.isFinite(revisionStart) || !Number.isFinite(revisionEnd) && index + 1 < revisions.length) return;
+    for (const occurrence of scheduleFromSnapshot(withScheduleRevision(medicine, revision), dateString)) {
+      const instant = occurrence.scheduledAt.getTime();
+      if (instant >= revisionStart && instant < revisionEnd) occurrences.push(occurrence);
+    }
+  });
+  return occurrences.sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
+}
+
+/** Backward-compatible wall-clock view used by medicine summary UI. */
+export function getScheduledTimesForDate(medicine: Medicine, dateString: string): string[] {
+  return scheduleFromSnapshot(medicine, dateString).map((occurrence) => occurrence.scheduledTime);
 }
 
 export function formatDuration(totalMinutes: number) {

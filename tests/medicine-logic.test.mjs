@@ -1,15 +1,38 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getScheduledTimesForDate } from "../lib/schedule.ts";
+import { existsSync } from "node:fs";
+import { registerHooks } from "node:module";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import { getMedicineOccurrencesForDate, getScheduledTimesForDate } from "../lib/schedule.ts";
+import { demoProfileStorageKey, loadDemoProfile, serializeDemoProfile } from "../lib/demoProfiles.ts";
 import {
   availableVolumeFromContainers,
   applyTakenDose,
   doseUnitFor,
+  canonicalizeOccurrenceRecords,
+  getOccurrenceTimeStatus,
+  getOutstandingMissedOccurrences,
   getStockStatus,
   inventoryUnitFor,
+  isOccurrenceOverdue,
   minutesFromScheduledOccurrence,
   scheduledOccurrenceId,
+  scheduledOccurrenceKey,
+  upsertMissedOccurrenceRecords,
 } from "../lib/medicineLogic.ts";
+
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (!specifier.startsWith("@/")) return nextResolve(specifier, context);
+    const basePath = resolve(process.cwd(), specifier.slice(2));
+    const candidate = [basePath, `${basePath}.ts`, `${basePath}.tsx`, resolve(basePath, "index.ts")].find(existsSync);
+    if (!candidate) throw new Error(`Unable to resolve the project's @/ alias for a test module: ${specifier}`);
+    return nextResolve(pathToFileURL(candidate).href, context);
+  },
+});
+
+const { reconcileHistoricalMissedOccurrences } = await import("../lib/missedDoses.ts");
 
 function syrup(overrides = {}) {
   return {
@@ -41,6 +64,24 @@ function takenRecord(date, time, actualTakenTime, id = scheduledOccurrenceId("sy
     scheduledTime: time,
     actualTakenTime,
     status: "taken_late",
+  };
+}
+
+function localIso(date, time = "00:00") {
+  const [year, month, day] = date.split("-").map(Number);
+  const [hour, minute] = time.split(":").map(Number);
+  return new Date(year, month - 1, day, hour, minute).toISOString();
+}
+
+function revision(effectiveAt, overrides = {}) {
+  return {
+    effectiveAt,
+    frequency: "Once daily",
+    intervalHours: undefined,
+    scheduleTimes: ["08:00"],
+    startDate: "2026-10-14",
+    endDate: undefined,
+    ...overrides,
   };
 }
 
@@ -173,5 +214,302 @@ test("tablet inventory continues to deduct in tablet units", () => {
   const result = applyTakenDose([tablet], [], record, 1);
   assert.equal(result.accepted, true);
   assert.equal(result.medicines[0].inventoryAmount, 9);
+});
+
+test("five-minute overdue threshold uses elapsed milliseconds, including across midnight", () => {
+  const scheduledAt = new Date(2026, 9, 16, 23, 58);
+  assert.equal(isOccurrenceOverdue(scheduledAt, new Date(2026, 9, 17, 0, 2, 59, 999)), false);
+  assert.equal(isOccurrenceOverdue(scheduledAt, new Date(2026, 9, 17, 0, 3)), true);
+});
+
+test("dashboard dose-time lifecycle uses exact elapsed boundaries", () => {
+  const scheduledAt = new Date(2026, 9, 16, 8, 0);
+  assert.equal(getOccurrenceTimeStatus(scheduledAt, new Date(scheduledAt.getTime() - 1)), "upcoming");
+  assert.equal(getOccurrenceTimeStatus(scheduledAt, scheduledAt), "due");
+  assert.equal(getOccurrenceTimeStatus(scheduledAt, new Date(scheduledAt.getTime() + 5 * 60_000 - 1)), "due");
+  assert.equal(getOccurrenceTimeStatus(scheduledAt, new Date(scheduledAt.getTime() + 5 * 60_000)), "overdue");
+  assert.equal(getOccurrenceTimeStatus(scheduledAt, new Date(scheduledAt.getTime() + 5 * 60_000 + 1)), "overdue");
+});
+
+test("schedule revisions prevent invented historical times and apply known frequency changes", () => {
+  const medicine = syrup({
+    frequency: "Once daily",
+    scheduleTimes: ["09:00"],
+    scheduleRevisions: [
+      revision(localIso("2026-10-14"), { scheduleTimes: ["08:00"] }),
+      revision(localIso("2026-10-17"), { scheduleTimes: ["09:00"] }),
+    ],
+  });
+  assert.deepEqual(getMedicineOccurrencesForDate(medicine, "2026-10-16").map((item) => item.scheduledTime), ["08:00"]);
+  assert.deepEqual(getMedicineOccurrencesForDate(medicine, "2026-10-17").map((item) => item.scheduledTime), ["09:00"]);
+
+  const morningEdit = syrup({
+    scheduleRevisions: [
+      revision(localIso("2026-10-14"), { scheduleTimes: ["08:00"] }),
+      revision(localIso("2026-10-17", "07:00"), { scheduleTimes: ["09:00"] }),
+    ],
+  });
+  const afternoonEdit = syrup({
+    scheduleRevisions: [
+      revision(localIso("2026-10-14"), { scheduleTimes: ["08:00"] }),
+      revision(localIso("2026-10-17", "10:00"), { scheduleTimes: ["09:00"] }),
+    ],
+  });
+  assert.deepEqual(getMedicineOccurrencesForDate(morningEdit, "2026-10-17").map((item) => item.scheduledTime), ["09:00"]);
+  assert.deepEqual(getMedicineOccurrencesForDate(afternoonEdit, "2026-10-17").map((item) => item.scheduledTime), ["08:00"]);
+
+  const frequencyChanged = syrup({
+    frequency: "Once weekly",
+    scheduleTimes: ["09:00"],
+    scheduleRevisions: [
+      revision(localIso("2026-10-14"), { frequency: "Once daily", scheduleTimes: ["08:00"] }),
+      revision(localIso("2026-10-17"), { frequency: "Once weekly", scheduleTimes: ["09:00"] }),
+    ],
+  });
+  assert.equal(getMedicineOccurrencesForDate(frequencyChanged, "2026-10-16").length, 1);
+  assert.equal(getMedicineOccurrencesForDate(frequencyChanged, "2026-10-17").length, 0);
+  assert.equal(getMedicineOccurrencesForDate(frequencyChanged, "2026-10-21").length, 1);
+
+  const now = new Date(localIso("2026-10-19", "12:00"));
+  const reconciled = reconcileHistoricalMissedOccurrences([medicine], [], now);
+  assert.deepEqual(reconciled.map((record) => [record.scheduledDate, record.scheduledTime]), [
+    ["2026-10-14", "08:00"],
+    ["2026-10-15", "08:00"],
+    ["2026-10-16", "08:00"],
+    ["2026-10-17", "09:00"],
+    ["2026-10-18", "09:00"],
+  ]);
+
+  const bounded = syrup({
+    scheduleRevisions: [
+      revision(localIso("2026-10-14"), { endDate: "2026-10-16" }),
+      revision(localIso("2026-10-17"), { scheduleTimes: ["09:00"], startDate: "2026-10-18" }),
+    ],
+  });
+  assert.equal(getMedicineOccurrencesForDate(bounded, "2026-10-17").length, 0);
+  assert.deepEqual(getMedicineOccurrencesForDate(bounded, "2026-10-18").map((item) => item.scheduledTime), ["09:00"]);
+});
+
+test("unknown legacy schedule periods do not create missed occurrences, and deletion preserves existing history", () => {
+  const legacy = syrup({
+    frequency: "Once daily",
+    scheduleTimes: ["09:00"],
+    startDate: "2026-10-14",
+  });
+  const now = new Date(localIso("2026-10-18", "12:00"));
+  assert.equal(reconcileHistoricalMissedOccurrences([legacy], [], now).length, 0);
+
+  const known = syrup({ scheduleRevisions: [revision(localIso("2026-10-14"))] });
+  const materialized = reconcileHistoricalMissedOccurrences([known], [], now);
+  assert.ok(materialized.length > 0);
+  const afterDelete = reconcileHistoricalMissedOccurrences([], materialized, now);
+  assert.equal(afterDelete, materialized);
+  assert.equal(afterDelete.some((record) => record.medicineId === known.id), true);
+});
+
+test("legacy local profile shape remains readable and new optional schedule history round-trips", () => {
+  const storage = new Map();
+  const syntheticStorage = {
+    getItem: (key) => storage.get(key) ?? null,
+    setItem: (key, value) => storage.set(key, value),
+  };
+  const legacyMedicine = { ...syrup(), scheduleRevisions: undefined };
+  const oldDose = takenRecord("2026-10-16", "10:00", localIso("2026-10-16", "10:10"));
+  storage.set(demoProfileStorageKey("compat@example.invalid"), serializeDemoProfile({
+    email: "compat@example.invalid",
+    medicines: [legacyMedicine],
+    doseRecords: [oldDose],
+  }));
+  const loaded = loadDemoProfile(syntheticStorage, "COMPAT@example.invalid");
+  assert.equal(loaded.medicines.length, 1);
+  assert.equal(loaded.doseRecords.length, 1);
+  assert.equal(loaded.doseRecords[0].id, oldDose.id);
+
+  const revised = { ...legacyMedicine, scheduleRevisions: [revision(localIso("2026-10-16"))] };
+  storage.set(demoProfileStorageKey("compat@example.invalid"), serializeDemoProfile({ ...loaded, medicines: [revised] }));
+  const roundTrip = loadDemoProfile(syntheticStorage, "compat@example.invalid");
+  assert.equal(roundTrip.medicines[0].scheduleRevisions[0].scheduleTimes[0], "08:00");
+  assert.equal(roundTrip.doseRecords[0].id, oldDose.id);
+});
+
+test("PRN schedules never materialize missed occurrences", () => {
+  const prn = syrup({
+    frequency: "As needed (PRN)",
+    scheduleTimes: [],
+    scheduleRevisions: [revision(localIso("2026-10-14"), { frequency: "As needed (PRN)", scheduleTimes: [] })],
+  });
+  assert.equal(reconcileHistoricalMissedOccurrences([prn], [], new Date(localIso("2026-10-18", "12:00"))).length, 0);
+});
+
+test("historical missed occurrences persist as distinct records and reconciliation is idempotent", () => {
+  const candidate = (date, time = "08:00") => ({
+    id: scheduledOccurrenceId("synthetic-syrup", date, time), medicineId: "synthetic-syrup",
+    scheduledDate: date, scheduledTime: time, status: "missed",
+  });
+  const firstPass = upsertMissedOccurrenceRecords([], [candidate("2026-10-09"), candidate("2026-10-10")]);
+  assert.deepEqual(firstPass.map(({ scheduledDate, status }) => [scheduledDate, status]), [
+    ["2026-10-09", "missed"],
+    ["2026-10-10", "missed"],
+  ]);
+  assert.deepEqual(getOutstandingMissedOccurrences(firstPass, "2026-10-10").map((record) => record.scheduledDate), ["2026-10-09"]);
+  assert.deepEqual(getOutstandingMissedOccurrences(firstPass, "2026-10-11").map((record) => record.scheduledDate), ["2026-10-10", "2026-10-09"]);
+  assert.equal(upsertMissedOccurrenceRecords(firstPass, [candidate("2026-10-09"), candidate("2026-10-10")]), firstPass);
+});
+
+test("a pending saved occurrence transitions to missed without changing its identity", () => {
+  const pending = { id: "existing-occurrence-id", medicineId: "synthetic-syrup", scheduledDate: "2026-10-10", scheduledTime: "08:00", status: "overdue" };
+  const candidate = { id: scheduledOccurrenceId(pending.medicineId, pending.scheduledDate, pending.scheduledTime), medicineId: pending.medicineId, scheduledDate: pending.scheduledDate, scheduledTime: pending.scheduledTime, status: "missed" };
+  const updated = upsertMissedOccurrenceRecords([pending], [candidate]);
+  assert.equal(updated.length, 1);
+  assert.equal(updated[0].id, pending.id);
+  assert.equal(updated[0].status, "missed");
+});
+
+test("taking today's dose does not rewrite previous missed occurrences", () => {
+  const daily = syrup();
+  const missed = upsertMissedOccurrenceRecords([], [
+    { id: "missed-09", medicineId: daily.id, scheduledDate: "2026-10-09", scheduledTime: "08:00", status: "missed" },
+    { id: "missed-10", medicineId: daily.id, scheduledDate: "2026-10-10", scheduledTime: "08:00", status: "missed" },
+  ]);
+  const todayRecord = {
+    id: scheduledOccurrenceId(daily.id, "2026-10-11", "08:00"),
+    medicineId: daily.id,
+    scheduledDate: "2026-10-11",
+    scheduledTime: "08:00",
+    actualTakenTime: new Date(2026, 9, 11, 9, 1).toISOString(),
+    status: "taken_late",
+  };
+  const result = applyTakenDose([daily], missed, todayRecord, daily.doseAmount);
+  assert.equal(result.accepted, true);
+  assert.deepEqual(result.doseRecords.filter((record) => record.status === "missed").map((record) => record.scheduledDate), ["2026-10-09", "2026-10-10"]);
+});
+
+test("late completion updates only the original missed occurrence and deducts once", () => {
+  const daily = syrup();
+  const original = { id: "missed-10", medicineId: daily.id, scheduledDate: "2026-10-10", scheduledTime: "08:00", status: "missed" };
+  const missed = upsertMissedOccurrenceRecords([], [original]);
+  const actualTakenTime = new Date(2026, 9, 11, 9, 2).toISOString();
+  const lateRecord = { ...original, status: "taken_late", actualTakenTime };
+  const result = applyTakenDose([daily], missed, lateRecord, daily.doseAmount);
+  assert.equal(result.accepted, true);
+  assert.equal(result.doseRecords[0].id, original.id);
+  assert.equal(result.doseRecords[0].scheduledDate, "2026-10-10");
+  assert.equal(result.doseRecords[0].scheduledTime, "08:00");
+  assert.equal(result.doseRecords[0].actualTakenTime, actualTakenTime);
+  assert.equal(result.medicines[0].inventoryAmount, daily.inventoryAmount - daily.doseAmount);
+  assert.equal(applyTakenDose(result.medicines, result.doseRecords, lateRecord, daily.doseAmount).reason, "duplicate");
+  assert.equal(scheduledOccurrenceKey(daily.id, "2026-10-10", "08:00"), scheduledOccurrenceKey(result.doseRecords[0].medicineId, result.doseRecords[0].scheduledDate, result.doseRecords[0].scheduledTime));
+});
+
+test("missed occurrence upsert excludes PRN and preserves existing legacy records", () => {
+  const daily = syrup();
+  const prn = syrup({ id: "synthetic-prn" });
+  const legacy = { id: "legacy-record", medicineId: "legacy-med", scheduledDate: "2026-10-10", scheduledTime: "08:00", status: "taken_on_time", actualTakenTime: new Date(2026, 9, 10, 8, 0).toISOString() };
+  const result = upsertMissedOccurrenceRecords([legacy], [
+    { id: "daily-missed", medicineId: daily.id, scheduledDate: "2026-10-10", scheduledTime: "08:00", status: "missed" },
+    { id: "prn-missed", medicineId: prn.id, scheduledDate: "2026-10-10", scheduledTime: "08:00", status: "missed", isPrn: true },
+  ]);
+  assert.equal(result.filter((record) => record.medicineId === daily.id).length, 1);
+  assert.equal(result.some((record) => record.medicineId === prn.id), false);
+  assert.equal(result[0], legacy);
+});
+
+test("one medicine's multiple missed occurrences remain separately countable", () => {
+  const records = upsertMissedOccurrenceRecords([], [
+    { id: "daily-am", medicineId: "synthetic-syrup", scheduledDate: "2026-10-09", scheduledTime: "08:00", status: "missed" },
+    { id: "daily-pm", medicineId: "synthetic-syrup", scheduledDate: "2026-10-09", scheduledTime: "20:00", status: "missed" },
+  ]);
+  assert.equal(records.length, 2);
+  assert.deepEqual(records.map((record) => record.scheduledTime), ["08:00", "20:00"]);
+});
+
+test("conflicting duplicate outcomes canonicalize to the confirmed taken occurrence", () => {
+  const missed = { id: "legacy-missed", medicineId: "synthetic-syrup", scheduledDate: "2026-10-10", scheduledTime: "08:00", status: "missed" };
+  const taken = { ...missed, id: "legacy-taken", status: "missed", actualTakenTime: localIso("2026-10-10", "09:15") };
+  const canonical = canonicalizeOccurrenceRecords([missed, taken]);
+  assert.equal(canonical.length, 1);
+  assert.equal(canonical[0].status, "taken_late");
+  assert.equal(canonical[0].actualTakenTime, taken.actualTakenTime);
+  assert.equal(getOutstandingMissedOccurrences([missed, taken], "2026-10-11").length, 0);
+});
+
+test("late completion updates every duplicate representation and deducts stock once", () => {
+  const original = { id: "legacy-missed-a", medicineId: "synthetic-syrup", scheduledDate: "2026-10-10", scheduledTime: "08:00", status: "missed" };
+  const duplicate = { ...original, id: "legacy-missed-b", medicineName: "Legacy name" };
+  const actualTakenTime = localIso("2026-10-10", "09:15");
+  const action = { ...original, status: "taken_late", actualTakenTime };
+  const first = applyTakenDose([syrup()], [original, duplicate], action, 0.5);
+  assert.equal(first.accepted, true);
+  assert.equal(first.medicines[0].inventoryAmount, 59.5);
+  assert.deepEqual(first.doseRecords.map((record) => [record.id, record.scheduledDate, record.scheduledTime, record.status, record.actualTakenTime]), [
+    [original.id, original.scheduledDate, original.scheduledTime, "taken_late", actualTakenTime],
+    [duplicate.id, original.scheduledDate, original.scheduledTime, "taken_late", actualTakenTime],
+  ]);
+  const repeated = applyTakenDose(first.medicines, first.doseRecords, action, 0.5);
+  assert.equal(repeated.accepted, false);
+  assert.equal(repeated.reason, "duplicate");
+  assert.equal(repeated.medicines[0].inventoryAmount, 59.5);
+});
+
+test("elapsed-hour fall-back occurrences retain distinct instants and identities", () => {
+  const previousTimezone = process.env.TZ;
+  process.env.TZ = "America/New_York";
+  try {
+    const medicine = syrup({
+      frequency: "Every X hours",
+      intervalHours: 1,
+      scheduleTimes: ["00:30"],
+      startDate: "2026-11-01",
+      createdAt: localIso("2026-11-01", "00:00"),
+    });
+    const repeated = getMedicineOccurrencesForDate(medicine, "2026-11-01").filter((item) => item.scheduledTime === "01:30");
+    assert.equal(repeated.length, 2);
+    assert.notEqual(repeated[0].scheduledInstant, repeated[1].scheduledInstant);
+    assert.notEqual(
+      scheduledOccurrenceId(medicine.id, repeated[0].scheduledDate, repeated[0].scheduledTime, repeated[0].scheduledInstant),
+      scheduledOccurrenceId(medicine.id, repeated[1].scheduledDate, repeated[1].scheduledTime, repeated[1].scheduledInstant),
+    );
+    assert.notEqual(
+      scheduledOccurrenceKey(medicine.id, repeated[0].scheduledDate, repeated[0].scheduledTime, repeated[0].scheduledInstant),
+      scheduledOccurrenceKey(medicine.id, repeated[1].scheduledDate, repeated[1].scheduledTime, repeated[1].scheduledInstant),
+    );
+    const legacyTaken = { id: "legacy-fold-dose", medicineId: medicine.id, scheduledDate: "2026-11-01", scheduledTime: "01:30", status: "taken_late", actualTakenTime: repeated[0].scheduledInstant };
+    const attemptedSecondFold = applyTakenDose([medicine], [legacyTaken], {
+      ...legacyTaken,
+      id: scheduledOccurrenceId(medicine.id, "2026-11-01", "01:30", repeated[1].scheduledInstant),
+      scheduledInstant: repeated[1].scheduledInstant,
+      actualTakenTime: localIso("2026-11-01", "03:00"),
+    }, medicine.doseAmount);
+    assert.equal(attemptedSecondFold.accepted, false);
+    assert.equal(attemptedSecondFold.reason, "ambiguous-occurrence");
+    assert.equal(attemptedSecondFold.medicines[0].inventoryAmount, medicine.inventoryAmount);
+  } finally {
+    if (previousTimezone === undefined) delete process.env.TZ;
+    else process.env.TZ = previousTimezone;
+  }
+});
+
+test("spring-forward interval and fixed-time labels match their calculated local instants", () => {
+  const previousTimezone = process.env.TZ;
+  process.env.TZ = "America/New_York";
+  try {
+    const interval = syrup({
+      frequency: "Every X hours",
+      intervalHours: 1,
+      scheduleTimes: ["00:30"],
+      startDate: "2026-03-08",
+      createdAt: localIso("2026-03-08", "00:00"),
+    });
+    const intervalLabels = getMedicineOccurrencesForDate(interval, "2026-03-08").map((item) => item.scheduledTime);
+    assert.deepEqual(intervalLabels.slice(0, 4), ["00:30", "01:30", "03:30", "04:30"]);
+
+    const fixed = syrup({ frequency: "Once daily", scheduleTimes: ["02:30"], startDate: "2026-03-08" });
+    const shifted = getMedicineOccurrencesForDate(fixed, "2026-03-08");
+    assert.equal(shifted[0].scheduledTime, "03:30");
+    assert.equal(`${String(shifted[0].scheduledAt.getHours()).padStart(2, "0")}:${String(shifted[0].scheduledAt.getMinutes()).padStart(2, "0")}`, "03:30");
+  } finally {
+    if (previousTimezone === undefined) delete process.env.TZ;
+    else process.env.TZ = previousTimezone;
+  }
 });
 

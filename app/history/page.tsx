@@ -6,9 +6,11 @@ import BottomNav from "@/components/dashboard/BottomNav";
 import WorkspaceNav from "@/components/dashboard/WorkspaceNav";
 import WorkspaceHeader from "@/components/dashboard/WorkspaceHeader";
 import WorkspacePageHeading from "@/components/dashboard/WorkspacePageHeading";
-import { getScheduledTimesForDate, localDateString } from "@/lib/schedule";
+import { getMedicineOccurrencesForDate, localDateString } from "@/lib/schedule";
+import { canonicalizeOccurrenceRecords, inventoryUnitsCompatible, scheduledOccurrenceKey } from "@/lib/medicineLogic";
 
 const pad = (n: number) => n.toString().padStart(2, "0");
+type ScheduledRecordLabel = { medicineId: string; scheduledDate: string; scheduledTime: string; scheduledInstant?: string };
 
 function formatDate(dateStr: string) {
   const [y, m, d] = dateStr.split("-").map(Number);
@@ -27,8 +29,17 @@ function formatIso12(isoStr: string) {
   return format12Hour(`${pad(d.getHours())}:${pad(d.getMinutes())}`);
 }
 
+function formatScheduledRecordTime(record: ScheduledRecordLabel, records: ScheduledRecordLabel[]) {
+  const sameTime = records.filter((item) => item.medicineId === record.medicineId && item.scheduledDate === record.scheduledDate && item.scheduledTime === record.scheduledTime && item.scheduledInstant);
+  if (!record.scheduledInstant || sameTime.length < 2) return format12Hour(record.scheduledTime);
+  const offset = -new Date(record.scheduledInstant).getTimezoneOffset();
+  const sign = offset >= 0 ? "+" : "−";
+  const absolute = Math.abs(offset);
+  return `${format12Hour(record.scheduledTime)} (UTC${sign}${pad(Math.floor(absolute / 60))}:${pad(absolute % 60)})`;
+}
+
 export default function HistoryPage() {
-  const { medicines, doseRecords, isHydrated } = useMedicine();
+  const { medicines, doseRecords, isHydrated, recordTakenDose } = useMedicine();
   const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
@@ -43,19 +54,21 @@ export default function HistoryPage() {
     return now ? localDateString(now) : "";
   }, [now]);
 
-  // Build historical log: group taken doses by date (exclude today for clarity, show today too)
-  const grouped = useMemo(() => {
-    const takenRecords = doseRecords.filter((r) => r.actualTakenTime);
-    const byDate: Record<string, typeof takenRecords> = {};
+  const canonicalDoseRecords = useMemo(() => canonicalizeOccurrenceRecords(doseRecords), [doseRecords]);
 
-    for (const record of takenRecords) {
+  // Build the historical log from both completed and missed scheduled occurrences.
+  const grouped = useMemo(() => {
+    const historyRecords = canonicalDoseRecords.filter((record) => Boolean(record.actualTakenTime) || record.status === "missed");
+    const byDate: Record<string, typeof historyRecords> = {};
+
+    for (const record of historyRecords) {
       if (!byDate[record.scheduledDate]) byDate[record.scheduledDate] = [];
       byDate[record.scheduledDate].push(record);
     }
 
     // Sort dates descending
     return Object.entries(byDate).sort(([a], [b]) => b.localeCompare(a));
-  }, [doseRecords]);
+  }, [canonicalDoseRecords]);
 
   // Overall adherence stats (last 7 days)
   const stats = useMemo(() => {
@@ -68,30 +81,48 @@ export default function HistoryPage() {
 
     let totalScheduled = 0;
     let totalTaken = 0;
+    const countedOccurrences = new Set<string>();
+    const countedWallTimes = new Set<string>();
 
     for (const dayStr of days) {
       for (const med of medicines) {
-        let timesToCount = getScheduledTimesForDate(med, dayStr);
-        if (dayStr === todayStr) {
-            timesToCount = timesToCount.filter((t) => {
-            const [h, m] = t.split(":").map(Number);
-              const sched = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m);
-              return sched <= now;
-          });
-        }
+        const allOccurrences = getMedicineOccurrencesForDate(med, dayStr);
+        const wallTimeCounts = new Map<string, number>();
+        for (const occurrence of allOccurrences) wallTimeCounts.set(occurrence.scheduledTime, (wallTimeCounts.get(occurrence.scheduledTime) ?? 0) + 1);
+        const occurrences = allOccurrences.filter((occurrence) =>
+          dayStr !== todayStr || occurrence.scheduledAt <= now
+        );
 
-        for (const time of timesToCount) {
+        for (const occurrence of occurrences) {
+          const key = scheduledOccurrenceKey(med.id, dayStr, occurrence.scheduledTime, occurrence.scheduledInstant);
+          if (countedOccurrences.has(key)) continue;
+          countedOccurrences.add(key);
+          countedWallTimes.add(JSON.stringify([med.id, dayStr, occurrence.scheduledTime]));
           totalScheduled++;
-          const taken = doseRecords.find(
-            (r) => r.medicineId === med.id && r.scheduledDate === dayStr && r.scheduledTime === time && r.actualTakenTime
+          const taken = canonicalDoseRecords.find(
+            (record) => record.medicineId === med.id && record.scheduledDate === dayStr && record.scheduledTime === occurrence.scheduledTime && record.actualTakenTime && (record.scheduledInstant === occurrence.scheduledInstant || (!record.scheduledInstant && wallTimeCounts.get(occurrence.scheduledTime) === 1))
           );
           if (taken) totalTaken++;
         }
       }
     }
 
+    for (const record of canonicalDoseRecords) {
+      if (record.isPrn || !days.includes(record.scheduledDate) || (record.status !== "missed" && !record.actualTakenTime)) continue;
+      const key = scheduledOccurrenceKey(record.medicineId, record.scheduledDate, record.scheduledTime, record.scheduledInstant);
+      if (countedOccurrences.has(key)) continue;
+      if (countedWallTimes.has(JSON.stringify([record.medicineId, record.scheduledDate, record.scheduledTime]))) continue;
+      if (record.scheduledDate === todayStr) {
+        const scheduledAt = record.scheduledInstant ? new Date(record.scheduledInstant) : new Date(`${record.scheduledDate}T${record.scheduledTime}`);
+        if (scheduledAt > now) continue;
+      }
+      countedOccurrences.add(key);
+      totalScheduled++;
+      if (record.actualTakenTime) totalTaken++;
+    }
+
     return { totalScheduled, totalTaken, pct: totalScheduled > 0 ? Math.round((totalTaken / totalScheduled) * 100) : null };
-  }, [medicines, doseRecords, todayStr, now]);
+  }, [medicines, canonicalDoseRecords, todayStr, now]);
 
   if (!isHydrated || !now) return <div className="min-h-screen bg-slate-50 dark:bg-slate-950" />;
 
@@ -102,6 +133,7 @@ export default function HistoryPage() {
       case "taken_on_time": return { text: "On time", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" };
       case "taken_early": return { text: "Early", cls: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300" };
       case "taken_late": return { text: "Late", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" };
+      case "missed": return { text: "Missed", cls: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300" };
       default: return { text: "Taken", cls: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" };
     }
   };
@@ -179,6 +211,7 @@ export default function HistoryPage() {
                     .map((record) => {
                       const med = getMed(record.medicineId);
                       const medicineName = record.medicineName ?? med?.name ?? "Deleted medicine";
+                      const ambiguousLegacyOccurrence = Boolean(med && !record.scheduledInstant && getMedicineOccurrencesForDate(med, record.scheduledDate).filter((occurrence) => occurrence.scheduledTime === record.scheduledTime).length > 1);
                       const { text, cls } = statusLabel(record.status);
 
                       return (
@@ -186,19 +219,38 @@ export default function HistoryPage() {
                           key={record.id}
                           className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900"
                         >
-                          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-950/60">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-emerald-600 dark:text-emerald-400">
-                              <polyline points="20 6 9 17 4 12" />
+                          <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg ${record.status === "missed" ? "bg-rose-100 dark:bg-rose-950/60" : "bg-emerald-100 dark:bg-emerald-950/60"}`}>
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={`h-4 w-4 ${record.status === "missed" ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                              {record.status === "missed" ? <><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></> : <polyline points="20 6 9 17 4 12" />}
                             </svg>
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="truncate font-semibold text-slate-900 dark:text-white text-sm">{medicineName}</p>
                             <p className="text-xs text-slate-500 dark:text-slate-400">
-                              {record.isPrn ? "As needed" : `Scheduled ${format12Hour(record.scheduledTime)}`}
+                              {record.isPrn ? "As needed" : `Scheduled ${formatScheduledRecordTime(record, records)}`}
                               {record.actualTakenTime && (
                                 <> · Taken {formatIso12(record.actualTakenTime)}</>
                               )}
                             </p>
+                            {record.status === "missed" && !record.actualTakenTime && ambiguousLegacyOccurrence && (
+                              <p role="status" className="mt-1 text-xs text-amber-700 dark:text-amber-300">This older dose falls in a repeated local time and cannot be assigned safely.</p>
+                            )}
+                            {record.status === "missed" && !record.actualTakenTime && med && !ambiguousLegacyOccurrence && (
+                              <button
+                                type="button"
+                                disabled={!inventoryUnitsCompatible(med) || med.inventoryAmount < med.doseAmount}
+                                onClick={() => recordTakenDose({
+                                  ...record,
+                                  scheduledInstant: record.scheduledInstant,
+                                  actualTakenTime: new Date().toISOString(),
+                                  status: "taken_late",
+                                }, med.doseAmount)}
+                                className="mt-1 text-xs font-semibold text-teal-700 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:text-slate-400 dark:text-teal-300 dark:disabled:text-slate-500"
+                                title={!inventoryUnitsCompatible(med) || med.inventoryAmount < med.doseAmount ? "Review available stock before recording this dose." : undefined}
+                              >
+                                Record as taken
+                              </button>
+                            )}
                           </div>
                           <span className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${cls}`}>
                             {text}

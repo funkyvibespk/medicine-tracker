@@ -15,11 +15,122 @@ export interface OccurrenceRecord {
   medicineId: string;
   scheduledDate: string;
   scheduledTime: string;
+  scheduledInstant?: string;
   actualTakenTime?: string;
   isPrn?: boolean;
 }
 
 export type StockStatus = "out" | "low" | "available" | "unknown";
+export const OVERDUE_THRESHOLD_MS = 5 * 60_000;
+
+export function isOccurrenceOverdue(scheduledAt: Date, now: Date): boolean {
+  return now.getTime() - scheduledAt.getTime() >= OVERDUE_THRESHOLD_MS;
+}
+
+export type OccurrenceTimeStatus = "upcoming" | "due" | "overdue";
+
+export function getOccurrenceTimeStatus(scheduledAt: Date, now: Date): OccurrenceTimeStatus {
+  const elapsedMs = now.getTime() - scheduledAt.getTime();
+  if (elapsedMs < 0) return "upcoming";
+  if (elapsedMs < OVERDUE_THRESHOLD_MS) return "due";
+  return "overdue";
+}
+
+export interface MissedOccurrenceCandidate extends OccurrenceRecord {
+  status: "missed";
+  medicineName?: string;
+  medicineType?: string;
+  medicineStrength?: string;
+}
+
+export function scheduledOccurrenceKey(medicineId: string, scheduledDate: string, scheduledTime: string, scheduledInstant?: string): string {
+  return JSON.stringify([medicineId, scheduledDate, scheduledTime, scheduledInstant ?? null]);
+}
+
+export function getOutstandingMissedOccurrences<T extends OccurrenceRecord & { status?: string }>(records: T[], today: string): T[] {
+  return canonicalizeOccurrenceRecords(records)
+    .filter((record) => !record.isPrn && record.status === "missed" && !record.actualTakenTime && record.scheduledDate < today)
+    .sort((a, b) => b.scheduledDate.localeCompare(a.scheduledDate) || b.scheduledTime.localeCompare(a.scheduledTime));
+}
+
+interface DoseOutcomeRecord extends OccurrenceRecord {
+  status?: string;
+  medicineName?: string;
+  medicineType?: string;
+  medicineStrength?: string;
+}
+
+/** Collapse only records with the same explicit occurrence identity for display and summaries. */
+export function canonicalizeOccurrenceRecords<R extends DoseOutcomeRecord>(records: R[]): R[] {
+  const canonical = new Map<string, R>();
+  for (const record of records) {
+    const key = scheduledOccurrenceKey(record.medicineId, record.scheduledDate, record.scheduledTime, record.scheduledInstant);
+    const existing = canonical.get(key);
+    if (!existing) {
+      canonical.set(key, record);
+      continue;
+    }
+
+    const chosen = existing.actualTakenTime ? existing : record.actualTakenTime ? record : existing;
+    const actualTakenTime = [existing.actualTakenTime, record.actualTakenTime]
+      .filter((value): value is string => Boolean(value))
+      .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())[0];
+    const hasTakenOutcome = Boolean(actualTakenTime) || isTakenOutcome(existing.status) || isTakenOutcome(record.status);
+    const status = hasTakenOutcome
+      ? actualTakenTime ? (isTakenOutcome(chosen.status) ? chosen.status : "taken_late") : chosen.status
+      : existing.status === "missed" || record.status === "missed" ? "missed" : existing.status;
+    canonical.set(key, {
+      ...existing,
+      ...chosen,
+      id: existing.id,
+      actualTakenTime,
+      status,
+      medicineName: existing.medicineName ?? record.medicineName,
+      medicineType: existing.medicineType ?? record.medicineType,
+      medicineStrength: existing.medicineStrength ?? record.medicineStrength,
+    } as R);
+  }
+  return [...canonical.values()];
+}
+
+function isTakenOutcome(status?: string) {
+  return Boolean(status?.startsWith("taken"));
+}
+
+/** Add or update missed outcomes without replacing existing taken or missed records. */
+export function upsertMissedOccurrenceRecords<R extends DoseOutcomeRecord>(
+  doseRecords: R[],
+  candidates: MissedOccurrenceCandidate[],
+): R[] {
+  const nextRecords = [...doseRecords];
+  const recordsByOccurrence = new Map<string, number[]>();
+  const keyFor = (record: OccurrenceRecord) => scheduledOccurrenceKey(record.medicineId, record.scheduledDate, record.scheduledTime, record.scheduledInstant);
+  nextRecords.forEach((record, index) => {
+    if (record.isPrn) return;
+    const key = keyFor(record);
+    const indices = recordsByOccurrence.get(key) ?? [];
+    indices.push(index);
+    recordsByOccurrence.set(key, indices);
+  });
+
+  let changed = false;
+  for (const candidate of candidates) {
+    if (candidate.isPrn) continue;
+    const key = keyFor(candidate);
+    const existingIndices = recordsByOccurrence.get(key);
+    if (existingIndices?.length) {
+      const existing = existingIndices.map((index) => nextRecords[index]);
+      if (existing.some((record) => record.actualTakenTime || record.status === "missed")) continue;
+      const existingIndex = existingIndices[0];
+      nextRecords[existingIndex] = { ...nextRecords[existingIndex], status: "missed" } as R;
+    } else {
+      nextRecords.push(candidate as R);
+      recordsByOccurrence.set(key, [nextRecords.length - 1]);
+    }
+    changed = true;
+  }
+  return changed ? nextRecords : doseRecords;
+}
 
 export function unitForMedicineType(type: MedicineTypeName): string {
   switch (type) {
@@ -63,7 +174,7 @@ export function availableVolumeFromContainers(containerCount: number, containerC
 
 export interface ApplyTakenDoseResult<M extends StockedMedicine, R extends OccurrenceRecord> {
   accepted: boolean;
-  reason?: "pending" | "invalid-dose" | "medicine-not-found" | "incompatible-units" | "insufficient-stock" | "duplicate";
+  reason?: "pending" | "invalid-dose" | "medicine-not-found" | "incompatible-units" | "insufficient-stock" | "duplicate" | "ambiguous-occurrence";
   medicines: M[];
   doseRecords: R[];
 }
@@ -92,14 +203,25 @@ export function applyTakenDose<M extends StockedMedicine, R extends OccurrenceRe
     return { accepted: false, reason: "insufficient-stock", medicines, doseRecords };
   }
 
+  // Older interval records have only a local clock label. At fall-back, that
+  // label cannot identify which real occurrence was recorded, so do not risk
+  // associating it with a new instant or deducting stock a second time.
+  if (record.scheduledInstant && doseRecords.some((saved) =>
+    !saved.isPrn && saved.medicineId === record.medicineId && saved.scheduledDate === record.scheduledDate &&
+    saved.scheduledTime === record.scheduledTime && !saved.scheduledInstant
+  )) {
+    return { accepted: false, reason: "ambiguous-occurrence", medicines, doseRecords };
+  }
+
   const matchesOccurrence = (saved: R) =>
     saved.medicineId === record.medicineId &&
     saved.scheduledDate === record.scheduledDate &&
     (record.isPrn
       ? Boolean(saved.isPrn)
-      : !saved.isPrn && saved.scheduledTime === record.scheduledTime)
+      : !saved.isPrn && saved.scheduledTime === record.scheduledTime &&
+        (record.scheduledInstant ? saved.scheduledInstant === record.scheduledInstant : !saved.scheduledInstant))
   const existingIndex = doseRecords.findIndex(matchesOccurrence);
-  if (doseRecords.some((saved) => matchesOccurrence(saved) && Boolean(saved.actualTakenTime))) {
+  if (doseRecords.some((saved) => matchesOccurrence(saved) && (Boolean(saved.actualTakenTime) || isTakenOutcome((saved as DoseOutcomeRecord).status)))) {
     return { accepted: false, reason: "duplicate", medicines, doseRecords };
   }
 
@@ -109,8 +231,12 @@ export function applyTakenDose<M extends StockedMedicine, R extends OccurrenceRe
     : item);
   const nextRecords = [...doseRecords];
   if (existingIndex >= 0) {
-    // Preserve an old pending occurrence's identity and other stored fields.
-    nextRecords[existingIndex] = { ...nextRecords[existingIndex], ...record, id: nextRecords[existingIndex].id };
+    // Keep duplicate legacy representations consistent without removing their IDs or fields.
+    for (let index = 0; index < nextRecords.length; index++) {
+      if (matchesOccurrence(nextRecords[index])) {
+        nextRecords[index] = { ...nextRecords[index], ...record, id: nextRecords[index].id };
+      }
+    }
   } else {
     nextRecords.push(record);
   }
@@ -118,17 +244,18 @@ export function applyTakenDose<M extends StockedMedicine, R extends OccurrenceRe
   return { accepted: true, medicines: nextMedicines, doseRecords: nextRecords };
 }
 
-export function scheduledOccurrenceId(medicineId: string, scheduledDate: string, scheduledTime: string): string {
-  return `${medicineId}-${scheduledDate}-${scheduledTime}`;
+export function scheduledOccurrenceId(medicineId: string, scheduledDate: string, scheduledTime: string, scheduledInstant?: string): string {
+  return `${medicineId}-${scheduledDate}-${scheduledTime}${scheduledInstant ? `-${new Date(scheduledInstant).getTime()}` : ""}`;
 }
 
 export function minutesFromScheduledOccurrence(
   scheduledDate: string,
   scheduledTime: string,
   actualTakenTime: string,
+  scheduledInstant?: string,
 ): number {
   const [year, month, day] = scheduledDate.split("-").map(Number);
   const [hour, minute] = scheduledTime.split(":").map(Number);
-  const scheduledAt = new Date(year, month - 1, day, hour, minute);
+  const scheduledAt = scheduledInstant ? new Date(scheduledInstant) : new Date(year, month - 1, day, hour, minute);
   return Math.round((new Date(actualTakenTime).getTime() - scheduledAt.getTime()) / 60_000);
 }
