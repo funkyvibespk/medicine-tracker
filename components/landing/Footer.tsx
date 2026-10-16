@@ -69,11 +69,6 @@ export default function Footer() {
             </h3>
             <ul className="mt-3 space-y-2">
               <li>
-                <Link href="/auth?mode=login" className="text-sm text-slate-600 hover:text-teal-600 transition-colors dark:text-slate-400 dark:hover:text-teal-400">
-                  Sign In
-                </Link>
-              </li>
-              <li>
                 <Link href="/auth?mode=signup" className="text-sm text-slate-600 hover:text-teal-600 transition-colors dark:text-slate-400 dark:hover:text-teal-400">
                   Get Started
                 </Link>

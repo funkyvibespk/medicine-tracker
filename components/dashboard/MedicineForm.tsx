@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, FormEvent, useEffect, useRef } from "react";
+import { useState } from "react";
+import type { FormEvent } from "react";
 import { Medicine, MedicineType } from "@/contexts/MedicineContext";
 import { localDateString } from "@/lib/schedule";
 
@@ -106,7 +107,6 @@ interface MedicineFormProps {
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export default function MedicineForm({ initialData, onSave, onCancel }: MedicineFormProps) {
-  const nameInputRef = useRef<HTMLInputElement>(null);
   const initialType: MedicineType = initialData?.type ?? "Tablet";
   const initialConfig = STRENGTH_CONFIG[initialType];
   const { strengthValue: initSV, strengthUnit: initSU } = parseStrength(
@@ -136,10 +136,6 @@ export default function MedicineForm({ initialData, onSave, onCancel }: Medicine
   const [strengthUnit, setStrengthUnit] = useState<string>(initSU);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    nameInputRef.current?.focus();
-  }, []);
 
   // ── Derived config for the current type ──
   const currentType = (formData.type as MedicineType) ?? "Tablet";
@@ -300,7 +296,6 @@ export default function MedicineForm({ initialData, onSave, onCancel }: Medicine
           <input
             type="text"
             id="medicineName"
-            ref={nameInputRef}
             name="name"
             value={formData.name || ""}
             onChange={handleChange}

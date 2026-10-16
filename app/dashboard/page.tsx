@@ -613,8 +613,8 @@ export default function DashboardPage() {
       
       {/* Add/Edit Modal */}
       {(isAddModalOpen || editingMedicine) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs overflow-y-auto">
-          <div role="dialog" aria-modal="true" aria-labelledby="medicine-dialog-title" onKeyDown={keepDialogFocusInside} className="relative w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900 my-8">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-slate-950/60 p-4 backdrop-blur-xs sm:items-center">
+          <div role="dialog" aria-modal="true" aria-labelledby="medicine-dialog-title" onKeyDown={keepDialogFocusInside} className="relative my-0 max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900 sm:my-8">
             <h2 id="medicine-dialog-title" className="text-xl font-bold mb-4">{editingMedicine ? "Edit Medicine" : "Add Medicine"}</h2>
             <MedicineForm
               key={editingMedicine?.id ?? "new-medicine"}
