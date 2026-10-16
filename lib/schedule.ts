@@ -13,6 +13,10 @@ function calendarDayNumber(dateString: string) {
 function dateIsActive(medicine: Medicine, dateString: string) {
   if (dateString < medicine.startDate) return false;
   if (medicine.endDate && dateString > medicine.endDate) return false;
+  if (medicine.createdAt) {
+    const createdAt = new Date(medicine.createdAt);
+    if (!Number.isNaN(createdAt.getTime()) && dateString < localDateString(createdAt)) return false;
+  }
   return true;
 }
 
@@ -59,7 +63,8 @@ export function getScheduledTimesForDate(medicine: Medicine, dateString: string)
     }
     while (occurrence < dayEnd.getTime()) {
       const current = new Date(occurrence);
-      if (localDateString(current) === dateString) {
+      const createdAt = medicine.createdAt ? new Date(medicine.createdAt) : null;
+      if (localDateString(current) === dateString && (!createdAt || Number.isNaN(createdAt.getTime()) || current >= createdAt)) {
         times.push(`${current.getHours().toString().padStart(2, "0")}:${current.getMinutes().toString().padStart(2, "0")}`);
       }
       occurrence += step;
@@ -67,7 +72,13 @@ export function getScheduledTimesForDate(medicine: Medicine, dateString: string)
     return times;
   }
 
-  return [...medicine.scheduleTimes].filter(Boolean).sort();
+  const createdAt = medicine.createdAt ? new Date(medicine.createdAt) : null;
+  return [...medicine.scheduleTimes].filter((time) => {
+    if (!time) return false;
+    if (!createdAt || Number.isNaN(createdAt.getTime()) || localDateString(createdAt) !== dateString) return true;
+    const [hour, minute] = time.split(":").map(Number);
+    return new Date(createdAt.getFullYear(), createdAt.getMonth(), createdAt.getDate(), hour, minute) >= createdAt;
+  }).sort();
 }
 
 export function formatDuration(totalMinutes: number) {

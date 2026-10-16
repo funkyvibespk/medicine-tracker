@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { Medicine, MedicineType } from "@/contexts/MedicineContext";
 import { localDateString } from "@/lib/schedule";
+import { availableVolumeFromContainers } from "@/lib/medicineLogic";
 
 // ─── Per-type strength configuration ──────────────────────────────────────────
 
@@ -106,6 +107,10 @@ interface MedicineFormProps {
 
 // ─── Component ─────────────────────────────────────────────────────────────────
 
+function createMedicineId() {
+  return `med-${Date.now()}`;
+}
+
 export default function MedicineForm({ initialData, onSave, onCancel }: MedicineFormProps) {
   const initialType: MedicineType = initialData?.type ?? "Tablet";
   const initialConfig = STRENGTH_CONFIG[initialType];
@@ -128,12 +133,14 @@ export default function MedicineForm({ initialData, onSave, onCancel }: Medicine
     notes: initialData?.notes ?? "",
     inventoryAmount: initialData?.inventoryAmount ?? 0,
     inventoryCapacity: initialData?.inventoryCapacity ?? 0,
+    inventoryContainerCapacity: initialData?.inventoryContainerCapacity ?? 0,
     lowStockThreshold: initialData?.lowStockThreshold ?? 5,
   });
 
   // ── Separate strength sub-fields ──
   const [strengthValue, setStrengthValue] = useState<string>(initSV);
   const [strengthUnit, setStrengthUnit] = useState<string>(initSU);
+  const [syrupStockEntryUnit, setSyrupStockEntryUnit] = useState<"ml" | "bottles">("ml");
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -219,6 +226,10 @@ export default function MedicineForm({ initialData, onSave, onCancel }: Medicine
       newErrors.scheduleTimes = "Choose a different time for each dose";
     if (formData.frequency === "Every X hours" && (!formData.intervalHours || formData.intervalHours < 1 || formData.intervalHours > 24))
       newErrors.intervalHours = "Enter an interval from 1 to 24 hours";
+    if (initialData && currentType !== initialData.type && Number(formData.inventoryAmount) > 0)
+      newErrors.type = "Set current stock to zero before changing medicine type so its saved inventory is not reinterpreted.";
+    if (currentType === "Syrup" && syrupStockEntryUnit === "bottles" && Number(formData.inventoryAmount) > 0 && !(Number(formData.inventoryContainerCapacity) > 0))
+      newErrors.inventoryContainerCapacity = "Enter the bottle capacity to calculate liquid stock";
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -238,23 +249,41 @@ export default function MedicineForm({ initialData, onSave, onCancel }: Medicine
       strengthValue.trim()
         ? `${strengthValue.trim()} ${strengthUnit}`.trim()
         : "";
+    const doseUnit = getDoseUnit();
+    const isSameSavedType = Boolean(initialData && currentType === initialData.type);
+    const enteredInventoryAmount = Number(formData.inventoryAmount) || 0;
+    const inventoryAmount = currentType === "Syrup" && syrupStockEntryUnit === "bottles"
+      ? availableVolumeFromContainers(enteredInventoryAmount, Number(formData.inventoryContainerCapacity) || 0)
+      : enteredInventoryAmount;
+    const inventoryCapacity = currentType === "Syrup" && syrupStockEntryUnit === "bottles" && !isSameSavedType
+      ? Number(formData.inventoryCapacity) || inventoryAmount
+      : Number(formData.inventoryCapacity) || 0;
+    const inventoryUnit = isSameSavedType ? initialData?.inventoryUnit ?? doseUnit : doseUnit;
+    const lowStockThresholdUnit = isSameSavedType
+      ? initialData?.lowStockThresholdUnit ?? initialData?.inventoryUnit ?? doseUnit
+      : doseUnit;
 
     const med: Medicine = {
-      id: initialData?.id || `med-${Date.now()}`,
+      id: initialData?.id || createMedicineId(),
       name: formData.name!.trim(),
       type: currentType,
       strength: combinedStrength,
       doseAmount: formData.doseAmount || 1,
+      doseUnit,
       frequency: normalizeFrequency(formData.frequency),
       intervalHours: formData.frequency === "Every X hours" ? formData.intervalHours : undefined,
       scheduleTimes,
       startDate: formData.startDate || localDateString(),
+      createdAt: initialData ? initialData.createdAt : new Date().toISOString(),
       endDate: formData.endDate || undefined,
       instructions: formData.instructions?.trim() || "",
       notes: formData.notes?.trim() || "",
-      inventoryAmount: formData.inventoryAmount || 0,
-      inventoryCapacity: formData.inventoryCapacity || 0,
+      inventoryAmount,
+      inventoryCapacity,
+      inventoryContainerCapacity: currentType === "Syrup" ? Number(formData.inventoryContainerCapacity) || 0 : undefined,
+      inventoryUnit,
       lowStockThreshold: formData.lowStockThreshold ?? 5,
+      lowStockThresholdUnit,
     };
 
     onSave(med);
@@ -327,6 +356,7 @@ export default function MedicineForm({ initialData, onSave, onCancel }: Medicine
             <option value="Sachet">Sachet</option>
             <option value="Injection">Injection</option>
           </select>
+          {errors.type && <p className="mt-1 text-xs text-rose-500">{errors.type}</p>}
         </div>
 
         {/* ── Strength / Concentration — type-aware ── */}
@@ -523,7 +553,7 @@ export default function MedicineForm({ initialData, onSave, onCancel }: Medicine
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label htmlFor="currentStock" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Current Stock
+              {currentType === "Syrup" && syrupStockEntryUnit === "bottles" ? "Bottles on hand" : "Current Stock"}
             </label>
             <div className="flex items-center gap-2">
               <input
@@ -531,17 +561,27 @@ export default function MedicineForm({ initialData, onSave, onCancel }: Medicine
                 id="currentStock"
                 name="inventoryAmount"
                 min="0"
-                step={formData.type === "Syrup" ? "5" : "1"}
+                step={currentType === "Syrup" && syrupStockEntryUnit === "ml" ? "any" : "1"}
                 value={formData.inventoryAmount || ""}
                 onChange={handleChange}
                 className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
               />
-              <span className="text-sm text-slate-500 dark:text-slate-400">{getDoseUnit()}</span>
+              {currentType === "Syrup" && (!initialData || currentType !== initialData.type) ? (
+                <select aria-label="Syrup stock entry unit" value={syrupStockEntryUnit} onChange={(event) => setSyrupStockEntryUnit(event.target.value as "ml" | "bottles")} className="rounded-xl border border-slate-300 px-2 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                  <option value="ml">mL</option>
+                  <option value="bottles">bottles</option>
+                </select>
+              ) : currentType === "Syrup" ? (
+                <span className="text-sm text-slate-500 dark:text-slate-400">{initialData?.inventoryUnit ?? "mL"}</span>
+              ) : (
+                <span className="text-sm text-slate-500 dark:text-slate-400">{getDoseUnit()}</span>
+              )}
             </div>
+            {currentType === "Syrup" && syrupStockEntryUnit === "bottles" && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Bottle count is converted to available mL using its capacity.</p>}
           </div>
           <div>
             <label htmlFor="lowStockThreshold" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Low Stock Alert At
+              Low Stock Alert At ({initialData && currentType === initialData.type ? initialData.lowStockThresholdUnit ?? initialData.inventoryUnit ?? getDoseUnit() : getDoseUnit()})
             </label>
             <div className="flex items-center gap-2">
               <input
@@ -549,7 +589,7 @@ export default function MedicineForm({ initialData, onSave, onCancel }: Medicine
                 id="lowStockThreshold"
                 name="lowStockThreshold"
                 min="0"
-                step={formData.type === "Syrup" ? "5" : "1"}
+                step={currentType === "Syrup" ? "any" : "1"}
                 value={formData.lowStockThreshold ?? ""}
                 onChange={handleChange}
                 className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
@@ -557,12 +597,20 @@ export default function MedicineForm({ initialData, onSave, onCancel }: Medicine
             </div>
           </div>
           <div>
-            <label htmlFor="inventoryCapacity" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Container Capacity (optional)</label>
+            <label htmlFor="inventoryCapacity" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Total Stock Capacity (optional)</label>
             <div className="flex items-center gap-2">
-              <input id="inventoryCapacity" type="number" name="inventoryCapacity" min="0" step={formData.type === "Syrup" ? "5" : "1"} value={formData.inventoryCapacity || ""} onChange={handleChange} className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+              <input id="inventoryCapacity" type="number" name="inventoryCapacity" min="0" step={currentType === "Syrup" ? "any" : "1"} value={formData.inventoryCapacity || ""} onChange={handleChange} className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
               <span className="text-sm text-slate-500 dark:text-slate-400">{getDoseUnit()}</span>
             </div>
           </div>
+          {currentType === "Syrup" && <div>
+            <label htmlFor="inventoryContainerCapacity" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Bottle Capacity</label>
+            <div className="flex items-center gap-2">
+              <input id="inventoryContainerCapacity" type="number" name="inventoryContainerCapacity" min="0" step="any" value={formData.inventoryContainerCapacity || ""} onChange={handleChange} aria-invalid={Boolean(errors.inventoryContainerCapacity)} className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+              <span className="text-sm text-slate-500 dark:text-slate-400">mL</span>
+            </div>
+            {errors.inventoryContainerCapacity && <p className="mt-1 text-xs text-rose-500">{errors.inventoryContainerCapacity}</p>}
+          </div>}
         </div>
       </div>
 

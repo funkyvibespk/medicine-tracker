@@ -9,6 +9,7 @@ import WorkspaceHeader from "@/components/dashboard/WorkspaceHeader";
 import WorkspacePageHeading from "@/components/dashboard/WorkspacePageHeading";
 import { estimatedDosesPerDay } from "@/lib/schedule";
 import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
+import { doseUnitFor, getStockStatus, inventoryUnitFor, inventoryUnitsCompatible } from "@/lib/medicineLogic";
 
 export default function MedicinesPage() {
   const { medicines, addMedicine, updateMedicine, deleteMedicine, isHydrated } = useMedicine();
@@ -25,17 +26,6 @@ export default function MedicinesPage() {
     m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     m.type.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  const getUnit = (type: string) => {
-    switch (type) {
-      case "Tablet": return "tablets";
-      case "Capsule": return "capsules";
-      case "Syrup": return "ml";
-      case "Sachet": return "sachets";
-      case "Injection": return "vials";
-      default: return "units";
-    }
-  };
 
   const typeColor = (type: string) => {
     switch (type) {
@@ -110,10 +100,12 @@ export default function MedicinesPage() {
         ) : (
           <div className="space-y-3">
             {filtered.map((med) => {
-              const isLow = med.inventoryAmount <= med.lowStockThreshold && med.inventoryAmount > 0;
-              const isOut = med.inventoryAmount === 0;
+              const stockStatus = getStockStatus(med);
+              const isLow = stockStatus === "low";
+              const isOut = stockStatus === "out";
+              const isUnknown = stockStatus === "unknown";
               const dosesPerDay = estimatedDosesPerDay(med);
-              const daysLeft = dosesPerDay !== null && dosesPerDay > 0 && med.doseAmount > 0
+              const daysLeft = inventoryUnitsCompatible(med) && dosesPerDay !== null && dosesPerDay > 0 && med.doseAmount > 0
                 ? Math.floor(med.inventoryAmount / (dosesPerDay * med.doseAmount))
                 : null;
               const scheduleLabel = med.frequency === "As needed (PRN)"
@@ -156,20 +148,22 @@ export default function MedicinesPage() {
                           Low stock
                         </span>
                       )}
+                      {isUnknown && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">Review units</span>}
                     </div>
                     <p className="mt-0.5 text-sm text-teal-600 dark:text-teal-400 font-medium">
-                      {med.strength || "—"} · {med.doseAmount} {getUnit(med.type)} per dose
+                      {med.strength || "—"} · {med.doseAmount} {med.doseUnit ?? doseUnitFor(med)} per dose
                     </p>
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
                         <span><span className="font-medium text-slate-700 dark:text-slate-300">{scheduleLabel}</span></span>
                       <span>
                         Stock: <span className={`font-medium ${isOut ? "text-rose-600 dark:text-rose-400" : isLow ? "text-amber-600 dark:text-amber-400" : "text-slate-700 dark:text-slate-300"}`}>
-                          {med.inventoryAmount} {getUnit(med.type)}
+                          {med.inventoryAmount} {inventoryUnitFor(med)}
                         </span>
                         {daysLeft !== null && !isOut && (
                           <span className="ml-1 text-slate-400">≈ {daysLeft} day{daysLeft !== 1 ? "s" : ""} left</span>
                         )}
                       </span>
+                      {isUnknown && <span className="text-amber-700 dark:text-amber-300">Dose and inventory units are incompatible; stock was preserved.</span>}
                       {med.instructions && <span>· {med.instructions}</span>}
                     </div>
                   </div>

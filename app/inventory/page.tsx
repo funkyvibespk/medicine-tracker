@@ -7,6 +7,7 @@ import WorkspaceNav from "@/components/dashboard/WorkspaceNav";
 import WorkspaceHeader from "@/components/dashboard/WorkspaceHeader";
 import WorkspacePageHeading from "@/components/dashboard/WorkspacePageHeading";
 import { estimatedDosesPerDay } from "@/lib/schedule";
+import { doseUnitFor, getStockStatus, inventoryUnitFor, inventoryUnitsCompatible } from "@/lib/medicineLogic";
 import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
 
 export default function InventoryPage() {
@@ -17,31 +18,21 @@ export default function InventoryPage() {
 
   if (!isHydrated) return <div className="min-h-screen bg-slate-50 dark:bg-slate-950" />;
 
-  const getUnit = (type: string) => {
-    switch (type) {
-      case "Tablet": return "tablets";
-      case "Capsule": return "capsules";
-      case "Syrup": return "ml";
-      case "Sachet": return "sachets";
-      case "Injection": return "vials";
-      default: return "units";
-    }
-  };
-
   const addingMed = medicines.find((m) => m.id === addingStockMedId) ?? null;
 
   // Compute stock status for each medicine
   const withStatus = medicines.map((med) => {
     const dosesPerDay = estimatedDosesPerDay(med);
     const daysLeft =
-      dosesPerDay !== null && dosesPerDay > 0 && med.doseAmount > 0
+      inventoryUnitsCompatible(med) && dosesPerDay !== null && dosesPerDay > 0 && med.doseAmount > 0
         ? Math.floor(med.inventoryAmount / (dosesPerDay * med.doseAmount))
         : null;
-    const isOut = med.inventoryAmount === 0;
-    const isLow = !isOut && med.inventoryAmount <= med.lowStockThreshold;
-    const isOk = !isOut && !isLow;
+    const stockStatus = getStockStatus(med);
+    const isOut = stockStatus === "out";
+    const isLow = stockStatus === "low";
+    const isUnknown = stockStatus === "unknown";
 
-    return { med, daysLeft, isOut, isLow, isOk };
+    return { med, daysLeft, isOut, isLow, isUnknown };
   });
 
   const outCount = withStatus.filter((s) => s.isOut).length;
@@ -49,7 +40,7 @@ export default function InventoryPage() {
 
   // Sort: Out first, then Low, then Ok
   const sorted = [...withStatus].sort((a, b) => {
-    const order = (s: typeof a) => (s.isOut ? 0 : s.isLow ? 1 : 2);
+    const order = (s: typeof a) => (s.isOut ? 0 : s.isLow ? 1 : s.isUnknown ? 2 : 3);
     return order(a) - order(b);
   });
 
@@ -105,8 +96,8 @@ export default function InventoryPage() {
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {sorted.map(({ med, daysLeft, isOut, isLow }) => {
-              const pct = med.inventoryCapacity && med.inventoryCapacity > 0
+            {sorted.map(({ med, daysLeft, isOut, isLow, isUnknown }) => {
+              const pct = inventoryUnitsCompatible(med) && med.inventoryCapacity && med.inventoryCapacity > 0
                 ? Math.min(100, Math.round((med.inventoryAmount / med.inventoryCapacity) * 100))
                 : null;
 
@@ -136,6 +127,10 @@ export default function InventoryPage() {
                         <span className="flex-shrink-0 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
                           Low
                         </span>
+                      ) : isUnknown ? (
+                        <span className="flex-shrink-0 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                          Review units
+                        </span>
                       ) : (
                         <span className="flex-shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
                           OK
@@ -149,7 +144,7 @@ export default function InventoryPage() {
                         <span className={`text-2xl font-extrabold ${isOut ? "text-rose-600 dark:text-rose-400" : isLow ? "text-amber-600 dark:text-amber-400" : "text-slate-900 dark:text-white"}`}>
                           {med.inventoryAmount}
                         </span>
-                        <span className="text-sm text-slate-500 dark:text-slate-400">{getUnit(med.type)}</span>
+                        <span className="text-sm text-slate-500 dark:text-slate-400">{inventoryUnitFor(med)}</span>
                       </div>
 
                       {/* Progress bar (only if capacity set) */}
@@ -167,8 +162,8 @@ export default function InventoryPage() {
 
                     <div className="mt-3 space-y-1 text-xs text-slate-500 dark:text-slate-400">
                       <div>{estimatedDosesPerDay(med) === null
-                        ? `Dose: ${med.doseAmount} ${getUnit(med.type)} · As needed`
-                        : `Dose: ${med.doseAmount} ${getUnit(med.type)} × ${estimatedDosesPerDay(med)!.toFixed(2)}/day`}</div>
+                        ? `Dose: ${med.doseAmount} ${med.doseUnit ?? doseUnitFor(med)} · As needed`
+                        : `Dose: ${med.doseAmount} ${med.doseUnit ?? doseUnitFor(med)} × ${estimatedDosesPerDay(med)!.toFixed(2)}/day`}</div>
                       {daysLeft !== null && !isOut && (
                         <div>
                           Estimated: <span className={`font-semibold ${isLow ? "text-amber-600 dark:text-amber-400" : "text-slate-700 dark:text-slate-300"}`}>
@@ -176,7 +171,8 @@ export default function InventoryPage() {
                           </span>
                         </div>
                       )}
-                      <div>Alert below: {med.lowStockThreshold} {getUnit(med.type)}</div>
+                      <div>{typeof med.lowStockThreshold === "number" ? `Alert at: ${med.lowStockThreshold} ${med.lowStockThresholdUnit ?? inventoryUnitFor(med)}` : "Low-stock alert not configured"}</div>
+                      {isUnknown && <div className="font-semibold text-amber-700 dark:text-amber-300">Dose and inventory units are incompatible; stock was preserved.</div>}
                     </div>
                   </div>
 
@@ -207,7 +203,7 @@ export default function InventoryPage() {
           <div role="dialog" aria-modal="true" aria-labelledby="inventory-add-stock-title" onKeyDown={keepDialogFocusInside} className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
             <h3 id="inventory-add-stock-title" className="text-lg font-bold text-slate-900 dark:text-white mb-1">Add Stock</h3>
             <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">
-              {addingMed.name} · Current: {addingMed.inventoryAmount} {getUnit(addingMed.type)}
+              {addingMed.name} · Current: {addingMed.inventoryAmount} {inventoryUnitFor(addingMed)}
             </p>
             <form
               onSubmit={(e) => {
@@ -220,13 +216,13 @@ export default function InventoryPage() {
               }}
             >
               <label htmlFor="inventory-stock-quantity" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Quantity to add ({getUnit(addingMed.type)})
+                Quantity to add ({inventoryUnitFor(addingMed)})
               </label>
               <input
                 id="inventory-stock-quantity"
                 type="number"
-                step="1"
-                min="1"
+                step={addingMed.type === "Syrup" ? "any" : "1"}
+                min={addingMed.type === "Syrup" ? "0.01" : "1"}
                 value={stockToAdd || ""}
                 onChange={(e) => setStockToAdd(parseFloat(e.target.value) || 0)}
                 className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm mb-3 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 dark:bg-slate-800 dark:border-slate-700 dark:text-white"

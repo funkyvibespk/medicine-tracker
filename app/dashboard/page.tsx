@@ -10,6 +10,7 @@ import WorkspaceHeader from "@/components/dashboard/WorkspaceHeader";
 import WorkspacePageHeading from "@/components/dashboard/WorkspacePageHeading";
 import { formatDuration, getScheduledTimesForDate, isPrnMedicine, localDateString } from "@/lib/schedule";
 import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
+import { doseUnitFor, getStockStatus, inventoryUnitFor, inventoryUnitsCompatible, minutesFromScheduledOccurrence, scheduledOccurrenceId } from "@/lib/medicineLogic";
 
 // Helper to pad numbers
 const pad = (n: number) => n.toString().padStart(2, "0");
@@ -17,6 +18,7 @@ const pad = (n: number) => n.toString().padStart(2, "0");
 type ScheduledDose = {
   id: string;
   med: Medicine;
+  scheduledDate: string;
   time: string;
   record?: DoseRecord;
   status: DoseStatus;
@@ -33,7 +35,7 @@ export default function DashboardPage() {
     addMedicine,
     updateMedicine,
     updateDoseRecord,
-    recordDose,
+    recordTakenDose,
     deleteMedicine,
     addStock,
     isHydrated,
@@ -95,9 +97,9 @@ export default function DashboardPage() {
       if (med.endDate && med.endDate < todayStr) return;
 
       getScheduledTimesForDate(med, todayStr).forEach((time) => {
-        const id = `${med.id}-${todayStr}-${time}`;
+        const id = scheduledOccurrenceId(med.id, todayStr, time);
         const record = doseRecords.find(
-          (r) => r.medicineId === med.id && r.scheduledDate === todayStr && r.scheduledTime === time
+          (r) => !r.isPrn && r.medicineId === med.id && r.scheduledDate === todayStr && r.scheduledTime === time && Boolean(r.actualTakenTime)
         );
 
         // Calculate dynamic status
@@ -109,9 +111,7 @@ export default function DashboardPage() {
         const scheduledTimeDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), schHour, schMin);
         
         if (record && record.actualTakenTime) {
-          const takenTimeDate = new Date(record.actualTakenTime);
-          const diffMs = takenTimeDate.getTime() - scheduledTimeDate.getTime();
-          minutesDiff = Math.round(diffMs / 60000);
+          minutesDiff = minutesFromScheduledOccurrence(todayStr, time, record.actualTakenTime!);
           
           if (minutesDiff < -5) {
             status = "taken_early";
@@ -140,6 +140,7 @@ export default function DashboardPage() {
         doses.push({
           id,
           med,
+          scheduledDate: todayStr,
           time,
           record,
           status,
@@ -165,7 +166,10 @@ export default function DashboardPage() {
   const prnMedicines = medicines.filter((med) => isPrnMedicine(med) && med.startDate <= todayStr && (!med.endDate || med.endDate >= todayStr));
 
   const activeMedicines = medicines.filter((medicine) => medicine.startDate <= todayStr && (!medicine.endDate || medicine.endDate >= todayStr));
-  const stockAlerts = medicines.filter((medicine) => medicine.inventoryAmount <= medicine.lowStockThreshold);
+  const stockAlerts = medicines.filter((medicine) => {
+    const status = getStockStatus(medicine);
+    return status === "out" || status === "low";
+  });
   const filteredDoses = todaysDoses.filter((dose) => {
     if (doseFilter === "taken") return dose.status.startsWith("taken");
     if (doseFilter === "pending") return !dose.status.startsWith("taken");
@@ -223,27 +227,19 @@ export default function DashboardPage() {
   const confirmTakeDose = (dose: ScheduledDose, takenTime: Date) => {
     // Determine status
     let status: DoseStatus = "taken_on_time";
-    const diffMs = takenTime.getTime() - dose.scheduledDateObj.getTime();
-    const minutesDiff = Math.round(diffMs / 60000);
+    const minutesDiff = minutesFromScheduledOccurrence(dose.scheduledDate, dose.time, takenTime.toISOString());
     
     if (minutesDiff < -5) status = "taken_early";
     else if (minutesDiff > 5) status = "taken_late";
     
-    recordDose({
-      id: `${dose.id}-${takenTime.getTime()}`,
+    recordTakenDose({
+      id: dose.id,
       medicineId: dose.med.id,
-      scheduledDate: todayStr,
+      scheduledDate: dose.scheduledDate,
       scheduledTime: dose.time,
       actualTakenTime: takenTime.toISOString(),
       status
-    });
-    
-    // Deduct inventory
-    if (dose.med.inventoryAmount > 0) {
-      updateMedicine(dose.med.id, {
-        inventoryAmount: Math.max(0, dose.med.inventoryAmount - dose.med.doseAmount)
-      });
-    }
+    }, dose.med.doseAmount);
     
     setTakingEarly(null);
   };
@@ -255,16 +251,15 @@ export default function DashboardPage() {
     ) return;
     const takenTime = new Date();
     const time = `${pad(takenTime.getHours())}:${pad(takenTime.getMinutes())}`;
-    recordDose({
-      id: `prn-${med.id}-${takenTime.getTime()}`,
+    recordTakenDose({
+      id: `prn-${med.id}-${todayStr}`,
       medicineId: med.id,
       scheduledDate: todayStr,
       scheduledTime: time,
       actualTakenTime: takenTime.toISOString(),
       status: "taken_on_time",
       isPrn: true,
-    });
-    updateMedicine(med.id, { inventoryAmount: Math.max(0, med.inventoryAmount - med.doseAmount) });
+    }, med.doseAmount);
   };
 
   const handleChangeTimeSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -273,7 +268,10 @@ export default function DashboardPage() {
     if (!changingDose || typeof submittedTime !== "string" || !submittedTime) return;
     
     const [hh, mm] = submittedTime.split(":").map(Number);
-    const newTakenDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm);
+    const currentTakenDate = changingDose.record?.actualTakenTime
+      ? new Date(changingDose.record.actualTakenTime)
+      : changingDose.scheduledDateObj;
+    const newTakenDate = new Date(currentTakenDate.getFullYear(), currentTakenDate.getMonth(), currentTakenDate.getDate(), hh, mm);
     
     // Cannot be in future
     if (newTakenDate > now) {
@@ -283,8 +281,7 @@ export default function DashboardPage() {
     setTimeError("");
     
     let status: DoseStatus = "taken_on_time";
-    const diffMs = newTakenDate.getTime() - changingDose.scheduledDateObj.getTime();
-    const minutesDiff = Math.round(diffMs / 60000);
+    const minutesDiff = minutesFromScheduledOccurrence(changingDose.scheduledDate, changingDose.time, newTakenDate.toISOString());
     
     if (minutesDiff < -5) status = "taken_early";
     else if (minutesDiff > 5) status = "taken_late";
@@ -295,14 +292,14 @@ export default function DashboardPage() {
         status
       });
     } else {
-      recordDose({
-        id: `${changingDose.id}-${Date.now()}`,
+      recordTakenDose({
+        id: changingDose.id,
         medicineId: changingDose.med.id,
-        scheduledDate: todayStr,
+        scheduledDate: changingDose.scheduledDate,
         scheduledTime: changingDose.time,
         actualTakenTime: newTakenDate.toISOString(),
         status
-      });
+      }, changingDose.med.doseAmount);
     }
     
     setChangingDose(null);
@@ -319,17 +316,6 @@ export default function DashboardPage() {
   const formatIsoTo12Hour = (isoStr: string) => {
     const d = new Date(isoStr);
     return format12Hour(`${pad(d.getHours())}:${pad(d.getMinutes())}`);
-  };
-
-  const getUnit = (type: string) => {
-    switch (type) {
-      case "Tablet": return "tablets";
-      case "Capsule": return "capsules";
-      case "Syrup": return "ml";
-      case "Sachet": return "sachets";
-      case "Injection": return "vials";
-      default: return "units";
-    }
   };
 
   if (!isHydrated || now.getTime() === 0) return <div className="min-h-screen bg-slate-50 dark:bg-slate-950" />;
@@ -407,7 +393,7 @@ export default function DashboardPage() {
 
         <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-bold text-slate-900 dark:text-white">Upcoming doses</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">The next scheduled doses today</p></div><Link href="#todays-schedule" className="text-xs font-semibold text-teal-700 hover:text-teal-600 dark:text-teal-300">Open today&apos;s schedule →</Link></div>
-          {upcomingDoses.length === 0 ? <p className="mt-4 rounded-xl bg-slate-50 px-4 py-4 text-sm text-slate-500 dark:bg-slate-950/50 dark:text-slate-400">No upcoming scheduled doses today.</p> : <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{upcomingDoses.map((dose) => <div key={dose.id} className="flex min-w-0 items-center gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-950/50"><span className="shrink-0 rounded-lg bg-white px-2 py-1 text-xs font-bold text-teal-700 shadow-sm dark:bg-slate-800 dark:text-teal-300">{format12Hour(dose.time)}</span><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900 dark:text-white">{dose.med.name}</span><span className="block text-xs text-slate-500 dark:text-slate-400">{dose.med.doseAmount} {getUnit(dose.med.type)}</span></span></div>)}</div>}
+          {upcomingDoses.length === 0 ? <p className="mt-4 rounded-xl bg-slate-50 px-4 py-4 text-sm text-slate-500 dark:bg-slate-950/50 dark:text-slate-400">No upcoming scheduled doses today.</p> : <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{upcomingDoses.map((dose) => <div key={dose.id} className="flex min-w-0 items-center gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-950/50"><span className="shrink-0 rounded-lg bg-white px-2 py-1 text-xs font-bold text-teal-700 shadow-sm dark:bg-slate-800 dark:text-teal-300">{format12Hour(dose.time)}</span><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900 dark:text-white">{dose.med.name}</span><span className="block text-xs text-slate-500 dark:text-slate-400">{dose.med.doseAmount} {dose.med.doseUnit ?? doseUnitFor(dose.med)}</span></span></div>)}</div>}
         </section>
 
         <section id="todays-schedule" className="mb-4 flex flex-wrap items-end justify-between gap-3">
@@ -441,7 +427,10 @@ export default function DashboardPage() {
         ) : (
           <div className="space-y-5">
           {filteredDoses.length > 0 && <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {filteredDoses.map((dose) => (
+            {filteredDoses.map((dose) => {
+              const stockStatus = getStockStatus(dose.med);
+              const unitsCompatible = inventoryUnitsCompatible(dose.med);
+              return (
               <div
                 key={dose.id}
                 className={`group relative flex flex-col justify-between rounded-2xl border p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
@@ -517,24 +506,26 @@ export default function DashboardPage() {
                     <p className="mt-1 text-sm font-medium text-teal-600 dark:text-teal-400">
                       {dose.med.type} {dose.med.strength ? `· ${dose.med.strength}` : ""}
                     </p>
-                    <p className="text-xs text-slate-500 mt-1">Dose: {dose.med.doseAmount} {getUnit(dose.med.type)}</p>
+                    <p className="text-xs text-slate-500 mt-1">Dose: {dose.med.doseAmount} {dose.med.doseUnit ?? doseUnitFor(dose.med)}</p>
                     <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{dose.med.frequency}{dose.med.frequency === "Every X hours" ? ` · every ${dose.med.intervalHours || 8} hours` : ""}</p>
                     <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">From {dose.med.startDate}{dose.med.endDate ? ` · To ${dose.med.endDate}` : " · No end date"}</p>
                     {dose.med.instructions && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{dose.med.instructions}</p>}
 
                     {/* Inventory Status */}
                     <div className="mt-2.5">
-                      {dose.med.inventoryAmount === 0 ? (
+                      {stockStatus === "out" ? (
                         <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400">
                           <span className="h-1.5 w-1.5 rounded-full bg-rose-500" /> Out of stock
                         </span>
-                      ) : dose.med.inventoryAmount <= dose.med.lowStockThreshold ? (
+                      ) : stockStatus === "low" ? (
                         <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
-                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> {dose.med.inventoryAmount} {getUnit(dose.med.type)} remaining (Low stock)
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> {dose.med.inventoryAmount} {inventoryUnitFor(dose.med)} remaining (Low stock)
                         </span>
+                      ) : stockStatus === "unknown" ? (
+                        <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">Inventory units do not match dose units; review stock before recording.</span>
                       ) : (
                         <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                          {dose.med.inventoryAmount} {getUnit(dose.med.type)} remaining
+                          {dose.med.inventoryAmount} {inventoryUnitFor(dose.med)} remaining
                           {dose.med.type === "Syrup" && ` (≈ ${Math.floor(dose.med.inventoryAmount / dose.med.doseAmount)} doses)`}
                         </span>
                       )}
@@ -570,7 +561,7 @@ export default function DashboardPage() {
                   ) : (
                     <button
                       type="button"
-                      disabled={dose.med.inventoryAmount < dose.med.doseAmount}
+                      disabled={!unitsCompatible || dose.med.inventoryAmount < dose.med.doseAmount}
                       onClick={() => handleTakeDose(dose)}
                       className="w-full cursor-pointer flex items-center justify-center gap-2 rounded-xl py-2.5 px-4 text-xs sm:text-sm font-semibold text-white bg-teal-600 hover:bg-teal-500 shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -580,7 +571,8 @@ export default function DashboardPage() {
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>}
           {filteredDoses.length === 0 && prnMedicines.length > 0 && <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500 dark:bg-slate-900">No scheduled doses match this filter.</p>}
           {prnMedicines.length > 0 && <section>
@@ -592,14 +584,14 @@ export default function DashboardPage() {
                   <div>
                     <h3 className="text-lg font-bold text-slate-900 dark:text-white">{med.name}</h3>
                     <p className="mt-1 text-sm font-medium text-teal-600 dark:text-teal-400">{med.type}{med.strength ? ` · ${med.strength}` : ""}</p>
-                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">As needed · Dose: {med.doseAmount} {getUnit(med.type)}</p>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">As needed · Dose: {med.doseAmount} {med.doseUnit ?? doseUnitFor(med)}</p>
                     {med.instructions && <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{med.instructions}</p>}
-                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{med.inventoryAmount} {getUnit(med.type)} remaining</p>
+                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{med.inventoryAmount} {inventoryUnitFor(med)} remaining</p>
                     {doseRecords.filter((record) => record.isPrn && record.medicineId === med.id && record.scheduledDate === todayStr).map((record) => (
                       <p key={record.id} className="mt-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">Taken at {record.actualTakenTime ? formatIsoTo12Hour(record.actualTakenTime) : "—"}</p>
                     ))}
                   </div>
-                  <button type="button" disabled={prnTakenToday || med.inventoryAmount < med.doseAmount} onClick={() => recordPrnDose(med)} className="mt-5 w-full rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-50">{prnTakenToday ? "Taken ✓" : "Mark as Taken"}</button>
+                  <button type="button" disabled={prnTakenToday || !inventoryUnitsCompatible(med) || med.inventoryAmount < med.doseAmount} onClick={() => recordPrnDose(med)} className="mt-5 w-full rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-50">{prnTakenToday ? "Taken ✓" : "Mark as Taken"}</button>
                 </div>;
               })}
             </div>
@@ -698,7 +690,7 @@ export default function DashboardPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
           <div role="dialog" aria-modal="true" aria-labelledby="dashboard-add-stock-title" onKeyDown={keepDialogFocusInside} className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
             <h3 id="dashboard-add-stock-title" className="text-lg font-bold text-slate-900 dark:text-white mb-4">Add Stock</h3>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">Current stock: {addingStockMed.inventoryAmount} {getUnit(addingStockMed.type)}</p>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">Current stock: {addingStockMed.inventoryAmount} {inventoryUnitFor(addingStockMed)}</p>
             <form onSubmit={(e) => {
               e.preventDefault();
               if (stockToAdd > 0) {
@@ -707,12 +699,12 @@ export default function DashboardPage() {
                 setStockToAdd(0);
               }
             }}>
-              <label htmlFor="dashboard-stock-quantity" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Quantity to add</label>
+              <label htmlFor="dashboard-stock-quantity" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Quantity to add ({inventoryUnitFor(addingStockMed)})</label>
               <input
                 id="dashboard-stock-quantity"
                 type="number"
-                step={addingStockMed.type === "Syrup" ? "5" : "1"}
-                min="0"
+                step={addingStockMed.type === "Syrup" ? "any" : "1"}
+                min={addingStockMed.type === "Syrup" ? "0.01" : "0"}
                 value={stockToAdd || ""}
                 onChange={(e) => setStockToAdd(parseFloat(e.target.value) || 0)}
                 className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm mb-4 dark:bg-slate-800 dark:border-slate-700 dark:text-white"

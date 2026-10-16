@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import {
   demoProfileStorageKey,
   loadDemoProfile,
@@ -8,6 +8,7 @@ import {
   serializeDemoProfile,
 } from "@/lib/demoProfiles";
 import { readDemoSession } from "@/lib/demoSession";
+import { applyTakenDose } from "@/lib/medicineLogic";
 
 export type MedicineType = "Tablet" | "Capsule" | "Syrup" | "Sachet" | "Injection";
 
@@ -21,14 +22,19 @@ export interface Medicine {
   intervalHours?: number;
   scheduleTimes: string[]; // ["08:00", "20:00"]
   startDate: string; // YYYY-MM-DD
+  createdAt?: string; // creation timestamp for suppressing same-day doses before the medicine existed
   endDate?: string;
   instructions?: string;
   notes?: string;
+  doseUnit?: string;
   
   // Inventory
   inventoryAmount: number;
   inventoryCapacity?: number; // total size for volume-based
+  inventoryContainerCapacity?: number; // volume per container for new liquid stock
+  inventoryUnit?: string;
   lowStockThreshold: number;
+  lowStockThresholdUnit?: string;
 }
 
 export type DoseStatus = "upcoming" | "due" | "overdue" | "taken_early" | "taken_on_time" | "taken_late";
@@ -52,7 +58,7 @@ interface MedicineContextType {
   addMedicine: (med: Medicine) => void;
   updateMedicine: (id: string, med: Partial<Medicine>) => void;
   deleteMedicine: (id: string) => void;
-  recordDose: (record: DoseRecord) => void;
+  recordTakenDose: (record: DoseRecord, doseAmount: number) => boolean;
   updateDoseRecord: (id: string, updates: Partial<DoseRecord>) => void;
   updateInventory: (medicineId: string, amount: number) => void;
   addStock: (medicineId: string, amount: number) => void;
@@ -68,20 +74,26 @@ const MedicineContext = createContext<MedicineContextType | undefined>(undefined
 export function MedicineProvider({ children }: { children: ReactNode }) {
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [doseRecords, setDoseRecords] = useState<DoseRecord[]>([]);
+  const medicinesRef = useRef<Medicine[]>([]);
+  const doseRecordsRef = useRef<DoseRecord[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
   const [activeProfileEmail, setActiveProfileEmail] = useState<string | null>(null);
 
   const activateProfile = (emailInput: string, options?: { migrateLegacy?: boolean }) => {
     const email = normalizeDemoEmail(emailInput);
     const profile = loadDemoProfile(localStorage, email, options);
+    medicinesRef.current = profile.medicines as Medicine[];
+    doseRecordsRef.current = profile.doseRecords as DoseRecord[];
     setIsHydrated(false);
-    setMedicines(profile.medicines as Medicine[]);
-    setDoseRecords(profile.doseRecords as DoseRecord[]);
+    setMedicines(medicinesRef.current);
+    setDoseRecords(doseRecordsRef.current);
     setActiveProfileEmail(email);
     setIsHydrated(true);
   };
 
   const deactivateProfile = () => {
+    medicinesRef.current = [];
+    doseRecordsRef.current = [];
     setIsHydrated(false);
     setMedicines([]);
     setDoseRecords([]);
@@ -97,9 +109,10 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
           migrateLegacy: false,
         });
         // localStorage can only be read after hydration; restore saved client state here.
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setMedicines(profile.medicines as Medicine[]);
-        setDoseRecords(profile.doseRecords as DoseRecord[]);
+        medicinesRef.current = profile.medicines as Medicine[];
+        doseRecordsRef.current = profile.doseRecords as DoseRecord[];
+        setMedicines(medicinesRef.current);
+        setDoseRecords(doseRecordsRef.current);
         setActiveProfileEmail(session.email);
       }
     } catch (e) {
@@ -118,67 +131,72 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
   }, [medicines, doseRecords, isHydrated, activeProfileEmail]);
 
   const addMedicine = (med: Medicine) => {
-    setMedicines((prev) => [...prev, med]);
+    medicinesRef.current = [...medicinesRef.current, med];
+    setMedicines(medicinesRef.current);
   };
 
   const updateMedicine = (id: string, updates: Partial<Medicine>) => {
-    setMedicines((prev) => prev.map((m) => (m.id === id ? { ...m, ...updates } : m)));
+    medicinesRef.current = medicinesRef.current.map((m) => (m.id === id ? { ...m, ...updates } : m));
+    setMedicines(medicinesRef.current);
   };
 
   const deleteMedicine = (id: string) => {
-    const medicine = medicines.find((item) => item.id === id);
+    const medicine = medicinesRef.current.find((item) => item.id === id);
     if (medicine) {
-      setDoseRecords((prev) => prev.map((record) => record.medicineId === id
+      doseRecordsRef.current = doseRecordsRef.current.map((record) => record.medicineId === id
         ? {
             ...record,
             medicineName: record.medicineName ?? medicine.name,
             medicineType: record.medicineType ?? medicine.type,
             medicineStrength: record.medicineStrength ?? medicine.strength,
           }
-        : record));
+        : record);
+      setDoseRecords(doseRecordsRef.current);
     }
-    setMedicines((prev) => prev.filter((m) => m.id !== id));
+    medicinesRef.current = medicinesRef.current.filter((m) => m.id !== id);
+    setMedicines(medicinesRef.current);
   };
 
-  const recordDose = (record: DoseRecord) => {
-    setDoseRecords((prev) => {
-      // replace if existing for same scheduled date and time
-      const medicine = medicines.find((item) => item.id === record.medicineId);
-      const filtered = record.isPrn
-        ? prev
-        : prev.filter((r) => !(r.medicineId === record.medicineId && r.scheduledDate === record.scheduledDate && r.scheduledTime === record.scheduledTime && !r.isPrn));
-      return [...filtered, {
-        ...record,
-        medicineName: medicine?.name ?? record.medicineName,
-        medicineType: medicine?.type ?? record.medicineType,
-        medicineStrength: medicine?.strength ?? record.medicineStrength,
-      }];
-    });
+  const recordTakenDose = (record: DoseRecord, doseAmount: number) => {
+    const medicine = medicinesRef.current.find((item) => item.id === record.medicineId);
+    if (!medicine) return false;
+    const enrichedRecord: DoseRecord = {
+      ...record,
+      medicineName: medicine.name ?? record.medicineName,
+      medicineType: medicine.type ?? record.medicineType,
+      medicineStrength: medicine.strength ?? record.medicineStrength,
+    };
+    const result = applyTakenDose(medicinesRef.current, doseRecordsRef.current, enrichedRecord, doseAmount);
+    if (!result.accepted) return false;
+    medicinesRef.current = result.medicines;
+    doseRecordsRef.current = result.doseRecords;
+    setMedicines(medicinesRef.current);
+    setDoseRecords(doseRecordsRef.current);
+    return true;
   };
 
   const updateDoseRecord = (id: string, updates: Partial<DoseRecord>) => {
-    setDoseRecords((prev) => prev.map((d) => (d.id === id ? { ...d, ...updates } : d)));
+    doseRecordsRef.current = doseRecordsRef.current.map((d) => (d.id === id ? { ...d, ...updates } : d));
+    setDoseRecords(doseRecordsRef.current);
   };
 
   const updateInventory = (medicineId: string, amount: number) => {
-    setMedicines((prev) =>
-      prev.map((m) => {
-        if (m.id !== medicineId) return m;
-        return { ...m, inventoryAmount: Math.max(0, amount) };
-      })
-    );
+    medicinesRef.current = medicinesRef.current.map((m) => m.id === medicineId
+      ? { ...m, inventoryAmount: Math.max(0, amount) }
+      : m);
+    setMedicines(medicinesRef.current);
   };
 
   const addStock = (medicineId: string, amountToAdd: number) => {
-    setMedicines((prev) =>
-      prev.map((m) => {
-        if (m.id !== medicineId) return m;
-        return { ...m, inventoryAmount: Math.max(0, m.inventoryAmount + amountToAdd) };
-      })
-    );
+    medicinesRef.current = medicinesRef.current.map((m) => m.id === medicineId
+      ? { ...m, inventoryAmount: Math.max(0, m.inventoryAmount + amountToAdd) }
+      : m);
+    setMedicines(medicinesRef.current);
   };
 
   const clearAll = () => {
+    medicinesRef.current = [];
+    doseRecordsRef.current = [];
     setMedicines([]);
     setDoseRecords([]);
   };
@@ -191,7 +209,7 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
         addMedicine,
         updateMedicine,
         deleteMedicine,
-        recordDose,
+        recordTakenDose,
         updateDoseRecord,
         updateInventory,
         addStock,
