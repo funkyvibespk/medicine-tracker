@@ -62,8 +62,12 @@ export default function MedicinesPage() {
 
         {possibleDuplicatePairs.length > 0 && (
           <section className="mb-6 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 dark:border-amber-900/60 dark:bg-amber-950/20" aria-labelledby="possible-duplicates-title">
-            <h2 id="possible-duplicates-title" className="text-sm font-semibold text-amber-950 dark:text-amber-200">Review possible duplicate entries ({possibleDuplicatePairs.length})</h2>
-            <p className="mt-1 text-xs text-amber-900/80 dark:text-amber-300">These records have similar normalized names and matching dosage form and strength. No inventory or history is combined automatically.</p>
+            <h2 id="possible-duplicates-title" className="text-sm font-semibold text-amber-950 dark:text-amber-200">Review Duplicate Medicines ({possibleDuplicatePairs.length})</h2>
+            <div className="mt-3 rounded-xl border border-amber-300 bg-amber-100/80 p-3 dark:border-amber-800 dark:bg-amber-950/50">
+              <p className="text-sm font-bold text-amber-950 dark:text-amber-100">Choose the Correct Medicine</p>
+              <p className="mt-1 text-xs leading-relaxed text-amber-950/85 dark:text-amber-200">Compare strength, dosage form, schedule, stock quantity, and dose history before resolving these entries. Similar names are a review prompt, not proof that medicines are equivalent.</p>
+            </div>
+            <p className="mt-2 text-xs text-amber-900/80 dark:text-amber-300">No inventory or dose history is combined automatically. Review each record individually below.</p>
             <div className="mt-3 space-y-3">
               {possibleDuplicatePairs.map(({ first, second, kind }) => (
                 <div key={`${first.id}:${second.id}`} className="grid gap-3 rounded-xl border border-amber-200/80 bg-white p-3 sm:grid-cols-2 dark:border-amber-900/50 dark:bg-slate-900">
@@ -78,13 +82,13 @@ export default function MedicinesPage() {
                         <dt>Low-stock threshold</dt><dd>{medicine.lowStockThreshold} {medicine.lowStockThresholdUnit ?? inventoryUnitFor(medicine)}</dd>
                         <dt>Dose history</dt><dd>{doseRecords.filter((record) => record.medicineId === medicine.id).length} records</dd>
                       </dl>
-                      <button type="button" onClick={() => setEditingMedicine(medicine)} className="mt-3 min-h-9 rounded-lg border border-slate-300 px-3 text-xs font-semibold text-slate-700 hover:bg-white dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">Open this medicine to review</button>
+                      <button type="button" onClick={() => setEditingMedicine(medicine)} className="mt-3 inline-flex min-h-10 items-center justify-center rounded-lg border border-teal-300 bg-white px-3.5 text-xs font-semibold text-teal-800 shadow-sm transition-colors hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 dark:border-teal-700 dark:bg-slate-900 dark:text-teal-200 dark:hover:bg-slate-800">Review / edit this medicine</button>
                     </div>
                   ))}
                 </div>
               ))}
             </div>
-            <p className="mt-3 text-[11px] text-amber-900/80 dark:text-amber-300">Choose the correct prescription and stock before manually changing or removing an entry. These records are never merged or deleted by this review.</p>
+            <p className="mt-3 text-[11px] text-amber-900/80 dark:text-amber-300">Use the review action to inspect or edit a record. Deletion and merging are not offered here because this version cannot safely combine inventory and dose history.</p>
           </section>
         )}
 
