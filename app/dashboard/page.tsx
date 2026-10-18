@@ -486,7 +486,7 @@ export default function DashboardPage() {
         </section>
 
         {/* Medicines List or Empty State */}
-        <div className="order-2">
+        <div className="order-2 mb-6">
         {medicines.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white/50 px-6 py-16 text-center dark:border-slate-800 dark:bg-slate-900/30">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-50 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400">
