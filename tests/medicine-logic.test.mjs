@@ -273,12 +273,13 @@ test("schedule revisions prevent invented historical times and apply known frequ
 
   const now = new Date(localIso("2026-10-19", "12:00"));
   const reconciled = reconcileHistoricalMissedOccurrences([medicine], [], now);
-  assert.deepEqual(reconciled.map((record) => [record.scheduledDate, record.scheduledTime]), [
-    ["2026-10-14", "08:00"],
-    ["2026-10-15", "08:00"],
-    ["2026-10-16", "08:00"],
-    ["2026-10-17", "09:00"],
-    ["2026-10-18", "09:00"],
+  assert.deepEqual(reconciled.map((record) => [record.scheduledDate, record.scheduledTime, record.status]), [
+    ["2026-10-14", "08:00", "missed"],
+    ["2026-10-15", "08:00", "missed"],
+    ["2026-10-16", "08:00", "missed"],
+    ["2026-10-17", "09:00", "missed"],
+    ["2026-10-18", "09:00", "missed"],
+    ["2026-10-19", "09:00", "overdue"],
   ]);
 
   const bounded = syrup({
@@ -289,6 +290,74 @@ test("schedule revisions prevent invented historical times and apply known frequ
   });
   assert.equal(getMedicineOccurrencesForDate(bounded, "2026-10-17").length, 0);
   assert.deepEqual(getMedicineOccurrencesForDate(bounded, "2026-10-18").map((item) => item.scheduledTime), ["09:00"]);
+});
+
+test("an overdue occurrence stays unresolved until the next scheduled occurrence is due", () => {
+  const daily = syrup({ frequency: "Once daily", scheduleTimes: ["08:00"], startDate: "2026-10-14", scheduleRevisions: [revision(localIso("2026-10-14"), { frequency: "Once daily", scheduleTimes: ["08:00"] })] });
+  const beforeNextDose = reconcileHistoricalMissedOccurrences([daily], [], new Date(localIso("2026-10-15", "07:59")));
+  assert.deepEqual(beforeNextDose.map((record) => [record.scheduledDate, record.scheduledTime, record.status]), [["2026-10-14", "08:00", "overdue"]]);
+
+  const atNextDose = reconcileHistoricalMissedOccurrences([daily], beforeNextDose, new Date(localIso("2026-10-15", "08:00")));
+  assert.deepEqual(atNextDose.map((record) => [record.scheduledDate, record.scheduledTime, record.status]), [["2026-10-14", "08:00", "missed"]]);
+
+  const afterNextDose = reconcileHistoricalMissedOccurrences([daily], atNextDose, new Date(localIso("2026-10-15", "08:06")));
+  assert.deepEqual(afterNextDose.map((record) => [record.scheduledDate, record.scheduledTime, record.status]), [
+    ["2026-10-14", "08:00", "missed"],
+    ["2026-10-15", "08:00", "overdue"],
+  ]);
+});
+
+test("taking before cutoff updates the saved occurrence and later reconciliation preserves Taken", () => {
+  const daily = syrup({ frequency: "Once daily", scheduleTimes: ["08:00"], startDate: "2026-10-14", scheduleRevisions: [revision(localIso("2026-10-14"), { frequency: "Once daily", scheduleTimes: ["08:00"] })] });
+  const pending = reconcileHistoricalMissedOccurrences([daily], [], new Date(localIso("2026-10-15", "07:59")));
+  const original = pending[0];
+  const actualTakenTime = localIso("2026-10-15", "07:59");
+  const taken = applyTakenDose([daily], pending, { ...original, actualTakenTime, status: "taken_late" }, daily.doseAmount);
+  assert.equal(taken.accepted, true);
+  assert.equal(taken.doseRecords.length, 1);
+  assert.deepEqual([taken.doseRecords[0].id, taken.doseRecords[0].scheduledDate, taken.doseRecords[0].scheduledTime, taken.doseRecords[0].actualTakenTime], [original.id, "2026-10-14", "08:00", actualTakenTime]);
+  assert.equal(taken.medicines[0].inventoryAmount, daily.inventoryAmount - daily.doseAmount);
+
+  const profileStorage = new Map();
+  const syntheticStorage = {
+    getItem: (key) => profileStorage.get(key) ?? null,
+    setItem: (key, value) => profileStorage.set(key, value),
+  };
+  const profileKey = demoProfileStorageKey("late-dose@example.invalid");
+  profileStorage.set(profileKey, serializeDemoProfile({ email: "late-dose@example.invalid", medicines: taken.medicines, doseRecords: taken.doseRecords }));
+  const reloaded = loadDemoProfile(syntheticStorage, "late-dose@example.invalid");
+  const afterCutoff = reconcileHistoricalMissedOccurrences(reloaded.medicines, reloaded.doseRecords, new Date(localIso("2026-10-15", "08:00")));
+  assert.equal(afterCutoff.length, 1);
+  assert.equal(afterCutoff[0].status, "taken_late");
+  assert.equal(afterCutoff[0].actualTakenTime, actualTakenTime);
+  const duplicate = applyTakenDose(taken.medicines, afterCutoff, { ...original, actualTakenTime, status: "taken_late" }, daily.doseAmount);
+  assert.equal(duplicate.reason, "duplicate");
+  assert.equal(duplicate.medicines[0].inventoryAmount, daily.inventoryAmount - daily.doseAmount);
+});
+
+test("manual schedule revision sets the missed cutoff at its next active scheduled time", () => {
+  const edited = syrup({
+    frequency: "Once daily",
+    scheduleTimes: ["10:00"],
+    startDate: "2026-10-14",
+    scheduleRevisions: [
+      revision(localIso("2026-10-14"), { frequency: "Once daily", scheduleTimes: ["08:00"] }),
+      revision(localIso("2026-10-15", "07:00"), { frequency: "Once daily", scheduleTimes: ["10:00"] }),
+    ],
+  });
+  assert.deepEqual(reconcileHistoricalMissedOccurrences([edited], [], new Date(localIso("2026-10-15", "09:59"))).map((record) => [record.scheduledDate, record.status]), [["2026-10-14", "overdue"]]);
+  assert.deepEqual(reconcileHistoricalMissedOccurrences([edited], [], new Date(localIso("2026-10-15", "10:00"))).map((record) => [record.scheduledDate, record.status]), [["2026-10-14", "missed"]]);
+});
+
+test("incremental reconciliation finds a previous weekly occurrence across its schedule gap", () => {
+  const weekly = syrup({
+    frequency: "Once weekly",
+    scheduleTimes: ["08:00"],
+    startDate: "2026-10-14",
+    scheduleRevisions: [revision(localIso("2026-10-14"), { frequency: "Once weekly", scheduleTimes: ["08:00"] })],
+  });
+  const reconciled = reconcileHistoricalMissedOccurrences([weekly], [], new Date(localIso("2026-10-21", "08:00")), "2026-10-20");
+  assert.deepEqual(reconciled.map((record) => [record.scheduledDate, record.status]), [["2026-10-14", "missed"]]);
 });
 
 test("unknown legacy schedule periods do not create missed occurrences, and deletion preserves existing history", () => {
@@ -359,7 +428,9 @@ test("legacy hydration baseline keeps today's earlier scheduled dose visible aft
   const occurrences = getMedicineOccurrencesForDate(reloaded.medicines[0], date);
   assert.deepEqual(occurrences.map((occurrence) => occurrence.scheduledTime), ["08:00"]);
   assert.equal(getOccurrenceTimeStatus(occurrences[0].scheduledAt, now), "overdue");
-  assert.equal(reconcileHistoricalMissedOccurrences(reloaded.medicines, [], now).length, 0);
+  const reconciled = reconcileHistoricalMissedOccurrences(reloaded.medicines, [], now);
+  assert.equal(reconciled.find((record) => record.scheduledDate === date)?.status, "overdue");
+  assert.equal(reconciled.some((record) => record.scheduledDate === date && record.status === "missed"), false);
 });
 
 test("previously persisted unmarked hydration baseline is recognized without changing schedule data", () => {

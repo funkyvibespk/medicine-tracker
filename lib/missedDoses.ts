@@ -1,57 +1,93 @@
 import type { DoseRecord, Medicine } from "@/contexts/MedicineContext";
-import type { MissedOccurrenceCandidate } from "@/lib/medicineLogic";
+import type { MissedOccurrenceCandidate, PendingOccurrenceCandidate } from "@/lib/medicineLogic";
 import { getMedicineOccurrencesForDate, localDateString } from "@/lib/schedule";
-import { isOccurrenceOverdue, scheduledOccurrenceId, upsertMissedOccurrenceRecords } from "@/lib/medicineLogic";
+import { isOccurrenceOverdue, scheduledOccurrenceId, upsertMissedOccurrenceRecords, upsertPendingOccurrenceRecords } from "@/lib/medicineLogic";
 
 function dateFromLocalString(dateString: string) {
   const [year, month, day] = dateString.split("-").map(Number);
   return new Date(year, month - 1, day);
 }
 
-/** Materialize only occurrences whose schedule revision is known to have been active. */
+function firstKnownDate(medicine: Medicine) {
+  const firstRevision = medicine.scheduleRevisions?.slice().sort((a, b) => a.effectiveAt.localeCompare(b.effectiveAt))[0];
+  const revisionDate = firstRevision
+    ? localDateString(new Date(firstRevision.effectiveAt))
+    : medicine.startDate;
+  return revisionDate > medicine.startDate ? revisionDate : medicine.startDate;
+}
+
+/** Find the immediately preceding known occurrence when a reconciliation range starts mid-history. */
+function previousOccurrenceBefore(medicine: Medicine, beforeDate: string, earliestDate: string) {
+  const day = dateFromLocalString(beforeDate);
+  day.setDate(day.getDate() - 1);
+  const earliest = dateFromLocalString(earliestDate);
+  while (day >= earliest) {
+    const occurrences = getMedicineOccurrencesForDate(medicine, localDateString(day));
+    if (occurrences.length) return occurrences[occurrences.length - 1];
+    day.setDate(day.getDate() - 1);
+  }
+  return null;
+}
+
+/**
+ * Keep a scheduled occurrence unresolved until its next occurrence becomes due.
+ * At that exact cutoff it becomes missed; before then it is stored as overdue so
+ * History can still offer the existing record-as-taken action across reloads.
+ */
 export function reconcileHistoricalMissedOccurrences(
   medicines: Medicine[],
   doseRecords: DoseRecord[],
   now: Date,
   fromDate?: string,
-  includeToday = false,
 ): DoseRecord[] {
   const today = localDateString(now);
+  const pendingOccurrences: PendingOccurrenceCandidate[] = [];
   const missedOccurrences: MissedOccurrenceCandidate[] = [];
-  for (const medicine of medicines) {
-    if (medicine.frequency === "As needed (PRN)") continue;
-    // Legacy medicines are given a baseline revision at hydration. If a caller
-    // has no revision at all, its past schedule is unknown and must not be guessed.
-    if (!medicine.scheduleRevisions?.length) continue;
-    const firstKnownDate = medicine.scheduleRevisions?.length
-      ? localDateString(new Date(medicine.scheduleRevisions[0].effectiveAt))
-      : medicine.startDate;
-    const scheduleStartDate = firstKnownDate > medicine.startDate ? firstKnownDate : medicine.startDate;
-    const firstDate = fromDate && fromDate > scheduleStartDate ? fromDate : scheduleStartDate;
-    const day = dateFromLocalString(firstDate);
-    const todayDate = dateFromLocalString(today);
-    while (day < todayDate || (includeToday && day.getTime() === todayDate.getTime())) {
-      const date = localDateString(day);
-      for (const occurrence of getMedicineOccurrencesForDate(medicine, date)) {
-        const scheduledAt = occurrence.scheduledAt;
-        if (!isOccurrenceOverdue(scheduledAt, now)) continue;
 
-        missedOccurrences.push({
-          id: scheduledOccurrenceId(medicine.id, date, occurrence.scheduledTime, occurrence.scheduledInstant),
-          medicineId: medicine.id,
-          scheduledDate: occurrence.scheduledDate,
-          scheduledTime: occurrence.scheduledTime,
-          scheduledInstant: occurrence.scheduledInstant,
-          status: "missed",
-          medicineName: medicine.name,
-          medicineType: medicine.type,
-          medicineStrength: medicine.strength,
-        });
-      }
+  for (const medicine of medicines) {
+    if (!medicine.scheduleRevisions?.length) continue;
+
+    const earliestDate = firstKnownDate(medicine);
+    const scanStart = fromDate && fromDate > earliestDate ? fromDate : earliestDate;
+    const occurrences = [];
+    if (scanStart > earliestDate) {
+      const previous = previousOccurrenceBefore(medicine, scanStart, earliestDate);
+      if (previous) occurrences.push(previous);
+    }
+
+    const day = dateFromLocalString(scanStart);
+    const todayDate = dateFromLocalString(today);
+    while (day <= todayDate) {
+      occurrences.push(...getMedicineOccurrencesForDate(medicine, localDateString(day)));
       day.setDate(day.getDate() + 1);
+    }
+    occurrences.sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
+
+    for (let index = 0; index < occurrences.length; index++) {
+      const occurrence = occurrences[index];
+      const scheduledAt = occurrence.scheduledAt;
+      if (scheduledAt >= now) continue;
+
+      const candidateBase = {
+        id: scheduledOccurrenceId(medicine.id, occurrence.scheduledDate, occurrence.scheduledTime, occurrence.scheduledInstant),
+        medicineId: medicine.id,
+        scheduledDate: occurrence.scheduledDate,
+        scheduledTime: occurrence.scheduledTime,
+        scheduledInstant: occurrence.scheduledInstant,
+        medicineName: medicine.name,
+        medicineType: medicine.type,
+        medicineStrength: medicine.strength,
+      };
+      const nextOccurrence = occurrences[index + 1];
+
+      if (nextOccurrence && nextOccurrence.scheduledAt <= now) {
+        missedOccurrences.push({ ...candidateBase, status: "missed" });
+      } else if (isOccurrenceOverdue(scheduledAt, now)) {
+        pendingOccurrences.push({ ...candidateBase, status: "overdue" });
+      }
     }
   }
 
-  return upsertMissedOccurrenceRecords(doseRecords, missedOccurrences);
+  const withMissed = upsertMissedOccurrenceRecords(doseRecords, missedOccurrences);
+  return upsertPendingOccurrenceRecords(withMissed, pendingOccurrences);
 }
-

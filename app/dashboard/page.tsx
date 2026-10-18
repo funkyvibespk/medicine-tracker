@@ -131,6 +131,10 @@ export default function DashboardPage() {
           } else {
             status = "taken_on_time";
           }
+        } else if (record?.status === "missed") {
+          status = "missed";
+          minutesDiff = (now.getTime() - scheduledTimeDate.getTime()) / 60000;
+          diffText = "Missed";
         } else {
           const diffMs = now.getTime() - scheduledTimeDate.getTime();
           minutesDiff = diffMs / 60000;

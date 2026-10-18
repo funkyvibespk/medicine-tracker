@@ -200,7 +200,7 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
     const existing = medicinesRef.current.find((medicine) => medicine.id === id);
     const now = new Date();
     if (existing && scheduleChanged(existing, updates)) {
-      const reconciled = reconcileHistoricalMissedOccurrences(medicinesRef.current, doseRecordsRef.current, now, undefined, true);
+      const reconciled = reconcileHistoricalMissedOccurrences(medicinesRef.current, doseRecordsRef.current, now);
       if (reconciled !== doseRecordsRef.current) {
         doseRecordsRef.current = reconciled;
         setDoseRecords(reconciled);
@@ -228,7 +228,7 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
   const deleteMedicine = (id: string) => {
     const medicine = medicinesRef.current.find((item) => item.id === id);
     if (medicine) {
-      const reconciled = reconcileHistoricalMissedOccurrences(medicinesRef.current, doseRecordsRef.current, new Date(), undefined, true);
+      const reconciled = reconcileHistoricalMissedOccurrences(medicinesRef.current, doseRecordsRef.current, new Date());
       doseRecordsRef.current = reconciled;
       doseRecordsRef.current = doseRecordsRef.current.map((record) => record.medicineId === id
         ? {

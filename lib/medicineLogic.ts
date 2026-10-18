@@ -43,6 +43,13 @@ export interface MissedOccurrenceCandidate extends OccurrenceRecord {
   medicineStrength?: string;
 }
 
+export interface PendingOccurrenceCandidate extends OccurrenceRecord {
+  status: "overdue";
+  medicineName?: string;
+  medicineType?: string;
+  medicineStrength?: string;
+}
+
 export function scheduledOccurrenceKey(medicineId: string, scheduledDate: string, scheduledTime: string, scheduledInstant?: string): string {
   return JSON.stringify([medicineId, scheduledDate, scheduledTime, scheduledInstant ?? null]);
 }
@@ -142,6 +149,25 @@ export function upsertMissedOccurrenceRecords<R extends DoseOutcomeRecord>(
     changed = true;
   }
   return changed ? nextRecords : doseRecords;
+}
+
+/** Add unresolved overdue occurrences once; reconciliation promotes these to missed at the next-dose cutoff. */
+export function upsertPendingOccurrenceRecords<R extends DoseOutcomeRecord>(
+  doseRecords: R[],
+  candidates: PendingOccurrenceCandidate[],
+): R[] {
+  const existing = new Set(doseRecords.filter((record) => !record.isPrn).map((record) =>
+    scheduledOccurrenceKey(record.medicineId, record.scheduledDate, record.scheduledTime, record.scheduledInstant)
+  ));
+  const additions: R[] = [];
+  for (const candidate of candidates) {
+    if (candidate.isPrn) continue;
+    const key = scheduledOccurrenceKey(candidate.medicineId, candidate.scheduledDate, candidate.scheduledTime, candidate.scheduledInstant);
+    if (existing.has(key)) continue;
+    existing.add(key);
+    additions.push(candidate as R);
+  }
+  return additions.length ? [...doseRecords, ...additions] : doseRecords;
 }
 
 export function unitForMedicineType(type: MedicineTypeName): string {

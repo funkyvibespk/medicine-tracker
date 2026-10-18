@@ -56,9 +56,9 @@ export default function HistoryPage() {
 
   const canonicalDoseRecords = useMemo(() => canonicalizeOccurrenceRecords(doseRecords), [doseRecords]);
 
-  // Build the historical log from both completed and missed scheduled occurrences.
+  // Include unresolved overdue occurrences so they remain actionable until the next scheduled dose is due.
   const grouped = useMemo(() => {
-    const historyRecords = canonicalDoseRecords.filter((record) => Boolean(record.actualTakenTime) || record.status === "missed");
+    const historyRecords = canonicalDoseRecords.filter((record) => Boolean(record.actualTakenTime) || record.status === "missed" || record.status === "overdue");
     const byDate: Record<string, typeof historyRecords> = {};
 
     for (const record of historyRecords) {
@@ -108,7 +108,7 @@ export default function HistoryPage() {
     }
 
     for (const record of canonicalDoseRecords) {
-      if (record.isPrn || !days.includes(record.scheduledDate) || (record.status !== "missed" && !record.actualTakenTime)) continue;
+      if (record.isPrn || !days.includes(record.scheduledDate) || (record.status !== "missed" && record.status !== "overdue" && !record.actualTakenTime)) continue;
       const key = scheduledOccurrenceKey(record.medicineId, record.scheduledDate, record.scheduledTime, record.scheduledInstant);
       if (countedOccurrences.has(key)) continue;
       if (countedWallTimes.has(JSON.stringify([record.medicineId, record.scheduledDate, record.scheduledTime]))) continue;
@@ -134,6 +134,7 @@ export default function HistoryPage() {
       case "taken_early": return { text: "Early", cls: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300" };
       case "taken_late": return { text: "Late", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" };
       case "missed": return { text: "Missed", cls: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300" };
+      case "overdue": return { text: "Overdue", cls: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300" };
       default: return { text: "Taken", cls: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" };
     }
   };
@@ -232,10 +233,10 @@ export default function HistoryPage() {
                                 <> · Taken {formatIso12(record.actualTakenTime)}</>
                               )}
                             </p>
-                            {record.status === "missed" && !record.actualTakenTime && ambiguousLegacyOccurrence && (
+                            {(record.status === "missed" || record.status === "overdue") && !record.actualTakenTime && ambiguousLegacyOccurrence && (
                               <p role="status" className="mt-1 text-xs text-amber-700 dark:text-amber-300">This older dose falls in a repeated local time and cannot be assigned safely.</p>
                             )}
-                            {record.status === "missed" && !record.actualTakenTime && med && !ambiguousLegacyOccurrence && (
+                            {(record.status === "missed" || record.status === "overdue") && !record.actualTakenTime && med && !ambiguousLegacyOccurrence && (
                               <button
                                 type="button"
                                 disabled={!inventoryUnitsCompatible(med) || med.inventoryAmount < med.doseAmount}
