@@ -21,7 +21,15 @@ export interface OccurrenceRecord {
 }
 
 export type StockStatus = "out" | "low" | "available" | "unknown";
+export type DoseListFilter = "all" | "pending" | "taken";
 export const OVERDUE_THRESHOLD_MS = 5 * 60_000;
+
+/** Shared Dashboard filter so list contents and their badges use identical status rules. */
+export function filterDoseRecords<T extends { status?: string }>(records: T[], filter: DoseListFilter): T[] {
+  if (filter === "taken") return records.filter((record) => record.status?.startsWith("taken"));
+  if (filter === "pending") return records.filter((record) => !record.status?.startsWith("taken") && record.status !== "skipped");
+  return records;
+}
 
 export interface InventoryThresholdValidation {
   valid: boolean;

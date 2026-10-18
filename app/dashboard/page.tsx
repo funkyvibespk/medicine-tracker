@@ -10,7 +10,7 @@ import WorkspaceHeader from "@/components/dashboard/WorkspaceHeader";
 import WorkspacePageHeading from "@/components/dashboard/WorkspacePageHeading";
 import { formatDuration, getMedicineOccurrencesForDate, isPrnMedicine, localDateString } from "@/lib/schedule";
 import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
-import { canonicalizeOccurrenceRecords, doseUnitFor, findCloseDoseConflict, getOccurrenceTimeStatus, getOutstandingMissedOccurrences, getStockStatus, getUnscheduledSameDayMissedOccurrences, inventoryUnitFor, inventoryUnitsCompatible, minutesFromScheduledOccurrence, scheduledOccurrenceId, scheduledOccurrenceKey } from "@/lib/medicineLogic";
+import { canonicalizeOccurrenceRecords, doseUnitFor, filterDoseRecords, findCloseDoseConflict, getOccurrenceTimeStatus, getOutstandingMissedOccurrences, getStockStatus, getUnscheduledSameDayMissedOccurrences, inventoryUnitFor, inventoryUnitsCompatible, minutesFromScheduledOccurrence, scheduledOccurrenceId, scheduledOccurrenceKey } from "@/lib/medicineLogic";
 
 // Helper to pad numbers
 const pad = (n: number) => n.toString().padStart(2, "0");
@@ -236,8 +236,13 @@ export default function DashboardPage() {
     });
   }, [medicines, canonicalDoseRecords, now, todayStr]);
 
+  const doseLists = useMemo(() => ({
+    all: filterDoseRecords(todaysDoses, "all"),
+    pending: filterDoseRecords(todaysDoses, "pending"),
+    taken: filterDoseRecords(todaysDoses, "taken"),
+  }), [todaysDoses]);
   const overdueCount = todaysDoses.filter((d) => d.status === "overdue").length;
-  const takenCount = todaysDoses.filter((d) => d.status.startsWith("taken")).length;
+  const takenCount = doseLists.taken.length;
   const outstandingMisses = getOutstandingMissedOccurrences(doseRecords, todayStr);
   const prnMedicines = medicines.filter((med) => isPrnMedicine(med) && med.startDate <= todayStr && (!med.endDate || med.endDate >= todayStr));
 
@@ -247,11 +252,7 @@ export default function DashboardPage() {
     return status !== "available";
   });
   const stockNeedsReview = stockAlerts.some((medicine) => getStockStatus(medicine) === "unknown");
-  const filteredDoses = todaysDoses.filter((dose) => {
-    if (doseFilter === "taken") return dose.status.startsWith("taken");
-    if (doseFilter === "pending") return !dose.status.startsWith("taken") && dose.status !== "skipped";
-    return true;
-  });
+  const filteredDoses = doseLists[doseFilter];
 
   const weeklyAdherence = useMemo(() => {
     if (now.getTime() === 0) return [];
@@ -557,7 +558,7 @@ export default function DashboardPage() {
         <section id="todays-schedule" className="order-2 mb-4 flex scroll-mt-24 flex-wrap items-end justify-between gap-3">
           <div><h2 className="text-xl font-bold text-slate-900 dark:text-white">Today&apos;s schedule</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">See each dose time, prescribed amount, status, and action.</p></div>
           <div className="inline-flex rounded-xl bg-slate-100 p-1 dark:bg-slate-900" role="group" aria-label="Filter today's doses">
-            {(["all", "pending", "taken"] as DoseFilter[]).map((filter) => <button key={filter} type="button" onClick={() => setDoseFilter(filter)} aria-pressed={doseFilter === filter} className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${doseFilter === filter ? "bg-white text-teal-800 shadow-sm dark:bg-slate-800 dark:text-teal-200" : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"}`}>{filter === "all" ? `All ${todaysDoses.length}` : filter === "pending" ? `Pending ${todaysDoses.length - takenCount}` : `Taken ${takenCount}`}</button>)}
+            {(["all", "pending", "taken"] as DoseFilter[]).map((filter) => <button key={filter} type="button" onClick={() => setDoseFilter(filter)} aria-pressed={doseFilter === filter} className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${doseFilter === filter ? "bg-white text-teal-800 shadow-sm dark:bg-slate-800 dark:text-teal-200" : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"}`}>{filter === "all" ? `All ${doseLists.all.length}` : filter === "pending" ? `Pending ${doseLists.pending.length}` : `Taken ${doseLists.taken.length}`}</button>)}
           </div>
         </section>
 
@@ -582,7 +583,7 @@ export default function DashboardPage() {
             </div>
           </div>
         ) : filteredDoses.length === 0 && prnMedicines.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">{doseFilter === "taken" ? "No doses marked as taken today." : doseFilter === "pending" ? "All scheduled doses are marked as taken." : "No doses scheduled for today."}</div>
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">{doseFilter === "taken" ? "No doses marked as taken today." : doseFilter === "pending" ? "No pending scheduled doses." : "No doses scheduled for today."}</div>
         ) : (
           <div className="space-y-5">
           {filteredDoses.length > 0 && <div className="space-y-2.5">

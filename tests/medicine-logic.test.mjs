@@ -14,6 +14,7 @@ import {
   doseUnitFor,
   canonicalizeOccurrenceRecords,
   findCloseDoseConflict,
+  filterDoseRecords,
   getOccurrenceTimeStatus,
   getOutstandingMissedOccurrences,
   getStockStatus,
@@ -665,6 +666,49 @@ test("taken and skipped outcomes cannot coexist for one occurrence", () => {
   assert.equal(applySkippedDose([taken], { ...taken, status: "missed" }).reason, "already-taken");
   assert.equal(canonicalizeOccurrenceRecords([skipped.doseRecords[0], taken])[0].status, "taken_late");
   assert.equal(canonicalizeOccurrenceRecords([skipped.doseRecords[0], { ...missed, id: "taken-status", status: "taken_late" }])[0].status, "taken_late");
+});
+
+test("Dashboard All and Pending counts match their filtered dose lists after one of three doses is skipped", () => {
+  const doses = [
+    { id: "overdue-1", status: "overdue" },
+    { id: "upcoming-2", status: "upcoming" },
+    { id: "skipped-3", status: "skipped" },
+  ];
+  const allDoses = filterDoseRecords(doses, "all");
+  const pendingDoses = filterDoseRecords(doses, "pending");
+  assert.equal(allDoses.length, 3);
+  assert.equal(pendingDoses.length, 2);
+  assert.deepEqual(pendingDoses.map((dose) => dose.id), ["overdue-1", "upcoming-2"]);
+});
+
+test("Skipped dose remains excluded from Pending count after synthetic profile reload", () => {
+  const records = [
+    { id: "overdue-1", medicineId: "med-1", scheduledDate: "2026-10-19", scheduledTime: "08:00", status: "overdue" },
+    { id: "upcoming-2", medicineId: "med-2", scheduledDate: "2026-10-19", scheduledTime: "20:00", status: "upcoming" },
+    { id: "skipped-3", medicineId: "med-3", scheduledDate: "2026-10-19", scheduledTime: "09:00", status: "skipped" },
+  ];
+  const storage = new Map();
+  const email = "skip-count@example.test";
+  storage.set(demoProfileStorageKey(email), serializeDemoProfile({ email, medicines: [], doseRecords: records }));
+  const reloaded = loadDemoProfile({ getItem: (key) => storage.get(key) ?? null }, email);
+  assert.equal(filterDoseRecords(reloaded.doseRecords, "all").length, 3);
+  assert.equal(filterDoseRecords(reloaded.doseRecords, "pending").length, 2);
+  assert.equal(reloaded.doseRecords.find((record) => record.id === "skipped-3")?.scheduledTime, "09:00");
+});
+
+test("taken and skipped doses are excluded from Pending but only Taken appears in the Taken list", () => {
+  const doses = [
+    { id: "taken", status: "taken_late", actualTakenTime: localIso("2026-10-19", "08:30") },
+    { id: "skipped", status: "skipped" },
+    { id: "missed", status: "missed" },
+  ];
+  assert.deepEqual(filterDoseRecords(doses, "pending").map((dose) => dose.id), ["missed"]);
+  assert.deepEqual(filterDoseRecords(doses, "taken").map((dose) => dose.id), ["taken"]);
+});
+
+test("unresolved overdue doses remain in the shared Pending filter", () => {
+  const overdue = { id: "overdue", status: "overdue" };
+  assert.deepEqual(filterDoseRecords([overdue], "pending"), [overdue]);
 });
 
 test("suspiciously close scheduled or taken occurrences warn without mutating either occurrence", () => {
