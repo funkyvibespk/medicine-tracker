@@ -9,6 +9,7 @@ import {
 } from "@/lib/demoProfiles";
 import { readDemoSession } from "@/lib/demoSession";
 import { applySkippedDose, applyTakenDose } from "@/lib/medicineLogic";
+import { findBlockingMedicineIdentityMatch } from "@/lib/medicineIdentity";
 import { reconcileHistoricalMissedOccurrences } from "@/lib/missedDoses";
 import { addScheduleBaseline, localDateString } from "@/lib/schedule";
 
@@ -72,7 +73,7 @@ export interface DoseRecord {
 interface MedicineContextType {
   medicines: Medicine[];
   doseRecords: DoseRecord[];
-  addMedicine: (med: Medicine) => void;
+  addMedicine: (med: Medicine, options?: { allowLikelyDuplicate?: boolean }) => AddMedicineResult;
   updateMedicine: (id: string, med: Partial<Medicine>) => void;
   deleteMedicine: (id: string) => void;
   recordTakenDose: (record: DoseRecord, doseAmount: number) => boolean;
@@ -85,6 +86,11 @@ interface MedicineContextType {
   activeProfileEmail: string | null;
   activateProfile: (email: string, options?: { migrateLegacy?: boolean }) => void;
   deactivateProfile: () => void;
+}
+
+export interface AddMedicineResult {
+  added: boolean;
+  duplicateMatch?: { medicine: Medicine; kind: "exact" | "likely" };
 }
 
 const MedicineContext = createContext<MedicineContextType | undefined>(undefined);
@@ -179,7 +185,9 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(timer);
   }, [isHydrated, activeProfileEmail]);
 
-  const addMedicine = (med: Medicine) => {
+  const addMedicine = (med: Medicine, options?: { allowLikelyDuplicate?: boolean }): AddMedicineResult => {
+    const duplicateMatch = findBlockingMedicineIdentityMatch(med, medicinesRef.current, options?.allowLikelyDuplicate);
+    if (duplicateMatch) return { added: false, duplicateMatch };
     const createdAt = med.createdAt ?? new Date().toISOString();
     const medicine = {
       ...med,
@@ -195,6 +203,7 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
     };
     medicinesRef.current = [...medicinesRef.current, medicine];
     setMedicines(medicinesRef.current);
+    return { added: true };
   };
 
   const updateMedicine = (id: string, updates: Partial<Medicine>) => {

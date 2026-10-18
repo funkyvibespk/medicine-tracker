@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { addScheduleBaseline, getMedicineOccurrencesForDate, getScheduledTimesForDate } from "../lib/schedule.ts";
 import { demoProfileStorageKey, loadDemoProfile, serializeDemoProfile } from "../lib/demoProfiles.ts";
+import { findBlockingMedicineIdentityMatch, findMedicineIdentityMatches, findPotentialMedicineIdentityPairs } from "../lib/medicineIdentity.ts";
 import {
   availableVolumeFromContainers,
   applySkippedDose,
@@ -84,6 +85,25 @@ function revision(effectiveAt, overrides = {}) {
     scheduleTimes: ["08:00"],
     startDate: "2026-10-14",
     endDate: undefined,
+    ...overrides,
+  };
+}
+
+function identityMedicine(overrides = {}) {
+  return {
+    id: "synthetic-identity-a",
+    name: "Calan 40 mg",
+    type: "Tablet",
+    strength: "40 mg",
+    doseAmount: 1,
+    doseUnit: "tablets",
+    frequency: "Once daily",
+    scheduleTimes: ["08:00"],
+    startDate: "2026-10-14",
+    inventoryAmount: 30,
+    inventoryCapacity: 30,
+    inventoryUnit: "tablets",
+    lowStockThreshold: 5,
     ...overrides,
   };
 }
@@ -754,5 +774,58 @@ test("spring-forward interval and fixed-time labels match their calculated local
     if (previousTimezone === undefined) delete process.env.TZ;
     else process.env.TZ = previousTimezone;
   }
+});
+
+test("medicine identity blocks normalized exact duplicates but ignores schedule and stock differences", () => {
+  const existing = identityMedicine({ name: "Calan 40 mg", scheduleTimes: ["08:00"], inventoryAmount: 2 });
+  const candidate = identityMedicine({ id: "synthetic-identity-b", name: " calan-40MG ", strength: "40mg", scheduleTimes: ["20:00"], inventoryAmount: 90 });
+  assert.equal(findMedicineIdentityMatches(candidate, [existing])[0]?.kind, "exact");
+  assert.equal(findBlockingMedicineIdentityMatch(candidate, [existing])?.medicine.id, existing.id);
+  const ulsanic = identityMedicine({ id: "synthetic-ulsanic-a", name: "Ulsanic 40 mg", strength: "40 mg" });
+  const formattedUlsanic = identityMedicine({ id: "synthetic-ulsanic-b", name: "  ulsanic   40mg  ", strength: "40mg" });
+  assert.equal(findMedicineIdentityMatches(formattedUlsanic, [ulsanic])[0]?.kind, "exact");
+  assert.deepEqual(findMedicineIdentityMatches(identityMedicine({
+    id: "synthetic-identity-c",
+    strength: "40 mcg",
+  }), [existing]), []);
+  assert.deepEqual(findMedicineIdentityMatches(identityMedicine({
+    id: "synthetic-identity-d",
+    type: "Capsule",
+  }), [existing]), []);
+});
+
+test("medicine identity suggests a conservative spelling match without treating it as exact", () => {
+  const existing = identityMedicine({ name: "Calan", strength: "40 mg" });
+  const candidate = identityMedicine({ id: "synthetic-identity-b", name: "Calam", strength: "40mg" });
+  assert.equal(findMedicineIdentityMatches(candidate, [existing])[0]?.kind, "likely");
+  assert.equal(findBlockingMedicineIdentityMatch(candidate, [existing])?.kind, "likely");
+  assert.equal(findBlockingMedicineIdentityMatch(candidate, [existing], true), undefined);
+});
+
+test("rapid repeated medicine addition is blocked after the first explicit similar-medicine confirmation", () => {
+  const existing = identityMedicine({ name: "Calan" });
+  const candidate = identityMedicine({ id: "synthetic-identity-b", name: "Calam" });
+  const collection = [existing];
+  assert.equal(findBlockingMedicineIdentityMatch(candidate, collection)?.kind, "likely");
+  assert.equal(findBlockingMedicineIdentityMatch(candidate, collection, true), undefined);
+  collection.push(candidate);
+  const rapidRetry = identityMedicine({ id: "synthetic-identity-c", name: "Calam" });
+  assert.equal(findBlockingMedicineIdentityMatch(rapidRetry, collection, true)?.kind, "exact");
+});
+
+test("possible duplicate review pairs remain detectable after synthetic profile serialization and reload", () => {
+  const profile = {
+    email: "duplicate-review@example.test",
+    medicines: [identityMedicine({ id: "synthetic-identity-a", name: "Calan" }), identityMedicine({ id: "synthetic-identity-b", name: "Calam" })],
+    doseRecords: [],
+  };
+  const storage = new Map();
+  const key = demoProfileStorageKey("duplicate-review@example.test");
+  storage.set(key, serializeDemoProfile(profile));
+  const reloaded = loadDemoProfile({ getItem: (storageKey) => storage.get(storageKey) ?? null }, "duplicate-review@example.test");
+  assert.equal(findPotentialMedicineIdentityPairs(reloaded.medicines).length, 1);
+  assert.equal(reloaded.medicines.length, 2);
+  assert.equal(reloaded.medicines[0].inventoryAmount, 30);
+  assert.equal(reloaded.medicines[1].inventoryAmount, 30);
 });
 

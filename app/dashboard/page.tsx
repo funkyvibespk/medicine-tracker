@@ -799,15 +799,21 @@ export default function DashboardPage() {
             <MedicineForm
               key={editingMedicine?.id ?? "new-medicine"}
               initialData={editingMedicine}
-              onSave={(med) => {
+              existingMedicines={medicines}
+              doseRecords={doseRecords}
+              onSave={(med, options) => {
                 if (editingMedicine) {
                   updateMedicine(med.id, med);
                 } else {
-                  addMedicine(med);
+                  const result = addMedicine(med, options);
+                  if (!result.added) return result;
                 }
                 setIsAddModalOpen(false);
                 setEditingMedicine(null);
+                return { added: true };
               }}
+              onOpenExisting={(med) => { setIsAddModalOpen(false); setEditingMedicine(med); }}
+              onAddStock={(med, quantity) => { setIsAddModalOpen(false); setAddingStockMed(med); setStockToAdd(quantity); }}
               onCancel={() => { setIsAddModalOpen(false); setEditingMedicine(null); }}
             />
           </div>

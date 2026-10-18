@@ -10,14 +10,17 @@ import WorkspacePageHeading from "@/components/dashboard/WorkspacePageHeading";
 import { estimatedDosesPerDay } from "@/lib/schedule";
 import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
 import { doseUnitFor, getStockStatus, inventoryUnitFor, inventoryUnitsCompatible } from "@/lib/medicineLogic";
+import { findPotentialMedicineIdentityPairs } from "@/lib/medicineIdentity";
 
 export default function MedicinesPage() {
-  const { medicines, addMedicine, updateMedicine, deleteMedicine, isHydrated } = useMedicine();
+  const { medicines, doseRecords, addMedicine, updateMedicine, deleteMedicine, addStock, isHydrated } = useMedicine();
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingMedicine, setEditingMedicine] = useState<Medicine | null>(null);
   const [deletingMedicine, setDeletingMedicine] = useState<Medicine | null>(null);
-  useDialogFocusRestore(Boolean(isAddModalOpen || editingMedicine || deletingMedicine));
+  const [addingStockMed, setAddingStockMed] = useState<Medicine | null>(null);
+  const [stockToAdd, setStockToAdd] = useState(0);
+  useDialogFocusRestore(Boolean(isAddModalOpen || editingMedicine || deletingMedicine || addingStockMed));
   const [searchQuery, setSearchQuery] = useState("");
 
   if (!isHydrated) return <div className="min-h-screen bg-slate-50 dark:bg-slate-950" />;
@@ -26,6 +29,7 @@ export default function MedicinesPage() {
     m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     m.type.toLowerCase().includes(searchQuery.toLowerCase())
   );
+  const possibleDuplicatePairs = findPotentialMedicineIdentityPairs(medicines);
 
   const typeColor = (type: string) => {
     switch (type) {
@@ -55,6 +59,34 @@ export default function MedicinesPage() {
             <span>Add Medicine</span>
           </button>}
         />
+
+        {possibleDuplicatePairs.length > 0 && (
+          <section className="mb-6 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 dark:border-amber-900/60 dark:bg-amber-950/20" aria-labelledby="possible-duplicates-title">
+            <h2 id="possible-duplicates-title" className="text-sm font-semibold text-amber-950 dark:text-amber-200">Review possible duplicate entries ({possibleDuplicatePairs.length})</h2>
+            <p className="mt-1 text-xs text-amber-900/80 dark:text-amber-300">These records have similar normalized names and matching dosage form and strength. No inventory or history is combined automatically.</p>
+            <div className="mt-3 space-y-3">
+              {possibleDuplicatePairs.map(({ first, second, kind }) => (
+                <div key={`${first.id}:${second.id}`} className="grid gap-3 rounded-xl border border-amber-200/80 bg-white p-3 sm:grid-cols-2 dark:border-amber-900/50 dark:bg-slate-900">
+                  {[first, second].map((medicine) => (
+                    <div key={medicine.id} className="min-w-0 rounded-lg bg-slate-50 p-3 dark:bg-slate-800/70">
+                      <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{medicine.name} <span className="text-xs font-medium text-amber-700 dark:text-amber-300">{kind === "exact" ? "Exact formatting match" : "Possible spelling match"}</span></p>
+                      <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-slate-600 dark:text-slate-300">
+                        <dt>Strength / form</dt><dd>{medicine.strength || "—"} · {medicine.type}</dd>
+                        <dt>Route</dt><dd>Not stored by this version</dd>
+                        <dt>Schedule</dt><dd>{medicine.frequency}{medicine.frequency === "Every X hours" ? ` · every ${medicine.intervalHours || 8}h from ${medicine.scheduleTimes[0] || "—"}` : medicine.scheduleTimes.length ? ` · ${medicine.scheduleTimes.join(", ")}` : ""}</dd>
+                        <dt>Stock</dt><dd>{medicine.inventoryAmount} {inventoryUnitFor(medicine)}</dd>
+                        <dt>Low-stock threshold</dt><dd>{medicine.lowStockThreshold} {medicine.lowStockThresholdUnit ?? inventoryUnitFor(medicine)}</dd>
+                        <dt>Dose history</dt><dd>{doseRecords.filter((record) => record.medicineId === medicine.id).length} records</dd>
+                      </dl>
+                      <button type="button" onClick={() => setEditingMedicine(medicine)} className="mt-3 min-h-9 rounded-lg border border-slate-300 px-3 text-xs font-semibold text-slate-700 hover:bg-white dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">Open this medicine to review</button>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-[11px] text-amber-900/80 dark:text-amber-300">Choose the correct prescription and stock before manually changing or removing an entry. These records are never merged or deleted by this review.</p>
+          </section>
+        )}
 
         {/* Search */}
         {medicines.length > 0 && (
@@ -209,17 +241,40 @@ export default function MedicinesPage() {
             <MedicineForm
               key={editingMedicine?.id ?? "new-medicine"}
               initialData={editingMedicine}
-              onSave={(med) => {
+              existingMedicines={medicines}
+              doseRecords={doseRecords}
+              onSave={(med, options) => {
                 if (editingMedicine) {
                   updateMedicine(med.id, med);
                 } else {
-                  addMedicine(med);
+                  const result = addMedicine(med, options);
+                  if (!result.added) return result;
                 }
                 setIsAddModalOpen(false);
                 setEditingMedicine(null);
+                return { added: true };
               }}
+              onOpenExisting={(med) => { setIsAddModalOpen(false); setEditingMedicine(med); }}
+              onAddStock={(med, quantity) => { setIsAddModalOpen(false); setAddingStockMed(med); setStockToAdd(quantity); }}
               onCancel={() => { setIsAddModalOpen(false); setEditingMedicine(null); }}
             />
+          </div>
+        </div>
+      )}
+
+      {addingStockMed && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
+          <div role="dialog" aria-modal="true" aria-labelledby="medicines-add-stock-title" onKeyDown={keepDialogFocusInside} className="relative w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+            <h3 id="medicines-add-stock-title" className="text-lg font-bold text-slate-900 dark:text-white">Add stock to existing inventory</h3>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{addingStockMed.name} · current balance {addingStockMed.inventoryAmount} {inventoryUnitFor(addingStockMed)}</p>
+            <form onSubmit={(event) => { event.preventDefault(); if (stockToAdd > 0 && inventoryUnitsCompatible(addingStockMed)) { addStock(addingStockMed.id, stockToAdd); setAddingStockMed(null); setStockToAdd(0); } }}>
+              <label htmlFor="medicines-stock-quantity" className="mt-4 block text-xs font-semibold text-slate-700 dark:text-slate-300">Confirmed quantity to add ({inventoryUnitFor(addingStockMed)})</label>
+              <input id="medicines-stock-quantity" type="number" min="0" step={addingStockMed.type === "Syrup" ? "any" : "1"} value={stockToAdd || ""} onChange={(event) => setStockToAdd(Number(event.target.value) || 0)} className="mt-1 w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+              <div className="mt-5 flex justify-end gap-3">
+                <button type="button" onClick={() => { setAddingStockMed(null); setStockToAdd(0); }} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-300">Cancel</button>
+                <button type="submit" disabled={!stockToAdd || stockToAdd <= 0 || !inventoryUnitsCompatible(addingStockMed)} className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Add Stock</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
