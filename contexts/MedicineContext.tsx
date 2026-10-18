@@ -10,12 +10,14 @@ import {
 import { readDemoSession } from "@/lib/demoSession";
 import { applyTakenDose } from "@/lib/medicineLogic";
 import { reconcileHistoricalMissedOccurrences } from "@/lib/missedDoses";
-import { localDateString } from "@/lib/schedule";
+import { addScheduleBaseline, localDateString } from "@/lib/schedule";
 
 export type MedicineType = "Tablet" | "Capsule" | "Syrup" | "Sachet" | "Injection";
 
 export interface MedicineScheduleRevision {
   effectiveAt: string;
+  /** Marks a hydration-only baseline whose earlier schedule history is unknown. */
+  hydrationBaseline?: true;
   frequency: string;
   intervalHours?: number;
   scheduleTimes: string[];
@@ -93,19 +95,6 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
   const doseRecordsRef = useRef<DoseRecord[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
   const [activeProfileEmail, setActiveProfileEmail] = useState<string | null>(null);
-
-  const addScheduleBaseline = (savedMedicines: Medicine[], effectiveAt = new Date().toISOString()) =>
-    savedMedicines.map((medicine) => medicine.scheduleRevisions?.length ? medicine : {
-      ...medicine,
-      scheduleRevisions: [{
-        effectiveAt,
-        frequency: medicine.frequency,
-        intervalHours: medicine.intervalHours,
-        scheduleTimes: [...medicine.scheduleTimes],
-        startDate: medicine.startDate,
-        endDate: medicine.endDate,
-      }],
-    });
 
   const activateProfile = (emailInput: string, options?: { migrateLegacy?: boolean }) => {
     const email = normalizeDemoEmail(emailInput);

@@ -10,7 +10,7 @@ import WorkspaceHeader from "@/components/dashboard/WorkspaceHeader";
 import WorkspacePageHeading from "@/components/dashboard/WorkspacePageHeading";
 import { formatDuration, getMedicineOccurrencesForDate, isPrnMedicine, localDateString } from "@/lib/schedule";
 import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
-import { canonicalizeOccurrenceRecords, doseUnitFor, getOccurrenceTimeStatus, getOutstandingMissedOccurrences, getStockStatus, inventoryUnitFor, inventoryUnitsCompatible, minutesFromScheduledOccurrence, scheduledOccurrenceId, scheduledOccurrenceKey } from "@/lib/medicineLogic";
+import { canonicalizeOccurrenceRecords, doseUnitFor, getOccurrenceTimeStatus, getOutstandingMissedOccurrences, getStockStatus, getUnscheduledSameDayMissedOccurrences, inventoryUnitFor, inventoryUnitsCompatible, minutesFromScheduledOccurrence, scheduledOccurrenceId, scheduledOccurrenceKey } from "@/lib/medicineLogic";
 
 // Helper to pad numbers
 const pad = (n: number) => n.toString().padStart(2, "0");
@@ -164,9 +164,45 @@ export default function DashboardPage() {
       });
     });
 
+    const representedOccurrenceKeys = new Set<string>();
+    for (const dose of doses) {
+      representedOccurrenceKeys.add(scheduledOccurrenceKey(dose.med.id, dose.scheduledDate, dose.time, dose.scheduledInstant));
+      if (dose.record) {
+        representedOccurrenceKeys.add(scheduledOccurrenceKey(dose.record.medicineId, dose.record.scheduledDate, dose.record.scheduledTime, dose.record.scheduledInstant));
+      }
+    }
+    for (const record of getUnscheduledSameDayMissedOccurrences(canonicalDoseRecords, todayStr, representedOccurrenceKeys)) {
+      const med = medicines.find((medicine) => medicine.id === record.medicineId);
+      if (!med) continue;
+      const sameWallTimeOccurrences = doses.filter((dose) => dose.med.id === med.id && dose.scheduledDate === record.scheduledDate && dose.time === record.scheduledTime);
+      // A legacy record with no instant cannot safely be attached to repeated wall-clock occurrences.
+      if (!record.scheduledInstant && sameWallTimeOccurrences.length > 0) continue;
+
+      const [year, month, day] = record.scheduledDate.split("-").map(Number);
+      const [hour, minute] = record.scheduledTime.split(":").map(Number);
+      const scheduledDateObj = record.scheduledInstant
+        ? new Date(record.scheduledInstant)
+        : new Date(year, month - 1, day, hour, minute);
+      if (Number.isNaN(scheduledDateObj.getTime())) continue;
+
+      doses.push({
+        id: record.id,
+        med,
+        scheduledDate: record.scheduledDate,
+        time: record.scheduledTime,
+        scheduledInstant: record.scheduledInstant,
+        record,
+        status: "missed",
+        minutesDiff: (now.getTime() - scheduledDateObj.getTime()) / 60000,
+        diffText: "Missed",
+        almostDue: false,
+        scheduledDateObj,
+      });
+    }
+
     // Sort: Overdue -> Due -> Upcoming -> Taken
     return doses.sort((a, b) => {
-      const order = { overdue: 1, due: 2, upcoming: 3, taken_early: 4, taken_on_time: 4, taken_late: 4 };
+      const order = { overdue: 1, missed: 1, due: 2, upcoming: 3, taken_early: 4, taken_on_time: 4, taken_late: 4 };
       if (order[a.status as keyof typeof order] !== order[b.status as keyof typeof order]) {
         return order[a.status as keyof typeof order] - order[b.status as keyof typeof order];
       }
@@ -519,6 +555,8 @@ export default function DashboardPage() {
                 className={`group relative flex flex-col gap-4 rounded-2xl border p-4 transition-shadow hover:shadow-md sm:flex-row sm:items-center sm:justify-between ${
                   dose.status.startsWith("taken")
                     ? "border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/50 dark:bg-emerald-950/20"
+                    : dose.status === "missed"
+                    ? "border-rose-300 bg-rose-50/30 dark:border-rose-900/40 dark:bg-rose-950/10 shadow-sm"
                     : dose.status === "overdue"
                     ? "border-violet-300 bg-violet-50/30 dark:border-violet-900/40 dark:bg-violet-950/10 shadow-sm"
                     : dose.status === "due"
@@ -531,6 +569,7 @@ export default function DashboardPage() {
                     <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                       <span className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-bold ${
                         dose.status.startsWith("taken") ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300" :
+                        dose.status === "missed" ? "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300" :
                         dose.status === "overdue" ? "bg-violet-100 text-violet-800 dark:bg-violet-900/60 dark:text-violet-300" :
                         dose.status === "due" ? "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300" :
                         dose.almostDue ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300" :
@@ -543,14 +582,16 @@ export default function DashboardPage() {
                       {!dose.status.startsWith("taken") && (
                         <span className={`text-xs font-semibold ${
                           dose.status === "overdue" ? "text-violet-700 dark:text-violet-300 flex items-center gap-1" :
+                          dose.status === "missed" ? "text-rose-700 dark:text-rose-300 flex items-center gap-1" :
                           dose.status === "due" ? "text-red-700 dark:text-red-300 flex items-center gap-1" :
                           dose.almostDue ? "text-amber-700 dark:text-amber-300 flex items-center gap-1" :
                           "text-blue-700 dark:text-blue-300"
                         }`}>
                           {dose.status === "due" && <span aria-hidden="true" className="flex h-2 w-2 shrink-0 rounded-full bg-red-600" />}
                           {dose.status === "overdue" && <span aria-hidden="true" className="flex h-2 w-2 shrink-0 rounded-full bg-violet-600" />}
+                          {dose.status === "missed" && <span aria-hidden="true" className="flex h-2 w-2 shrink-0 rounded-full bg-rose-600" />}
                           {dose.almostDue && <span aria-hidden="true" className="flex h-2 w-2 shrink-0 rounded-full bg-amber-500" />}
-                          {dose.status === "due" ? "Due now" : dose.almostDue ? `Almost due · ${dose.diffText}` : dose.status === "overdue" ? dose.diffText : `Upcoming · ${dose.diffText}`}
+                          {dose.status === "due" ? "Due now" : dose.almostDue ? `Almost due · ${dose.diffText}` : dose.status === "missed" ? "Missed" : dose.status === "overdue" ? dose.diffText : `Upcoming · ${dose.diffText}`}
                         </span>
                       )}
                     </div>

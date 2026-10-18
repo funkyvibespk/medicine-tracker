@@ -53,6 +53,18 @@ export function getOutstandingMissedOccurrences<T extends OccurrenceRecord & { s
     .sort((a, b) => b.scheduledDate.localeCompare(a.scheduledDate) || b.scheduledTime.localeCompare(a.scheduledTime));
 }
 
+/** Same-day missed records not represented by today's current schedule still need an actionable dashboard row. */
+export function getUnscheduledSameDayMissedOccurrences<T extends OccurrenceRecord & { status?: string }>(
+  records: T[],
+  today: string,
+  representedOccurrenceKeys: ReadonlySet<string>,
+): T[] {
+  return canonicalizeOccurrenceRecords(records).filter((record) =>
+    !record.isPrn && record.scheduledDate === today && record.status === "missed" && !record.actualTakenTime &&
+    !representedOccurrenceKeys.has(scheduledOccurrenceKey(record.medicineId, record.scheduledDate, record.scheduledTime, record.scheduledInstant))
+  );
+}
+
 interface DoseOutcomeRecord extends OccurrenceRecord {
   status?: string;
   medicineName?: string;

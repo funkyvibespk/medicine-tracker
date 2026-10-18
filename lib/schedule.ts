@@ -13,6 +13,35 @@ export function localDateString(date: Date = new Date()) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+/** Preserve the current day's schedule for legacy profiles without revision history. */
+export function addScheduleBaseline(medicines: Medicine[], effectiveAt = new Date().toISOString()): Medicine[] {
+  return medicines.map((medicine) => {
+    const revisions = medicine.scheduleRevisions ?? [];
+    if (revisions.length === 1 && medicine.createdAt && !revisions[0].hydrationBaseline) {
+      const revisionTime = new Date(revisions[0].effectiveAt).getTime();
+      const createdTime = new Date(medicine.createdAt).getTime();
+      // The prior hydration helper persisted exactly one revision at load time,
+      // later than the medicine's creation-time schedule snapshot.
+      if (Number.isFinite(revisionTime) && Number.isFinite(createdTime) && revisionTime > createdTime) {
+        return { ...medicine, scheduleRevisions: [{ ...revisions[0], hydrationBaseline: true }] };
+      }
+    }
+    if (revisions.length) return medicine;
+    return {
+      ...medicine,
+      scheduleRevisions: [{
+        effectiveAt,
+        hydrationBaseline: true,
+        frequency: medicine.frequency,
+        intervalHours: medicine.intervalHours,
+        scheduleTimes: [...medicine.scheduleTimes],
+        startDate: medicine.startDate,
+        endDate: medicine.endDate,
+      }],
+    };
+  });
+}
+
 function calendarDayNumber(dateString: string) {
   const [year, month, day] = dateString.split("-").map(Number);
   return Math.floor(Date.UTC(year, month - 1, day) / 86_400_000);
@@ -118,9 +147,11 @@ export function getMedicineOccurrencesForDate(medicine: Medicine, dateString: st
     const revisionStart = new Date(revision.effectiveAt).getTime();
     const revisionEnd = revisions[index + 1] ? new Date(revisions[index + 1].effectiveAt).getTime() : Number.POSITIVE_INFINITY;
     if (!Number.isFinite(revisionStart) || !Number.isFinite(revisionEnd) && index + 1 < revisions.length) return;
+    const preserveHydrationDay = index === 0 && revision.hydrationBaseline === true && dateString === localDateString(new Date(revisionStart));
+    const revisionStartBound = preserveHydrationDay ? Number.NEGATIVE_INFINITY : revisionStart;
     for (const occurrence of scheduleFromSnapshot(withScheduleRevision(medicine, revision), dateString)) {
       const instant = occurrence.scheduledAt.getTime();
-      if (instant >= revisionStart && instant < revisionEnd) occurrences.push(occurrence);
+      if (instant >= revisionStartBound && instant < revisionEnd) occurrences.push(occurrence);
     }
   });
   return occurrences.sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());

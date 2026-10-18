@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { getMedicineOccurrencesForDate, getScheduledTimesForDate } from "../lib/schedule.ts";
+import { addScheduleBaseline, getMedicineOccurrencesForDate, getScheduledTimesForDate } from "../lib/schedule.ts";
 import { demoProfileStorageKey, loadDemoProfile, serializeDemoProfile } from "../lib/demoProfiles.ts";
 import {
   availableVolumeFromContainers,
@@ -14,6 +14,7 @@ import {
   getOccurrenceTimeStatus,
   getOutstandingMissedOccurrences,
   getStockStatus,
+  getUnscheduledSameDayMissedOccurrences,
   inventoryUnitFor,
   isOccurrenceOverdue,
   minutesFromScheduledOccurrence,
@@ -332,6 +333,82 @@ test("legacy local profile shape remains readable and new optional schedule hist
   assert.equal(roundTrip.doseRecords[0].id, oldDose.id);
 });
 
+test("legacy hydration baseline keeps today's earlier scheduled dose visible after profile reload", () => {
+  const date = "2026-10-18";
+  const now = new Date(localIso(date, "12:00"));
+  const legacyMedicine = syrup({
+    frequency: "Once daily",
+    scheduleTimes: ["08:00"],
+    startDate: "2026-10-14",
+    createdAt: localIso("2026-10-14", "00:00"),
+    scheduleRevisions: undefined,
+  });
+  const hydratedMedicine = addScheduleBaseline([legacyMedicine], now.toISOString())[0];
+  const storage = new Map();
+  const syntheticStorage = {
+    getItem: (key) => storage.get(key) ?? null,
+    setItem: (key, value) => storage.set(key, value),
+  };
+  storage.set(demoProfileStorageKey("legacy@example.invalid"), serializeDemoProfile({
+    email: "legacy@example.invalid",
+    medicines: [hydratedMedicine],
+    doseRecords: [],
+  }));
+
+  const reloaded = loadDemoProfile(syntheticStorage, "legacy@example.invalid");
+  const occurrences = getMedicineOccurrencesForDate(reloaded.medicines[0], date);
+  assert.deepEqual(occurrences.map((occurrence) => occurrence.scheduledTime), ["08:00"]);
+  assert.equal(getOccurrenceTimeStatus(occurrences[0].scheduledAt, now), "overdue");
+  assert.equal(reconcileHistoricalMissedOccurrences(reloaded.medicines, [], now).length, 0);
+});
+
+test("previously persisted unmarked hydration baseline is recognized without changing schedule data", () => {
+  const date = "2026-10-18";
+  const now = new Date(localIso(date, "12:00"));
+  const oldHydrationRevision = syrup({
+    frequency: "Once daily",
+    scheduleTimes: ["08:00"],
+    startDate: "2026-10-14",
+    createdAt: localIso("2026-10-14", "00:00"),
+    scheduleRevisions: [{
+      effectiveAt: now.toISOString(),
+      frequency: "Once daily",
+      scheduleTimes: ["08:00"],
+      startDate: "2026-10-14",
+    }],
+  });
+  const recognized = addScheduleBaseline([oldHydrationRevision])[0];
+  assert.equal(recognized.scheduleRevisions[0].hydrationBaseline, true);
+  assert.deepEqual(recognized.scheduleRevisions[0].scheduleTimes, ["08:00"]);
+  assert.deepEqual(getMedicineOccurrencesForDate(recognized, date).map((occurrence) => occurrence.scheduledTime), ["08:00"]);
+
+  const creationRevision = { ...oldHydrationRevision, scheduleRevisions: [{ ...oldHydrationRevision.scheduleRevisions[0], effectiveAt: oldHydrationRevision.createdAt }] };
+  assert.equal(addScheduleBaseline([creationRevision])[0].scheduleRevisions[0].hydrationBaseline, undefined);
+});
+
+test("unrepresented same-day missed occurrences remain available for the dashboard action", () => {
+  const today = "2026-10-18";
+  const unresolved = {
+    id: "today-missed",
+    medicineId: "synthetic-syrup",
+    scheduledDate: today,
+    scheduledTime: "08:00",
+    status: "missed",
+  };
+  const alreadyTaken = { ...unresolved, id: "today-taken", status: "taken_late", actualTakenTime: localIso(today, "08:30") };
+  const priorDay = { ...unresolved, id: "prior-missed", scheduledDate: "2026-10-17" };
+  const prn = { ...unresolved, id: "prn-missed", isPrn: true };
+  assert.deepEqual(
+    getUnscheduledSameDayMissedOccurrences([unresolved, priorDay, prn], today, new Set()).map((record) => record.id),
+    [unresolved.id],
+  );
+  assert.deepEqual(getUnscheduledSameDayMissedOccurrences([unresolved, alreadyTaken], today, new Set()), []);
+  assert.deepEqual(
+    getUnscheduledSameDayMissedOccurrences([unresolved], today, new Set([scheduledOccurrenceKey(unresolved.medicineId, today, "08:00")])),
+    [],
+  );
+});
+
 test("PRN schedules never materialize missed occurrences", () => {
   const prn = syrup({
     frequency: "As needed (PRN)",
@@ -399,6 +476,32 @@ test("late completion updates only the original missed occurrence and deducts on
   assert.equal(result.medicines[0].inventoryAmount, daily.inventoryAmount - daily.doseAmount);
   assert.equal(applyTakenDose(result.medicines, result.doseRecords, lateRecord, daily.doseAmount).reason, "duplicate");
   assert.equal(scheduledOccurrenceKey(daily.id, "2026-10-10", "08:00"), scheduledOccurrenceKey(result.doseRecords[0].medicineId, result.doseRecords[0].scheduledDate, result.doseRecords[0].scheduledTime));
+});
+
+test("same-day missed dashboard occurrence becomes taken once without a conflicting history entry", () => {
+  const today = "2026-10-18";
+  const daily = syrup();
+  const original = {
+    id: scheduledOccurrenceId(daily.id, today, "08:00"),
+    medicineId: daily.id,
+    scheduledDate: today,
+    scheduledTime: "08:00",
+    scheduledInstant: localIso(today, "08:00"),
+    status: "missed",
+  };
+  const actualTakenTime = localIso(today, "13:45");
+  const taken = applyTakenDose([daily], [original], { ...original, status: "taken_late", actualTakenTime }, daily.doseAmount);
+  assert.equal(taken.accepted, true);
+  assert.equal(taken.doseRecords.length, 1);
+  assert.deepEqual(
+    [taken.doseRecords[0].scheduledDate, taken.doseRecords[0].scheduledTime, taken.doseRecords[0].actualTakenTime, taken.doseRecords[0].status],
+    [today, "08:00", actualTakenTime, "taken_late"],
+  );
+  assert.equal(canonicalizeOccurrenceRecords(taken.doseRecords).filter((record) => record.scheduledDate === today).length, 1);
+  assert.equal(getOutstandingMissedOccurrences(taken.doseRecords, "2026-10-19").length, 0);
+  const duplicate = applyTakenDose(taken.medicines, taken.doseRecords, { ...original, status: "taken_late", actualTakenTime }, daily.doseAmount);
+  assert.equal(duplicate.reason, "duplicate");
+  assert.equal(duplicate.medicines[0].inventoryAmount, daily.inventoryAmount - daily.doseAmount);
 });
 
 test("missed occurrence upsert excludes PRN and preserves existing legacy records", () => {
