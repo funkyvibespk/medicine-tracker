@@ -8,7 +8,7 @@ import {
   serializeDemoProfile,
 } from "@/lib/demoProfiles";
 import { readDemoSession } from "@/lib/demoSession";
-import { applyTakenDose } from "@/lib/medicineLogic";
+import { applySkippedDose, applyTakenDose } from "@/lib/medicineLogic";
 import { reconcileHistoricalMissedOccurrences } from "@/lib/missedDoses";
 import { addScheduleBaseline, localDateString } from "@/lib/schedule";
 
@@ -52,7 +52,7 @@ export interface Medicine {
   lowStockThresholdUnit?: string;
 }
 
-export type DoseStatus = "upcoming" | "due" | "overdue" | "missed" | "taken_early" | "taken_on_time" | "taken_late";
+export type DoseStatus = "upcoming" | "due" | "overdue" | "missed" | "skipped" | "taken_early" | "taken_on_time" | "taken_late";
 
 export interface DoseRecord {
   id: string;
@@ -76,6 +76,7 @@ interface MedicineContextType {
   updateMedicine: (id: string, med: Partial<Medicine>) => void;
   deleteMedicine: (id: string) => void;
   recordTakenDose: (record: DoseRecord, doseAmount: number) => boolean;
+  skipDoseOccurrence: (record: DoseRecord) => boolean;
   updateDoseRecord: (id: string, updates: Partial<DoseRecord>) => void;
   updateInventory: (medicineId: string, amount: number) => void;
   addStock: (medicineId: string, amount: number) => void;
@@ -262,6 +263,23 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
     return true;
   };
 
+  const skipDoseOccurrence = (record: DoseRecord) => {
+    if (record.status !== "overdue" && record.status !== "missed") return false;
+    const medicine = medicinesRef.current.find((item) => item.id === record.medicineId);
+    const enrichedRecord: DoseRecord = {
+      ...record,
+      medicineName: record.medicineName ?? medicine?.name,
+      medicineType: record.medicineType ?? medicine?.type,
+      medicineStrength: record.medicineStrength ?? medicine?.strength,
+      status: "skipped",
+    };
+    const nextRecords = applySkippedDose(doseRecordsRef.current, enrichedRecord);
+    if (!nextRecords.accepted) return false;
+    doseRecordsRef.current = nextRecords.doseRecords;
+    setDoseRecords(doseRecordsRef.current);
+    return true;
+  };
+
   const updateDoseRecord = (id: string, updates: Partial<DoseRecord>) => {
     doseRecordsRef.current = doseRecordsRef.current.map((d) => (d.id === id ? { ...d, ...updates } : d));
     setDoseRecords(doseRecordsRef.current);
@@ -297,6 +315,7 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
         updateMedicine,
         deleteMedicine,
         recordTakenDose,
+        skipDoseOccurrence,
         updateDoseRecord,
         updateInventory,
         addStock,

@@ -11,7 +11,7 @@ const workspaceLinks = ["Overview", "Medicines", "Inventory", "History"];
 
 export default function DashboardPreview() {
   return (
-    <section id="product-demo" aria-labelledby="product-demo-title" className="relative z-20 -mt-28 scroll-mt-24 px-3 pb-14 sm:-mt-36 sm:px-6 sm:pb-20 lg:-mt-40 lg:px-8 lg:pb-24">
+    <section id="product-demo" aria-labelledby="product-demo-title" className="relative z-20 -mt-22 scroll-mt-24 px-3 pb-14 sm:-mt-30 sm:px-6 sm:pb-20 lg:-mt-34 lg:px-8 lg:pb-24">
       <div className="mx-auto max-w-6xl overflow-hidden rounded-2xl border border-white/90 bg-white shadow-[0_28px_90px_-32px_rgba(15,23,42,0.28)] ring-1 ring-slate-200/70 sm:rounded-3xl dark:border-slate-800 dark:bg-slate-900 dark:ring-slate-700/70">
         <header className="flex items-center justify-between gap-3 border-b border-slate-200/80 bg-white px-4 py-3 sm:px-6 dark:border-slate-800 dark:bg-slate-900">
           <div className="flex min-w-0 items-center gap-3">

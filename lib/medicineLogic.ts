@@ -90,14 +90,18 @@ export function canonicalizeOccurrenceRecords<R extends DoseOutcomeRecord>(recor
       continue;
     }
 
-    const chosen = existing.actualTakenTime ? existing : record.actualTakenTime ? record : existing;
+    const chosen = existing.actualTakenTime ? existing
+      : record.actualTakenTime ? record
+        : isTakenOutcome(existing.status) ? existing
+          : isTakenOutcome(record.status) ? record : existing;
     const actualTakenTime = [existing.actualTakenTime, record.actualTakenTime]
       .filter((value): value is string => Boolean(value))
       .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())[0];
     const hasTakenOutcome = Boolean(actualTakenTime) || isTakenOutcome(existing.status) || isTakenOutcome(record.status);
     const status = hasTakenOutcome
       ? actualTakenTime ? (isTakenOutcome(chosen.status) ? chosen.status : "taken_late") : chosen.status
-      : existing.status === "missed" || record.status === "missed" ? "missed" : existing.status;
+      : existing.status === "skipped" || record.status === "skipped" ? "skipped"
+        : existing.status === "missed" || record.status === "missed" ? "missed" : existing.status;
     canonical.set(key, {
       ...existing,
       ...chosen,
@@ -116,7 +120,7 @@ function isTakenOutcome(status?: string) {
   return Boolean(status?.startsWith("taken"));
 }
 
-/** Add or update missed outcomes without replacing existing taken or missed records. */
+/** Add or update missed outcomes without replacing existing terminal outcomes. */
 export function upsertMissedOccurrenceRecords<R extends DoseOutcomeRecord>(
   doseRecords: R[],
   candidates: MissedOccurrenceCandidate[],
@@ -139,7 +143,7 @@ export function upsertMissedOccurrenceRecords<R extends DoseOutcomeRecord>(
     const existingIndices = recordsByOccurrence.get(key);
     if (existingIndices?.length) {
       const existing = existingIndices.map((index) => nextRecords[index]);
-      if (existing.some((record) => record.actualTakenTime || record.status === "missed")) continue;
+      if (existing.some((record) => record.actualTakenTime || record.status === "missed" || record.status === "skipped" || isTakenOutcome(record.status))) continue;
       const existingIndex = existingIndices[0];
       nextRecords[existingIndex] = { ...nextRecords[existingIndex], status: "missed" } as R;
     } else {
@@ -168,6 +172,81 @@ export function upsertPendingOccurrenceRecords<R extends DoseOutcomeRecord>(
     additions.push(candidate as R);
   }
   return additions.length ? [...doseRecords, ...additions] : doseRecords;
+}
+
+export interface ApplySkippedDoseResult<R extends OccurrenceRecord> {
+  accepted: boolean;
+  reason?: "prn" | "not-unresolved" | "already-taken" | "already-skipped" | "ambiguous-occurrence";
+  doseRecords: R[];
+}
+
+/** Record a skipped outcome against the same occurrence identity without changing stock or taken time. */
+export function applySkippedDose<R extends OccurrenceRecord & { status?: string }>(
+  doseRecords: R[],
+  record: R,
+): ApplySkippedDoseResult<R> {
+  if (record.isPrn) return { accepted: false, reason: "prn", doseRecords };
+  if (record.status !== "overdue" && record.status !== "missed" && record.status !== "skipped") {
+    return { accepted: false, reason: "not-unresolved", doseRecords };
+  }
+  if (record.actualTakenTime !== undefined || isTakenOutcome(record.status)) {
+    return { accepted: false, reason: "already-taken", doseRecords };
+  }
+  if (record.scheduledInstant && doseRecords.some((saved) =>
+    !saved.isPrn && saved.medicineId === record.medicineId && saved.scheduledDate === record.scheduledDate &&
+    saved.scheduledTime === record.scheduledTime && !saved.scheduledInstant
+  )) {
+    return { accepted: false, reason: "ambiguous-occurrence", doseRecords };
+  }
+
+  const matchesOccurrence = (saved: R) =>
+    !saved.isPrn && saved.medicineId === record.medicineId && saved.scheduledDate === record.scheduledDate &&
+    saved.scheduledTime === record.scheduledTime &&
+    (record.scheduledInstant ? saved.scheduledInstant === record.scheduledInstant : !saved.scheduledInstant);
+  const matches = doseRecords.map((saved, index) => ({ saved, index })).filter(({ saved }) => matchesOccurrence(saved));
+  if (matches.some(({ saved }) => saved.actualTakenTime !== undefined || isTakenOutcome(saved.status))) {
+    return { accepted: false, reason: "already-taken", doseRecords };
+  }
+  if (matches.length && matches.every(({ saved }) => saved.status === "skipped")) {
+    return { accepted: false, reason: "already-skipped", doseRecords };
+  }
+
+  const nextRecords = [...doseRecords];
+  if (!matches.length) {
+    nextRecords.push({ ...record, status: "skipped" } as R);
+  } else {
+    for (const { saved, index } of matches) {
+      // Keep each saved record's identity and fields, and never set an actual-taken timestamp.
+      nextRecords[index] = { ...saved, status: "skipped" } as R;
+    }
+  }
+  return { accepted: true, doseRecords: nextRecords };
+}
+
+export interface CloseDoseConflict {
+  source: "scheduled" | "taken";
+  relatedAt: Date;
+}
+
+/** Warn only when two distinct occurrences fall within the existing five-minute due window. */
+export function findCloseDoseConflict<R extends OccurrenceRecord>(
+  medicineId: string,
+  targetOccurrenceKey: string,
+  targetScheduledAt: Date,
+  scheduledOccurrences: Array<{ medicineId: string; occurrenceKey: string; scheduledAt: Date }>,
+  doseRecords: R[],
+): CloseDoseConflict | null {
+  const nearbyScheduled = scheduledOccurrences
+    .filter((item) => item.medicineId === medicineId && item.occurrenceKey !== targetOccurrenceKey)
+    .map((item) => ({ relatedAt: item.scheduledAt, distance: Math.abs(item.scheduledAt.getTime() - targetScheduledAt.getTime()), source: "scheduled" as const }))
+    .filter((item) => item.distance <= OVERDUE_THRESHOLD_MS);
+  const nearbyTaken = doseRecords
+    .filter((record) => !record.isPrn && record.medicineId === medicineId && record.actualTakenTime &&
+      scheduledOccurrenceKey(record.medicineId, record.scheduledDate, record.scheduledTime, record.scheduledInstant) !== targetOccurrenceKey)
+    .map((record) => ({ relatedAt: new Date(record.actualTakenTime!), distance: Math.abs(new Date(record.actualTakenTime!).getTime() - targetScheduledAt.getTime()), source: "taken" as const }))
+    .filter((item) => Number.isFinite(item.relatedAt.getTime()) && item.distance <= OVERDUE_THRESHOLD_MS);
+  const nearest = [...nearbyScheduled, ...nearbyTaken].sort((a, b) => a.distance - b.distance)[0];
+  return nearest ? { source: nearest.source, relatedAt: nearest.relatedAt } : null;
 }
 
 export function unitForMedicineType(type: MedicineTypeName): string {

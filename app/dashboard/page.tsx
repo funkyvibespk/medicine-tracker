@@ -10,7 +10,7 @@ import WorkspaceHeader from "@/components/dashboard/WorkspaceHeader";
 import WorkspacePageHeading from "@/components/dashboard/WorkspacePageHeading";
 import { formatDuration, getMedicineOccurrencesForDate, isPrnMedicine, localDateString } from "@/lib/schedule";
 import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
-import { canonicalizeOccurrenceRecords, doseUnitFor, getOccurrenceTimeStatus, getOutstandingMissedOccurrences, getStockStatus, getUnscheduledSameDayMissedOccurrences, inventoryUnitFor, inventoryUnitsCompatible, minutesFromScheduledOccurrence, scheduledOccurrenceId, scheduledOccurrenceKey } from "@/lib/medicineLogic";
+import { canonicalizeOccurrenceRecords, doseUnitFor, findCloseDoseConflict, getOccurrenceTimeStatus, getOutstandingMissedOccurrences, getStockStatus, getUnscheduledSameDayMissedOccurrences, inventoryUnitFor, inventoryUnitsCompatible, minutesFromScheduledOccurrence, scheduledOccurrenceId, scheduledOccurrenceKey } from "@/lib/medicineLogic";
 
 // Helper to pad numbers
 const pad = (n: number) => n.toString().padStart(2, "0");
@@ -28,6 +28,7 @@ type ScheduledDose = {
   diffText: string;
   almostDue: boolean;
   scheduledDateObj: Date;
+  closeConflict?: { source: "scheduled" | "taken"; relatedAt: Date };
 };
 
 type DoseFilter = "all" | "pending" | "taken";
@@ -39,6 +40,7 @@ export default function DashboardPage() {
     updateMedicine,
     updateDoseRecord,
     recordTakenDose,
+    skipDoseOccurrence,
     deleteMedicine,
     addStock,
     isHydrated,
@@ -119,7 +121,10 @@ export default function DashboardPage() {
         let diffText = "";
         let almostDue = false;
         
-        if (record && record.actualTakenTime) {
+        if (record?.status === "skipped") {
+          status = "skipped";
+          diffText = "Skipped";
+        } else if (record && record.actualTakenTime) {
           minutesDiff = minutesFromScheduledOccurrence(todayStr, time, record.actualTakenTime, scheduledInstant);
           
           if (minutesDiff < -5) {
@@ -204,9 +209,26 @@ export default function DashboardPage() {
       });
     }
 
+    const nearbyScheduleOccurrences = medicines.flatMap((med) => [-1, 0, 1].flatMap((dayOffset) => {
+      const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + dayOffset);
+      const dateString = localDateString(date);
+      return getMedicineOccurrencesForDate(med, dateString).map((occurrence) => ({
+        medicineId: med.id,
+        occurrenceKey: scheduledOccurrenceKey(med.id, occurrence.scheduledDate, occurrence.scheduledTime, occurrence.scheduledInstant),
+        scheduledAt: occurrence.scheduledAt,
+      }));
+    }));
+
+    const dosesWithConflicts = doses.map((dose) => {
+      if (dose.status.startsWith("taken") || dose.status === "skipped") return dose;
+      const occurrenceKey = scheduledOccurrenceKey(dose.med.id, dose.scheduledDate, dose.time, dose.scheduledInstant);
+      const closeConflict = findCloseDoseConflict(dose.med.id, occurrenceKey, dose.scheduledDateObj, nearbyScheduleOccurrences, canonicalDoseRecords);
+      return closeConflict ? { ...dose, closeConflict } : dose;
+    });
+
     // Sort: Overdue -> Due -> Upcoming -> Taken
-    return doses.sort((a, b) => {
-      const order = { overdue: 1, missed: 1, due: 2, upcoming: 3, taken_early: 4, taken_on_time: 4, taken_late: 4 };
+    return dosesWithConflicts.sort((a, b) => {
+      const order = { overdue: 1, missed: 1, due: 2, upcoming: 3, taken_early: 4, taken_on_time: 4, taken_late: 4, skipped: 5 };
       if (order[a.status as keyof typeof order] !== order[b.status as keyof typeof order]) {
         return order[a.status as keyof typeof order] - order[b.status as keyof typeof order];
       }
@@ -227,7 +249,7 @@ export default function DashboardPage() {
   const stockNeedsReview = stockAlerts.some((medicine) => getStockStatus(medicine) === "unknown");
   const filteredDoses = todaysDoses.filter((dose) => {
     if (doseFilter === "taken") return dose.status.startsWith("taken");
-    if (doseFilter === "pending") return !dose.status.startsWith("taken");
+    if (doseFilter === "pending") return !dose.status.startsWith("taken") && dose.status !== "skipped";
     return true;
   });
 
@@ -298,6 +320,20 @@ export default function DashboardPage() {
     }
     
     confirmTakeDose(dose, now);
+  };
+
+  const handleSkipDose = (dose: ScheduledDose) => {
+    if (dose.status !== "overdue" && dose.status !== "missed") return;
+    if (!window.confirm(`Skip the ${formatDoseTime(dose)} dose of ${dose.med.name}? It will remain in History as Skipped.`)) return;
+    skipDoseOccurrence({
+      ...(dose.record ?? {} as DoseRecord),
+      id: dose.record?.id ?? dose.id,
+      medicineId: dose.med.id,
+      scheduledDate: dose.scheduledDate,
+      scheduledTime: dose.time,
+      scheduledInstant: dose.record?.scheduledInstant ?? dose.scheduledInstant,
+      status: dose.status,
+    });
   };
 
   const confirmTakeDose = (dose: ScheduledDose, takenTime: Date) => {
@@ -573,6 +609,7 @@ export default function DashboardPage() {
                     <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                       <span className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-bold ${
                         dose.status.startsWith("taken") ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300" :
+                        dose.status === "skipped" ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" :
                         dose.status === "missed" ? "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300" :
                         dose.status === "overdue" ? "bg-violet-100 text-violet-800 dark:bg-violet-900/60 dark:text-violet-300" :
                         dose.status === "due" ? "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300" :
@@ -585,6 +622,7 @@ export default function DashboardPage() {
                       
                       {!dose.status.startsWith("taken") && (
                         <span className={`text-xs font-semibold ${
+                          dose.status === "skipped" ? "text-slate-600 dark:text-slate-300" :
                           dose.status === "overdue" ? "text-violet-700 dark:text-violet-300 flex items-center gap-1" :
                           dose.status === "missed" ? "text-rose-700 dark:text-rose-300 flex items-center gap-1" :
                           dose.status === "due" ? "text-red-700 dark:text-red-300 flex items-center gap-1" :
@@ -595,7 +633,7 @@ export default function DashboardPage() {
                           {dose.status === "overdue" && <span aria-hidden="true" className="flex h-2 w-2 shrink-0 rounded-full bg-violet-600" />}
                           {dose.status === "missed" && <span aria-hidden="true" className="flex h-2 w-2 shrink-0 rounded-full bg-rose-600" />}
                           {dose.almostDue && <span aria-hidden="true" className="flex h-2 w-2 shrink-0 rounded-full bg-amber-500" />}
-                          {dose.status === "due" ? "Due now" : dose.almostDue ? `Almost due · ${dose.diffText}` : dose.status === "missed" ? "Missed" : dose.status === "overdue" ? dose.diffText : `Upcoming · ${dose.diffText}`}
+                          {dose.status === "skipped" ? "Skipped" : dose.status === "due" ? "Due now" : dose.almostDue ? `Almost due · ${dose.diffText}` : dose.status === "missed" ? "Missed" : dose.status === "overdue" ? dose.diffText : `Upcoming · ${dose.diffText}`}
                         </span>
                       )}
                     </div>
@@ -639,6 +677,11 @@ export default function DashboardPage() {
                     <p className="mt-1 text-sm font-semibold text-slate-700 dark:text-slate-200">Prescribed dose: {dose.med.doseAmount} {dose.med.doseUnit ?? doseUnitFor(dose.med)}</p>
                     <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{dose.med.type}{dose.med.strength ? ` · ${dose.med.strength}` : ""}{dose.med.frequency ? ` · ${dose.med.frequency}${dose.med.frequency === "Every X hours" ? ` (every ${dose.med.intervalHours || 8}h)` : ""}` : ""}</p>
                     {dose.med.instructions && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Instructions: {dose.med.instructions}</p>}
+                    {dose.closeConflict && (dose.status === "overdue" || dose.status === "missed" || dose.status === "due" || dose.status === "upcoming") && (
+                      <p role="status" className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+                        Potential schedule overlap: this dose at {dose.scheduledDateObj.toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" })} is within the tracker&apos;s 5-minute due window of a {dose.closeConflict.source === "taken" ? "recorded dose" : "scheduled dose"} at {dose.closeConflict.relatedAt.toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" })}. Review the schedule or leave this occurrence unresolved.
+                      </p>
+                    )}
 
                     {/* Inventory Status */}
                     <div className="mt-2.5">
@@ -663,7 +706,9 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="flex shrink-0 flex-col gap-2 border-t border-slate-100 pt-3 dark:border-slate-800/80 sm:min-w-44 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">
-                  {dose.status.startsWith("taken") ? (
+                  {dose.status === "skipped" ? (
+                    <div className="flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Skipped</div>
+                  ) : dose.status.startsWith("taken") ? (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between rounded-xl bg-emerald-100/70 dark:bg-emerald-950/60 px-3.5 py-2.5 border border-emerald-200/80 dark:border-emerald-900/50">
                         <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300 font-semibold text-xs sm:text-sm">
@@ -699,6 +744,15 @@ export default function DashboardPage() {
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><polyline points="20 6 9 17 4 12" /></svg>
                       <span>Mark as Taken</span>
                     </button>
+                    {(dose.status === "overdue" || dose.status === "missed") && !dose.identityAmbiguous && (
+                      <button
+                        type="button"
+                        onClick={() => handleSkipDose(dose)}
+                        className="w-full cursor-pointer flex min-h-10 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:scale-95 transition-all dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                      >
+                        Skip Dose
+                      </button>
+                    )}
                     {dose.identityAmbiguous && <p role="status" className="mt-2 text-xs text-amber-700 dark:text-amber-300">An older dose at this repeated local time cannot be assigned safely.</p>}
                     </>
                   )}

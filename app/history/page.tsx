@@ -39,7 +39,7 @@ function formatScheduledRecordTime(record: ScheduledRecordLabel, records: Schedu
 }
 
 export default function HistoryPage() {
-  const { medicines, doseRecords, isHydrated, recordTakenDose } = useMedicine();
+  const { medicines, doseRecords, isHydrated, recordTakenDose, skipDoseOccurrence } = useMedicine();
   const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
@@ -58,7 +58,7 @@ export default function HistoryPage() {
 
   // Include unresolved overdue occurrences so they remain actionable until the next scheduled dose is due.
   const grouped = useMemo(() => {
-    const historyRecords = canonicalDoseRecords.filter((record) => Boolean(record.actualTakenTime) || record.status === "missed" || record.status === "overdue");
+    const historyRecords = canonicalDoseRecords.filter((record) => Boolean(record.actualTakenTime) || record.status === "missed" || record.status === "overdue" || record.status === "skipped");
     const byDate: Record<string, typeof historyRecords> = {};
 
     for (const record of historyRecords) {
@@ -135,6 +135,7 @@ export default function HistoryPage() {
       case "taken_late": return { text: "Late", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" };
       case "missed": return { text: "Missed", cls: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300" };
       case "overdue": return { text: "Overdue", cls: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300" };
+      case "skipped": return { text: "Skipped", cls: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" };
       default: return { text: "Taken", cls: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" };
     }
   };
@@ -220,9 +221,9 @@ export default function HistoryPage() {
                           key={record.id}
                           className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900"
                         >
-                          <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg ${record.status === "missed" ? "bg-rose-100 dark:bg-rose-950/60" : "bg-emerald-100 dark:bg-emerald-950/60"}`}>
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={`h-4 w-4 ${record.status === "missed" ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"}`}>
-                              {record.status === "missed" ? <><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></> : <polyline points="20 6 9 17 4 12" />}
+                          <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg ${record.status === "missed" ? "bg-rose-100 dark:bg-rose-950/60" : record.status === "skipped" ? "bg-slate-100 dark:bg-slate-800" : "bg-emerald-100 dark:bg-emerald-950/60"}`}>
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={`h-4 w-4 ${record.status === "missed" ? "text-rose-600 dark:text-rose-400" : record.status === "skipped" ? "text-slate-600 dark:text-slate-300" : "text-emerald-600 dark:text-emerald-400"}`}>
+                              {record.status === "missed" ? <><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></> : record.status === "skipped" ? <line x1="5" y1="12" x2="19" y2="12" /> : <polyline points="20 6 9 17 4 12" />}
                             </svg>
                           </div>
                           <div className="min-w-0 flex-1">
@@ -237,20 +238,33 @@ export default function HistoryPage() {
                               <p role="status" className="mt-1 text-xs text-amber-700 dark:text-amber-300">This older dose falls in a repeated local time and cannot be assigned safely.</p>
                             )}
                             {(record.status === "missed" || record.status === "overdue") && !record.actualTakenTime && med && !ambiguousLegacyOccurrence && (
-                              <button
-                                type="button"
-                                disabled={!inventoryUnitsCompatible(med) || med.inventoryAmount < med.doseAmount}
-                                onClick={() => recordTakenDose({
-                                  ...record,
-                                  scheduledInstant: record.scheduledInstant,
-                                  actualTakenTime: new Date().toISOString(),
-                                  status: "taken_late",
-                                }, med.doseAmount)}
-                                className="mt-1 text-xs font-semibold text-teal-700 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:text-slate-400 dark:text-teal-300 dark:disabled:text-slate-500"
-                                title={!inventoryUnitsCompatible(med) || med.inventoryAmount < med.doseAmount ? "Review available stock before recording this dose." : undefined}
-                              >
-                                Record as taken
-                              </button>
+                              <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+                                <button
+                                  type="button"
+                                  disabled={!inventoryUnitsCompatible(med) || med.inventoryAmount < med.doseAmount}
+                                  onClick={() => recordTakenDose({
+                                    ...record,
+                                    scheduledInstant: record.scheduledInstant,
+                                    actualTakenTime: new Date().toISOString(),
+                                    status: "taken_late",
+                                  }, med.doseAmount)}
+                                  className="text-xs font-semibold text-teal-700 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:text-slate-400 dark:text-teal-300 dark:disabled:text-slate-500"
+                                  title={!inventoryUnitsCompatible(med) || med.inventoryAmount < med.doseAmount ? "Review available stock before recording this dose." : undefined}
+                                >
+                                  Record as taken
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (window.confirm(`Skip the ${format12Hour(record.scheduledTime)} dose of ${medicineName}? It will remain in History as Skipped.`)) {
+                                      skipDoseOccurrence(record);
+                                    }
+                                  }}
+                                  className="text-xs font-semibold text-slate-600 underline-offset-2 hover:underline dark:text-slate-300"
+                                >
+                                  Skip Dose
+                                </button>
+                              </div>
                             )}
                           </div>
                           <span className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${cls}`}>
