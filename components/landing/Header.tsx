@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { BrandLogo } from "@/components/BrandLogo";
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -16,16 +18,26 @@ export default function Header() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Close on Escape key
+  // Dismiss the open mobile menu on outside pointer or Escape, cleaning up per open cycle.
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setMobileMenuOpen(false);
-      }
+    if (!mobileMenuOpen) return;
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!(event.target instanceof Node)) return;
+      if (mobileMenuRef.current?.contains(event.target) || mobileMenuButtonRef.current?.contains(event.target)) return;
+      setMobileMenuOpen(false);
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileMenuOpen(false);
+    };
+
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [mobileMenuOpen]);
 
   return (
     <header
@@ -103,10 +115,12 @@ export default function Header() {
         <div className="flex sm:hidden items-center">
           <button
             type="button"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            ref={mobileMenuButtonRef}
+            onClick={() => setMobileMenuOpen((open) => !open)}
             className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
             aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
             aria-expanded={mobileMenuOpen}
+            aria-controls="landing-mobile-menu"
           >
             {mobileMenuOpen ? (
               <svg
@@ -144,7 +158,7 @@ export default function Header() {
 
       {/* Mobile Menu Dropdown */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-b border-slate-200 bg-white/95 px-4 pt-2 pb-5 shadow-lg backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/95 animate-in slide-in-from-top-2 duration-200">
+        <div ref={mobileMenuRef} id="landing-mobile-menu" className="md:hidden border-b border-slate-200 bg-white/95 px-4 pt-2 pb-5 shadow-lg backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/95 animate-in slide-in-from-top-2 duration-200">
           <nav className="flex flex-col space-y-3 pt-2" aria-label="Mobile Navigation">
             <a
               href="#features"
