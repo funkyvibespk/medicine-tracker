@@ -24,6 +24,7 @@ import {
   scheduledOccurrenceId,
   scheduledOccurrenceKey,
   upsertMissedOccurrenceRecords,
+  validateInventoryThreshold,
 } from "../lib/medicineLogic.ts";
 
 registerHooks({
@@ -218,6 +219,27 @@ test("threshold zero and five distinguish out, low, and positive stock", () => {
   assert.equal(getStockStatus(syrup({ inventoryAmount: 5, lowStockThreshold: 5 })), "low");
   assert.equal(getStockStatus(syrup({ inventoryAmount: 5.5, lowStockThreshold: 5 })), "available");
   assert.equal(getStockStatus(syrup({ inventoryAmount: 4, lowStockThreshold: 5, lowStockThresholdUnit: "bottles" })), "unknown");
+});
+
+test("stock and low-stock threshold validation enforces the requested boundary for add and edit", () => {
+  const cases = [
+    { stock: 1, threshold: 5, valid: false },
+    { stock: 5, threshold: 5, valid: true },
+    { stock: 5, threshold: 1, valid: true },
+    { stock: 0, threshold: 0, valid: true },
+    { stock: 0, threshold: 1, valid: false },
+  ];
+  for (const { stock, threshold, valid } of cases) {
+    const addValidation = validateInventoryThreshold(stock, threshold);
+    const editValidation = validateInventoryThreshold(stock, threshold);
+    assert.equal(addValidation.valid, valid, `Add Medicine ${stock}/${threshold}`);
+    assert.equal(editValidation.valid, valid, `Edit Medicine ${stock}/${threshold}`);
+  }
+  assert.equal(validateInventoryThreshold(1.25, 1.2).valid, true);
+  assert.equal(validateInventoryThreshold(-1, 0).inventoryAmountError, "Current stock must be a valid non-negative quantity.");
+  assert.equal(validateInventoryThreshold(1, -0.1).lowStockThresholdError, "Low-stock threshold must be a valid non-negative quantity.");
+  assert.equal(validateInventoryThreshold("", 0).valid, false);
+  assert.equal(validateInventoryThreshold(1, 1.1).lowStockThresholdError, "Low-stock threshold cannot be greater than current stock.");
 });
 
 test("legacy syrup quantities remain interpreted as mL and existing history is retained", () => {

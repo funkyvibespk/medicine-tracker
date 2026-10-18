@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Medicine, MedicineType, type AddMedicineResult, type DoseRecord } from "@/contexts/MedicineContext";
 import { localDateString } from "@/lib/schedule";
-import { availableVolumeFromContainers, inventoryUnitFor, inventoryUnitsCompatible } from "@/lib/medicineLogic";
+import { availableVolumeFromContainers, inventoryUnitFor, inventoryUnitsCompatible, parseNonNegativeQuantity, validateInventoryThreshold } from "@/lib/medicineLogic";
 import { findMedicineIdentityMatches, type MedicineIdentityMatch } from "@/lib/medicineIdentity";
 
 // ─── Per-type strength configuration ──────────────────────────────────────────
@@ -221,7 +221,7 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
 
   // ── Validation ──
 
-  const validate = (scheduleTimes: string[]) => {
+  const validate = (scheduleTimes: string[], currentStockInput: FormDataEntryValue | null, thresholdInput: FormDataEntryValue | null) => {
     const newErrors: Record<string, string> = {};
     if (!formData.name?.trim()) newErrors.name = "Name is required";
     if (!formData.doseAmount || formData.doseAmount <= 0) newErrors.doseAmount = "Valid dose amount required";
@@ -239,6 +239,23 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
     if (currentType === "Syrup" && syrupStockEntryUnit === "bottles" && Number(formData.inventoryAmount) > 0 && !(Number(formData.inventoryContainerCapacity) > 0))
       newErrors.inventoryContainerCapacity = "Enter the bottle capacity to calculate liquid stock";
 
+    const enteredStock = parseNonNegativeQuantity(currentStockInput);
+    const enteredThreshold = parseNonNegativeQuantity(thresholdInput);
+    if (enteredStock === null) newErrors.inventoryAmount = "Current stock must be a valid non-negative quantity.";
+    if (enteredThreshold === null) newErrors.lowStockThreshold = "Low-stock threshold must be a valid non-negative quantity.";
+    if (enteredStock !== null && enteredThreshold !== null) {
+      const isBottleEntry = currentType === "Syrup" && syrupStockEntryUnit === "bottles";
+      const containerCapacity = parseNonNegativeQuantity(formData.inventoryContainerCapacity);
+      const canCompareStock = !isBottleEntry || enteredStock === 0 || (containerCapacity !== null && containerCapacity > 0);
+      if (canCompareStock) {
+        const comparableStock = isBottleEntry
+          ? availableVolumeFromContainers(enteredStock, containerCapacity ?? 0)
+          : enteredStock;
+        const quantityValidation = validateInventoryThreshold(comparableStock, enteredThreshold);
+        if (quantityValidation.lowStockThresholdError) newErrors.lowStockThreshold = quantityValidation.lowStockThresholdError;
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -249,10 +266,13 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
     e.preventDefault();
     if (submittingRef.current) return;
     submittingRef.current = true;
+    const formValues = new FormData(e.currentTarget as HTMLFormElement);
+    const currentStockInput = formValues.get("inventoryAmount");
+    const thresholdInput = formValues.get("lowStockThreshold");
     const scheduleTimes = formData.frequency === "As needed (PRN)"
       ? []
-      : new FormData(e.currentTarget as HTMLFormElement).getAll("scheduleTime").filter((time): time is string => typeof time === "string");
-    if (!validate(scheduleTimes)) {
+      : formValues.getAll("scheduleTime").filter((time): time is string => typeof time === "string");
+    if (!validate(scheduleTimes, currentStockInput, thresholdInput)) {
       submittingRef.current = false;
       return;
     }
@@ -264,7 +284,7 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
         : "";
     const doseUnit = getDoseUnit();
     const isSameSavedType = Boolean(initialData && currentType === initialData.type);
-    const enteredInventoryAmount = Number(formData.inventoryAmount) || 0;
+    const enteredInventoryAmount = parseNonNegativeQuantity(currentStockInput) ?? 0;
     const inventoryAmount = currentType === "Syrup" && syrupStockEntryUnit === "bottles"
       ? availableVolumeFromContainers(enteredInventoryAmount, Number(formData.inventoryContainerCapacity) || 0)
       : enteredInventoryAmount;
@@ -295,7 +315,7 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
       inventoryCapacity,
       inventoryContainerCapacity: currentType === "Syrup" ? Number(formData.inventoryContainerCapacity) || 0 : undefined,
       inventoryUnit,
-      lowStockThreshold: formData.lowStockThreshold ?? 5,
+      lowStockThreshold: parseNonNegativeQuantity(thresholdInput) ?? 0,
       lowStockThresholdUnit,
     };
 
@@ -309,8 +329,12 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
 
     const result = onSave(med);
     if (result && !result.added) {
-      setReviewingDuplicate({ candidate: med, matches: result.duplicateMatch ? [result.duplicateMatch] : [] });
-      setSaveError(result.duplicateMatch ? "A matching medicine was added while this form was open. Review it before continuing." : "This medicine could not be added safely.");
+      if (result.validationError) {
+        setSaveError(result.validationError);
+      } else {
+        setReviewingDuplicate({ candidate: med, matches: result.duplicateMatch ? [result.duplicateMatch] : [] });
+        setSaveError(result.duplicateMatch ? "A matching medicine was added while this form was open. Review it before continuing." : "This medicine could not be added safely.");
+      }
       submittingRef.current = false;
       return;
     }
@@ -625,8 +649,10 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
                 id="currentStock"
                 name="inventoryAmount"
                 min="0"
+                required
                 step={currentType === "Syrup" && syrupStockEntryUnit === "ml" ? "any" : "1"}
-                value={formData.inventoryAmount || ""}
+                value={formData.inventoryAmount ?? ""}
+                aria-invalid={Boolean(errors.inventoryAmount)}
                 onChange={handleChange}
                 className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
               />
@@ -641,6 +667,7 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
                 <span className="text-sm text-slate-500 dark:text-slate-400">{getDoseUnit()}</span>
               )}
             </div>
+            {errors.inventoryAmount && <p className="mt-1 text-xs text-rose-600 dark:text-rose-400" role="alert">{errors.inventoryAmount}</p>}
             {currentType === "Syrup" && syrupStockEntryUnit === "bottles" && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Bottle count is converted to available mL using its capacity.</p>}
           </div>
           <div>
@@ -653,12 +680,15 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
                 id="lowStockThreshold"
                 name="lowStockThreshold"
                 min="0"
+                required
                 step={currentType === "Syrup" ? "any" : "1"}
                 value={formData.lowStockThreshold ?? ""}
+                aria-invalid={Boolean(errors.lowStockThreshold)}
                 onChange={handleChange}
                 className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
               />
             </div>
+            {errors.lowStockThreshold && <p className="mt-1 text-xs text-rose-600 dark:text-rose-400" role="alert">{errors.lowStockThreshold}</p>}
           </div>
           <div>
             <label htmlFor="inventoryCapacity" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Total Stock Capacity (optional)</label>

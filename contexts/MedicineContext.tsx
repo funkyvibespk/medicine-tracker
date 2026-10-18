@@ -8,7 +8,7 @@ import {
   serializeDemoProfile,
 } from "@/lib/demoProfiles";
 import { readDemoSession } from "@/lib/demoSession";
-import { applySkippedDose, applyTakenDose } from "@/lib/medicineLogic";
+import { applySkippedDose, applyTakenDose, validateInventoryThreshold } from "@/lib/medicineLogic";
 import { findBlockingMedicineIdentityMatch } from "@/lib/medicineIdentity";
 import { reconcileHistoricalMissedOccurrences } from "@/lib/missedDoses";
 import { addScheduleBaseline, localDateString } from "@/lib/schedule";
@@ -74,7 +74,7 @@ interface MedicineContextType {
   medicines: Medicine[];
   doseRecords: DoseRecord[];
   addMedicine: (med: Medicine, options?: { allowLikelyDuplicate?: boolean }) => AddMedicineResult;
-  updateMedicine: (id: string, med: Partial<Medicine>) => void;
+  updateMedicine: (id: string, med: Partial<Medicine>) => MedicineUpdateResult;
   deleteMedicine: (id: string) => void;
   recordTakenDose: (record: DoseRecord, doseAmount: number) => boolean;
   skipDoseOccurrence: (record: DoseRecord) => boolean;
@@ -91,6 +91,12 @@ interface MedicineContextType {
 export interface AddMedicineResult {
   added: boolean;
   duplicateMatch?: { medicine: Medicine; kind: "exact" | "likely" };
+  validationError?: string;
+}
+
+export interface MedicineUpdateResult {
+  saved: boolean;
+  validationError?: string;
 }
 
 const MedicineContext = createContext<MedicineContextType | undefined>(undefined);
@@ -186,6 +192,10 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
   }, [isHydrated, activeProfileEmail]);
 
   const addMedicine = (med: Medicine, options?: { allowLikelyDuplicate?: boolean }): AddMedicineResult => {
+    const quantityValidation = validateInventoryThreshold(med.inventoryAmount, med.lowStockThreshold);
+    if (!quantityValidation.valid) {
+      return { added: false, validationError: quantityValidation.inventoryAmountError ?? quantityValidation.lowStockThresholdError };
+    }
     const duplicateMatch = findBlockingMedicineIdentityMatch(med, medicinesRef.current, options?.allowLikelyDuplicate);
     if (duplicateMatch) return { added: false, duplicateMatch };
     const createdAt = med.createdAt ?? new Date().toISOString();
@@ -208,6 +218,14 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
 
   const updateMedicine = (id: string, updates: Partial<Medicine>) => {
     const existing = medicinesRef.current.find((medicine) => medicine.id === id);
+    if (!existing) return { saved: false, validationError: "This medicine could not be found." };
+    const quantityValidation = validateInventoryThreshold(
+      updates.inventoryAmount ?? existing.inventoryAmount,
+      updates.lowStockThreshold ?? existing.lowStockThreshold,
+    );
+    if (!quantityValidation.valid) {
+      return { saved: false, validationError: quantityValidation.inventoryAmountError ?? quantityValidation.lowStockThresholdError };
+    }
     const now = new Date();
     if (existing && scheduleChanged(existing, updates)) {
       const reconciled = reconcileHistoricalMissedOccurrences(medicinesRef.current, doseRecordsRef.current, now);
@@ -233,6 +251,7 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
       };
     });
     setMedicines(medicinesRef.current);
+    return { saved: true };
   };
 
   const deleteMedicine = (id: string) => {

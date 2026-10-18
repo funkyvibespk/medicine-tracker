@@ -23,6 +23,35 @@ export interface OccurrenceRecord {
 export type StockStatus = "out" | "low" | "available" | "unknown";
 export const OVERDUE_THRESHOLD_MS = 5 * 60_000;
 
+export interface InventoryThresholdValidation {
+  valid: boolean;
+  inventoryAmountError?: string;
+  lowStockThresholdError?: string;
+}
+
+export function parseNonNegativeQuantity(value: unknown): number | null {
+  if (typeof value === "string" && value.trim() === "") return null;
+  const quantity = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
+  return Number.isFinite(quantity) && quantity >= 0 ? quantity : null;
+}
+
+/** Validate saved inventory and its low-stock threshold in the same unit. */
+export function validateInventoryThreshold(inventoryAmount: unknown, lowStockThreshold: unknown): InventoryThresholdValidation {
+  const stock = parseNonNegativeQuantity(inventoryAmount);
+  const threshold = parseNonNegativeQuantity(lowStockThreshold);
+  const inventoryAmountError = stock === null ? "Current stock must be a valid non-negative quantity." : undefined;
+  const lowStockThresholdError = threshold === null
+    ? "Low-stock threshold must be a valid non-negative quantity."
+    : stock !== null && threshold > stock
+      ? "Low-stock threshold cannot be greater than current stock."
+      : undefined;
+  return {
+    valid: !inventoryAmountError && !lowStockThresholdError,
+    inventoryAmountError,
+    lowStockThresholdError,
+  };
+}
+
 export function isOccurrenceOverdue(scheduledAt: Date, now: Date): boolean {
   return now.getTime() - scheduledAt.getTime() >= OVERDUE_THRESHOLD_MS;
 }
