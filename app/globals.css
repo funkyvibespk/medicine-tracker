@@ -22,6 +22,15 @@ body {
   overflow-x: hidden;
 }
 
+@keyframes dose-almost-due-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.82); }
+}
+
+.dose-almost-due-pulse {
+  animation: dose-almost-due-pulse 1.6s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -30,5 +39,9 @@ body {
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .dose-almost-due-pulse {
+    animation: none !important;
   }
 }

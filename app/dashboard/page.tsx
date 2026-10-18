@@ -26,6 +26,7 @@ type ScheduledDose = {
   status: DoseStatus;
   minutesDiff: number;
   diffText: string;
+  almostDue: boolean;
   scheduledDateObj: Date;
 };
 
@@ -66,7 +67,7 @@ export default function DashboardPage() {
     // Defer the local clock read until after prerendering.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setNow(new Date());
-    const timer = setInterval(() => setNow(new Date()), 60000); // update every minute
+    const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -116,6 +117,7 @@ export default function DashboardPage() {
         let status: DoseStatus = "upcoming";
         let minutesDiff = 0;
         let diffText = "";
+        let almostDue = false;
         
         if (record && record.actualTakenTime) {
           minutesDiff = minutesFromScheduledOccurrence(todayStr, time, record.actualTakenTime, scheduledInstant);
@@ -140,7 +142,8 @@ export default function DashboardPage() {
             status = "due";
           } else {
             status = "upcoming";
-            diffText = `In ${formatDuration(minutesDiff)}`;
+            almostDue = diffMs < 0 && diffMs >= -5 * 60_000;
+            diffText = diffMs > -60_000 ? "In less than 1 min" : `In ${formatDuration(minutesDiff)}`;
           }
         }
 
@@ -155,6 +158,7 @@ export default function DashboardPage() {
           status,
           minutesDiff,
           diffText,
+          almostDue,
           scheduledDateObj: scheduledTimeDate,
         });
       });
@@ -395,9 +399,9 @@ export default function DashboardPage() {
         
         {/* Overdue Alert */}
         {overdueCount > 0 && (
-          <div role="status" aria-live="polite" className="mb-6 flex items-center gap-3 rounded-xl border border-rose-200 bg-rose-50/50 p-4 shadow-sm dark:border-rose-900/50 dark:bg-rose-950/20">
-            <span className="flex h-3 w-3 rounded-full bg-rose-500 animate-pulse" />
-            <p className="font-semibold text-rose-800 dark:text-rose-300 text-sm">
+          <div role="status" aria-live="polite" className="mb-6 flex items-center gap-3 rounded-xl border border-violet-200 bg-violet-50/50 p-4 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/20">
+            <span className="flex h-3 w-3 rounded-full bg-violet-500" />
+            <p className="font-semibold text-violet-800 dark:text-violet-300 text-sm">
               {overdueCount} scheduled dose{overdueCount !== 1 ? "s" : ""} overdue
             </p>
           </div>
@@ -513,9 +517,9 @@ export default function DashboardPage() {
                   dose.status.startsWith("taken")
                     ? "border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/50 dark:bg-emerald-950/20"
                     : dose.status === "overdue"
-                    ? "border-rose-300 bg-rose-50/30 dark:border-rose-900/40 dark:bg-rose-950/10 shadow-sm"
+                    ? "border-violet-300 bg-violet-50/30 dark:border-violet-900/40 dark:bg-violet-950/10 shadow-sm"
                     : dose.status === "due"
-                    ? "border-teal-300 bg-teal-50/30 dark:border-teal-700/40 dark:bg-teal-950/10 shadow-sm ring-1 ring-teal-500/20"
+                    ? "border-red-300 bg-red-50/30 dark:border-red-900/40 dark:bg-red-950/10 shadow-sm"
                     : "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
                 }`}
               >
@@ -523,9 +527,11 @@ export default function DashboardPage() {
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-bold ${
-                        dose.status.startsWith("taken") ? "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400" :
-                        dose.status === "overdue" ? "bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300" :
-                        "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                        dose.status.startsWith("taken") ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300" :
+                        dose.status === "overdue" ? "bg-violet-100 text-violet-800 dark:bg-violet-900/60 dark:text-violet-300" :
+                        dose.status === "due" ? "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300" :
+                        dose.almostDue ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300" :
+                        "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300"
                       }`}>
                         <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
                         {formatDoseTime(dose)}
@@ -533,12 +539,15 @@ export default function DashboardPage() {
                       
                       {!dose.status.startsWith("taken") && (
                         <span className={`text-xs font-semibold ${
-                          dose.status === "overdue" ? "text-rose-600 dark:text-rose-400" :
-                          dose.status === "due" ? "text-teal-600 dark:text-teal-400 flex items-center gap-1" :
-                          "text-slate-500 dark:text-slate-400"
+                          dose.status === "overdue" ? "text-violet-700 dark:text-violet-300 flex items-center gap-1" :
+                          dose.status === "due" ? "text-red-700 dark:text-red-300 flex items-center gap-1" :
+                          dose.almostDue ? "text-amber-700 dark:text-amber-300 flex items-center gap-1" :
+                          "text-blue-700 dark:text-blue-300"
                         }`}>
-                          {dose.status === "due" && <span className="flex h-2 w-2 rounded-full bg-teal-500 animate-pulse" />}
-                          {dose.status === "due" ? "Due now" : dose.diffText}
+                          {dose.status === "due" && <span aria-hidden="true" className="flex h-2 w-2 shrink-0 rounded-full bg-red-600" />}
+                          {dose.status === "overdue" && <span aria-hidden="true" className="flex h-2 w-2 shrink-0 rounded-full bg-violet-600" />}
+                          {dose.almostDue && <span aria-hidden="true" className="dose-almost-due-pulse flex h-2 w-2 shrink-0 rounded-full bg-amber-500" />}
+                          {dose.status === "due" ? "Due now" : dose.almostDue ? `Almost due · ${dose.diffText}` : dose.diffText}
                         </span>
                       )}
                     </div>
