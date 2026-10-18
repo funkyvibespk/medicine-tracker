@@ -44,9 +44,9 @@ function HeroNote({
 
 export default function Hero() {
   return (
-    <section className="relative isolate overflow-hidden bg-[radial-gradient(ellipse_at_50%_42%,rgba(20,184,166,0.08),transparent_57%)] pb-28 pt-8 sm:pb-36 sm:pt-10 lg:pb-40 lg:pt-3">
-      <div className="pointer-events-none absolute -left-44 top-40 -z-10 h-96 w-96 rounded-full bg-teal-100/40 blur-3xl dark:bg-teal-900/20" aria-hidden="true" />
-      <div className="pointer-events-none absolute -right-48 top-12 -z-10 h-[30rem] w-[30rem] rounded-full bg-emerald-100/40 blur-3xl dark:bg-emerald-900/15" aria-hidden="true" />
+    <section className="relative isolate overflow-hidden bg-[radial-gradient(ellipse_at_50%_42%,rgba(20,184,166,0.09),transparent_60%)] pb-24 pt-7 sm:pb-32 sm:pt-9 lg:pb-36 lg:pt-5">
+      <div className="pointer-events-none absolute -left-44 top-40 -z-10 h-80 w-80 rounded-full bg-teal-100/35 blur-3xl dark:bg-teal-900/20 sm:h-96 sm:w-96" aria-hidden="true" />
+      <div className="pointer-events-none absolute -right-48 top-12 -z-10 h-96 w-96 rounded-full bg-emerald-100/35 blur-3xl dark:bg-emerald-900/15 sm:h-[30rem] sm:w-[30rem]" aria-hidden="true" />
 
       <div className="relative mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
         <HeroNote
@@ -79,32 +79,32 @@ export default function Hero() {
         />
 
         <div className="mx-auto max-w-4xl">
-          <div className="inline-flex items-center gap-2 rounded-full border border-teal-100 bg-white/80 px-4 py-2 text-xs font-semibold text-teal-800 shadow-sm shadow-teal-950/[0.03] backdrop-blur sm:text-sm dark:border-teal-900/70 dark:bg-slate-900/80 dark:text-teal-200">
+          <div className="inline-flex items-center gap-2 rounded-full border border-teal-100/90 bg-white/90 px-4 py-2 text-xs font-semibold text-teal-800 shadow-sm shadow-teal-950/[0.04] backdrop-blur sm:text-sm dark:border-teal-900/70 dark:bg-slate-900/85 dark:text-teal-200">
             <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 text-teal-500" aria-hidden="true"><path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Zm7 12 .9 3.1L23 18l-3.1.9L19 22l-.9-3.1L15 18l3.1-.9L19 14ZM5 15l.7 2.3L8 18l-2.3.7L5 21l-.7-2.3L2 18l2.3-.7L5 15Z" /></svg>
             A smarter way to manage your medicines
           </div>
 
-          <h1 className="mx-auto mt-4 max-w-5xl text-[2.65rem] font-extrabold leading-[1.04] tracking-[-0.055em] text-slate-950 sm:text-6xl md:text-7xl lg:text-[4.1rem] dark:text-white">
+          <h1 className="mx-auto mt-5 max-w-4xl text-[2.45rem] font-extrabold leading-[1.06] tracking-[-0.05em] text-slate-950 sm:text-6xl md:text-7xl lg:text-[4.5rem] dark:text-white">
             Your medication routine,
             <span className="mt-1 block bg-gradient-to-r from-teal-700 via-teal-600 to-emerald-500 bg-clip-text text-transparent dark:from-teal-300 dark:via-teal-400 dark:to-emerald-300">
               made simple.
             </span>
           </h1>
 
-          <p className="mx-auto mt-2 max-w-2xl text-base font-medium leading-relaxed text-slate-600 sm:text-lg md:text-xl dark:text-slate-300">
+          <p className="mx-auto mt-4 max-w-2xl text-base font-medium leading-7 text-slate-600 sm:text-lg sm:leading-8 md:text-xl dark:text-slate-300">
             Track medicines, follow your schedule, and keep stock in view — all in one calm place.
           </p>
 
-          <div className="mt-4 flex justify-center">
+          <div className="mt-6 flex justify-center">
             <Link
               href="/auth?mode=signup"
-              className="inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-teal-700 to-emerald-600 px-8 py-3 text-base font-bold text-white shadow-lg shadow-teal-700/20 transition hover:-translate-y-0.5 hover:from-teal-600 hover:to-emerald-500 hover:shadow-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 sm:w-auto"
+              className="inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-teal-700 to-emerald-600 px-8 py-3 text-base font-bold text-white shadow-md shadow-teal-700/20 transition hover:-translate-y-0.5 hover:from-teal-600 hover:to-emerald-500 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 sm:w-auto"
             >
               Get Started <Arrow />
             </Link>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs font-medium text-slate-500 sm:gap-x-5 sm:text-sm dark:text-slate-400">
+          <div className="mx-auto mt-5 flex max-w-2xl flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs font-medium text-slate-500 sm:gap-x-5 sm:text-sm dark:text-slate-400">
             <span className="inline-flex items-center gap-1.5"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" /><path d="m9 12 2 2 4-4" /></svg>Free to use</span>
             <span className="hidden text-slate-300 sm:inline dark:text-slate-700">•</span>
             <span className="inline-flex items-center gap-1.5"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4" aria-hidden="true"><path d="m13 2-3 8h7l-6 12 1-9H5l8-11Z" /></svg>Easy setup</span>

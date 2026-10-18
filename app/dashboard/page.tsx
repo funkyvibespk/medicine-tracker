@@ -463,6 +463,7 @@ export default function DashboardPage() {
 
       <main className="flex min-w-0 flex-1 flex-col px-4 py-6 sm:px-6 lg:px-8">
         <WorkspacePageHeading
+          className="rounded-2xl border border-slate-200/80 bg-white/90 p-4 shadow-sm shadow-slate-900/[0.03] sm:p-5 dark:border-slate-800 dark:bg-slate-900"
           title="Your Dashboard"
           description={`A clear overview of your medicine routine for ${now.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}.`}
           action={<>
@@ -509,13 +510,13 @@ export default function DashboardPage() {
           </section>
         )}
 
-        <section aria-label="Medicine overview" className="order-3 mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section aria-label="Medicine overview" className="order-3 mb-6 grid gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
           {[
             { label: "Today’s doses", value: `${takenCount} / ${todaysDoses.length}`, note: "Taken today / scheduled today", destination: "View schedule", href: "#todays-schedule", tone: "teal" },
             { label: "Active medicines", value: activeMedicines.length, note: "Active on today’s date", destination: "View medicines", href: "/medicines", tone: "blue" },
             { label: "Stock alerts", value: stockAlerts.length, note: stockNeedsReview ? "Low/out stock or unit mismatch" : stockAlerts.length ? "Low or out of stock" : "No low, empty, or unit issues", destination: "Review inventory", href: "/inventory", tone: "amber" },
             { label: "Adherence", value: weeklyPercent === null ? "—" : `${weeklyPercent}%`, note: weeklyExpected ? `${weeklyTaken} of ${weeklyExpected} scheduled doses this week` : "No scheduled doses due this week", destination: "View history", href: "/history", tone: "violet" },
-          ].map((card) => <Link key={card.label} href={card.href} className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-teal-800">
+          ].map((card) => <Link key={card.label} href={card.href} className="group rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm shadow-slate-900/[0.03] transition hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 sm:p-5 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-teal-800">
             <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">{card.label}</p>
             <p className="mt-2 text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">{card.value}</p>
             <p className="mt-1 min-h-5 text-xs text-slate-500 dark:text-slate-400">{card.note}</p>
@@ -556,7 +557,7 @@ export default function DashboardPage() {
         </section>
 
         <section id="todays-schedule" className="order-2 mb-4 flex scroll-mt-24 flex-wrap items-end justify-between gap-3">
-          <div><h2 className="text-xl font-bold text-slate-900 dark:text-white">Today&apos;s schedule</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">See each dose time, prescribed amount, status, and action.</p></div>
+          <div><h2 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl dark:text-white">Today&apos;s schedule</h2><p className="mt-1 text-sm leading-relaxed text-slate-500 dark:text-slate-400">See each dose time, prescribed amount, status, and action.</p></div>
           <div className="inline-flex rounded-xl bg-slate-100 p-1 dark:bg-slate-900" role="group" aria-label="Filter today's doses">
             {(["all", "pending", "taken"] as DoseFilter[]).map((filter) => <button key={filter} type="button" onClick={() => setDoseFilter(filter)} aria-pressed={doseFilter === filter} className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${doseFilter === filter ? "bg-white text-teal-800 shadow-sm dark:bg-slate-800 dark:text-teal-200" : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"}`}>{filter === "all" ? `All ${doseLists.all.length}` : filter === "pending" ? `Pending ${doseLists.pending.length}` : `Taken ${doseLists.taken.length}`}</button>)}
           </div>
