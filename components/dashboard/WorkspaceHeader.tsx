@@ -129,7 +129,7 @@ export default function WorkspaceHeader() {
         </div>
       </header>
 
-      {passwordToast && !changePasswordOpen && <div role="status" aria-live="polite" aria-atomic="true" className="fixed right-4 top-20 z-40 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 shadow-lg dark:border-emerald-900/60 dark:bg-emerald-950 dark:text-emerald-200">
+      {passwordToast && !changePasswordOpen && <div role="status" aria-live="polite" aria-atomic="true" className="fixed left-1/2 top-4 z-40 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 shadow-lg sm:top-6 lg:top-20 dark:border-emerald-900/60 dark:bg-emerald-950 dark:text-emerald-200">
         Password changed successfully.
       </div>}
 
