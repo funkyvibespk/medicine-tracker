@@ -15,7 +15,7 @@ const navItems = [
   },
   {
     href: "/dashboard",
-    label: "Today",
+    label: "Overview",
     icon: (active: boolean) => (
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -36,6 +36,15 @@ const navItems = [
             <path d="M16 2v4M8 2v4M3 10h18" />
           </>
         )}
+      </svg>
+    ),
+  },
+  {
+    href: "/doses",
+    label: "My Doses",
+    icon: () => (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
+        <path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z" /><path d="m8.5 8.5 7 7" />
       </svg>
     ),
   },
@@ -135,7 +144,7 @@ export default function BottomNav({ desktopHidden = true }: { desktopHidden?: bo
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center gap-0.5 rounded-xl px-4 py-2 transition-all ${
+              className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-xl px-0.5 py-2 transition-all ${
                 isActive
                   ? "text-teal-600 dark:text-teal-400"
                   : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
@@ -143,7 +152,7 @@ export default function BottomNav({ desktopHidden = true }: { desktopHidden?: bo
               aria-current={isActive ? "page" : undefined}
             >
               {item.icon(isActive)}
-              <span className={`text-[10px] font-semibold tracking-wide ${isActive ? "text-teal-600 dark:text-teal-400" : ""}`}>
+              <span className={`whitespace-nowrap text-[9px] font-semibold tracking-wide sm:text-[10px] ${isActive ? "text-teal-600 dark:text-teal-400" : ""}`}>
                 {item.label}
               </span>
             </Link>

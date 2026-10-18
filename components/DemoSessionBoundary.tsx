@@ -4,7 +4,7 @@ import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { readDemoSession } from "@/lib/demoSession";
 
-const PROTECTED_PATHS = new Set(["/setup", "/dashboard", "/medicines", "/inventory", "/history"]);
+const PROTECTED_PATHS = new Set(["/setup", "/dashboard", "/doses", "/medicines", "/inventory", "/history"]);
 
 export default function DemoSessionBoundary({ children }: { children: ReactNode }) {
   const pathname = usePathname();
