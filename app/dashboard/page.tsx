@@ -384,7 +384,7 @@ export default function DashboardPage() {
       <div className="mx-auto flex w-full max-w-[1440px]">
         <WorkspaceNav />
 
-      <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
+      <main className="flex min-w-0 flex-1 flex-col px-4 py-6 sm:px-6 lg:px-8">
         <WorkspacePageHeading
           title="Your Dashboard"
           description={`A clear overview of your medicine routine for ${now.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}.`}
@@ -399,7 +399,7 @@ export default function DashboardPage() {
         
         {/* Overdue Alert */}
         {overdueCount > 0 && (
-          <div role="status" aria-live="polite" className="mb-6 flex items-center gap-3 rounded-xl border border-violet-200 bg-violet-50/50 p-4 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/20">
+          <div role="status" aria-live="polite" className="order-1 mb-6 flex items-center gap-3 rounded-xl border border-violet-200 bg-violet-50/50 p-4 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/20">
             <span className="flex h-3 w-3 rounded-full bg-violet-500" />
             <p className="font-semibold text-violet-800 dark:text-violet-300 text-sm">
               {overdueCount} scheduled dose{overdueCount !== 1 ? "s" : ""} overdue
@@ -408,7 +408,7 @@ export default function DashboardPage() {
         )}
 
         {outstandingMisses.length > 0 && (
-          <section aria-labelledby="missed-doses-title" className="mb-6 rounded-2xl border border-rose-200 bg-rose-50/60 p-4 shadow-sm dark:border-rose-900/50 dark:bg-rose-950/20">
+          <section aria-labelledby="missed-doses-title" className="order-1 mb-6 rounded-2xl border border-rose-200 bg-rose-50/60 p-4 shadow-sm dark:border-rose-900/50 dark:bg-rose-950/20">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h2 id="missed-doses-title" className="font-semibold text-rose-900 dark:text-rose-200">Missed doses from previous days</h2>
@@ -424,6 +424,7 @@ export default function DashboardPage() {
                 return <li key={record.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2 text-sm">
                   <span className="font-medium text-slate-800 dark:text-slate-100">{record.medicineName ?? medicine?.name ?? "Deleted medicine"}</span>
                   <span className="text-xs text-slate-600 dark:text-slate-300">{scheduledDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })} · {formatMissedTime(record)}</span>
+                  <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-800 dark:bg-rose-950/60 dark:text-rose-300">Missed</span>
                 </li>;
               })}
             </ul>
@@ -431,20 +432,21 @@ export default function DashboardPage() {
           </section>
         )}
 
-        <section aria-label="Medicine overview" className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section aria-label="Medicine overview" className="order-3 mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[
-            { label: "Today’s doses", value: `${takenCount} / ${todaysDoses.length}`, note: "Completed", href: "#todays-schedule", tone: "teal" },
-            { label: "Active medicines", value: activeMedicines.length, note: "In your schedule", href: "/medicines", tone: "blue" },
-            { label: "Stock alerts", value: stockAlerts.length, note: stockNeedsReview ? "Review stock units" : stockAlerts.length ? "Need attention" : "Stock looks good", href: "/inventory", tone: "amber" },
-            { label: "Adherence", value: weeklyPercent === null ? "—" : `${weeklyPercent}%`, note: weeklyExpected ? `${weeklyTaken} of ${weeklyExpected} scheduled doses this week` : "No scheduled doses recorded this week", href: "/history", tone: "violet" },
+            { label: "Today’s doses", value: `${takenCount} / ${todaysDoses.length}`, note: "Taken today / scheduled today", destination: "View schedule", href: "#todays-schedule", tone: "teal" },
+            { label: "Active medicines", value: activeMedicines.length, note: "Active on today’s date", destination: "View medicines", href: "/medicines", tone: "blue" },
+            { label: "Stock alerts", value: stockAlerts.length, note: stockNeedsReview ? "Low/out stock or unit mismatch" : stockAlerts.length ? "Low or out of stock" : "No low, empty, or unit issues", destination: "Review inventory", href: "/inventory", tone: "amber" },
+            { label: "Adherence", value: weeklyPercent === null ? "—" : `${weeklyPercent}%`, note: weeklyExpected ? `${weeklyTaken} of ${weeklyExpected} scheduled doses this week` : "No scheduled doses due this week", destination: "View history", href: "/history", tone: "violet" },
           ].map((card) => <Link key={card.label} href={card.href} className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-teal-800">
             <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">{card.label}</p>
             <p className="mt-2 text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">{card.value}</p>
             <p className="mt-1 min-h-5 text-xs text-slate-500 dark:text-slate-400">{card.note}</p>
+            <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-teal-700 group-hover:text-teal-800 dark:text-teal-300 dark:group-hover:text-teal-200">{card.destination}<span aria-hidden="true">→</span></span>
           </Link>)}
         </section>
 
-        <section className="mb-6 grid gap-4 xl:grid-cols-[1.35fr_1fr]">
+        <section className="order-5 mb-6 grid gap-4 xl:grid-cols-[1.35fr_1fr]">
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-start justify-between gap-3">
               <div><h2 className="font-bold text-slate-900 dark:text-white">Adherence this week</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Based on scheduled doses in your current medicine list.</p></div>
@@ -471,19 +473,20 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <section className="order-4 mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-bold text-slate-900 dark:text-white">Upcoming doses</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">The next scheduled doses today</p></div><Link href="#todays-schedule" className="text-xs font-semibold text-teal-700 hover:text-teal-600 dark:text-teal-300">Open today&apos;s schedule →</Link></div>
           {upcomingDoses.length === 0 ? <p className="mt-4 rounded-xl bg-slate-50 px-4 py-4 text-sm text-slate-500 dark:bg-slate-950/50 dark:text-slate-400">No upcoming scheduled doses today.</p> : <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{upcomingDoses.map((dose) => <div key={dose.id} className="flex min-w-0 items-center gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-950/50"><span className="shrink-0 rounded-lg bg-white px-2 py-1 text-xs font-bold text-teal-700 shadow-sm dark:bg-slate-800 dark:text-teal-300">{formatDoseTime(dose)}</span><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900 dark:text-white">{dose.med.name}</span><span className="block text-xs text-slate-500 dark:text-slate-400">{dose.med.doseAmount} {dose.med.doseUnit ?? doseUnitFor(dose.med)}</span></span></div>)}</div>}
         </section>
 
-        <section id="todays-schedule" className="mb-4 flex flex-wrap items-end justify-between gap-3">
-          <div><h2 className="text-xl font-bold text-slate-900 dark:text-white">Today&apos;s schedule</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Scheduled doses and their current status.</p></div>
+        <section id="todays-schedule" className="order-2 mb-4 flex scroll-mt-24 flex-wrap items-end justify-between gap-3">
+          <div><h2 className="text-xl font-bold text-slate-900 dark:text-white">Today&apos;s schedule</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">See each dose time, prescribed amount, status, and action.</p></div>
           <div className="inline-flex rounded-xl bg-slate-100 p-1 dark:bg-slate-900" role="group" aria-label="Filter today's doses">
             {(["all", "pending", "taken"] as DoseFilter[]).map((filter) => <button key={filter} type="button" onClick={() => setDoseFilter(filter)} aria-pressed={doseFilter === filter} className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${doseFilter === filter ? "bg-white text-teal-800 shadow-sm dark:bg-slate-800 dark:text-teal-200" : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"}`}>{filter === "all" ? `All ${todaysDoses.length}` : filter === "pending" ? `Pending ${todaysDoses.length - takenCount}` : `Taken ${takenCount}`}</button>)}
           </div>
         </section>
 
         {/* Medicines List or Empty State */}
+        <div className="order-2">
         {medicines.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white/50 px-6 py-16 text-center dark:border-slate-800 dark:bg-slate-900/30">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-50 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400">
@@ -506,14 +509,14 @@ export default function DashboardPage() {
           <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">{doseFilter === "taken" ? "No doses marked as taken today." : doseFilter === "pending" ? "All scheduled doses are marked as taken." : "No doses scheduled for today."}</div>
         ) : (
           <div className="space-y-5">
-          {filteredDoses.length > 0 && <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {filteredDoses.length > 0 && <div className="space-y-2.5">
             {filteredDoses.map((dose) => {
               const stockStatus = getStockStatus(dose.med);
               const unitsCompatible = inventoryUnitsCompatible(dose.med);
               return (
               <div
                 key={dose.id}
-                className={`group relative flex flex-col justify-between rounded-2xl border p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
+                className={`group relative flex flex-col gap-4 rounded-2xl border p-4 transition-shadow hover:shadow-md sm:flex-row sm:items-center sm:justify-between ${
                   dose.status.startsWith("taken")
                     ? "border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/50 dark:bg-emerald-950/20"
                     : dose.status === "overdue"
@@ -523,9 +526,9 @@ export default function DashboardPage() {
                     : "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
                 }`}
               >
-                <div>
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-1.5">
+                    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                       <span className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-bold ${
                         dose.status.startsWith("taken") ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300" :
                         dose.status === "overdue" ? "bg-violet-100 text-violet-800 dark:bg-violet-900/60 dark:text-violet-300" :
@@ -546,8 +549,8 @@ export default function DashboardPage() {
                         }`}>
                           {dose.status === "due" && <span aria-hidden="true" className="flex h-2 w-2 shrink-0 rounded-full bg-red-600" />}
                           {dose.status === "overdue" && <span aria-hidden="true" className="flex h-2 w-2 shrink-0 rounded-full bg-violet-600" />}
-                          {dose.almostDue && <span aria-hidden="true" className="dose-almost-due-pulse flex h-2 w-2 shrink-0 rounded-full bg-amber-500" />}
-                          {dose.status === "due" ? "Due now" : dose.almostDue ? `Almost due · ${dose.diffText}` : dose.diffText}
+                          {dose.almostDue && <span aria-hidden="true" className="flex h-2 w-2 shrink-0 rounded-full bg-amber-500" />}
+                          {dose.status === "due" ? "Due now" : dose.almostDue ? `Almost due · ${dose.diffText}` : dose.status === "overdue" ? dose.diffText : `Upcoming · ${dose.diffText}`}
                         </span>
                       )}
                     </div>
@@ -584,17 +587,13 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  <div className="mt-3.5">
-                    <h3 className={`text-lg font-bold tracking-tight ${dose.status.startsWith("taken") ? "text-slate-700 dark:text-slate-300" : "text-slate-900 dark:text-white"}`}>
+                  <div className="mt-2.5">
+                    <h3 className={`text-base font-bold tracking-tight ${dose.status.startsWith("taken") ? "text-slate-700 dark:text-slate-300" : "text-slate-900 dark:text-white"}`}>
                       {dose.med.name}
                     </h3>
-                    <p className="mt-1 text-sm font-medium text-teal-600 dark:text-teal-400">
-                      {dose.med.type} {dose.med.strength ? `· ${dose.med.strength}` : ""}
-                    </p>
-                    <p className="text-xs text-slate-500 mt-1">Dose: {dose.med.doseAmount} {dose.med.doseUnit ?? doseUnitFor(dose.med)}</p>
-                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{dose.med.frequency}{dose.med.frequency === "Every X hours" ? ` · every ${dose.med.intervalHours || 8} hours` : ""}</p>
-                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">From {dose.med.startDate}{dose.med.endDate ? ` · To ${dose.med.endDate}` : " · No end date"}</p>
-                    {dose.med.instructions && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{dose.med.instructions}</p>}
+                    <p className="mt-1 text-sm font-semibold text-slate-700 dark:text-slate-200">Prescribed dose: {dose.med.doseAmount} {dose.med.doseUnit ?? doseUnitFor(dose.med)}</p>
+                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{dose.med.type}{dose.med.strength ? ` · ${dose.med.strength}` : ""}{dose.med.frequency ? ` · ${dose.med.frequency}${dose.med.frequency === "Every X hours" ? ` (every ${dose.med.intervalHours || 8}h)` : ""}` : ""}</p>
+                    {dose.med.instructions && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Instructions: {dose.med.instructions}</p>}
 
                     {/* Inventory Status */}
                     <div className="mt-2.5">
@@ -618,7 +617,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                <div className="mt-5 border-t border-slate-100 pt-3 dark:border-slate-800/80">
+                <div className="flex shrink-0 flex-col gap-2 border-t border-slate-100 pt-3 dark:border-slate-800/80 sm:min-w-44 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">
                   {dose.status.startsWith("taken") ? (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between rounded-xl bg-emerald-100/70 dark:bg-emerald-950/60 px-3.5 py-2.5 border border-emerald-200/80 dark:border-emerald-900/50">
@@ -650,10 +649,10 @@ export default function DashboardPage() {
                       disabled={!unitsCompatible || dose.med.inventoryAmount < dose.med.doseAmount || dose.identityAmbiguous}
                       title={dose.identityAmbiguous ? "An older dose at this repeated local time cannot be safely assigned to either occurrence." : undefined}
                       onClick={() => handleTakeDose(dose)}
-                      className="w-full cursor-pointer flex items-center justify-center gap-2 rounded-xl py-2.5 px-4 text-xs sm:text-sm font-semibold text-white bg-teal-600 hover:bg-teal-500 shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full cursor-pointer flex min-h-11 items-center justify-center gap-2 rounded-xl py-2.5 px-4 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-500 shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><polyline points="20 6 9 17 4 12" /></svg>
-                      <span>Not Taken</span>
+                      <span>Mark as Taken</span>
                     </button>
                     {dose.identityAmbiguous && <p role="status" className="mt-2 text-xs text-amber-700 dark:text-amber-300">An older dose at this repeated local time cannot be assigned safely.</p>}
                     </>
@@ -687,6 +686,7 @@ export default function DashboardPage() {
           </section>}
           </div>
         )}
+        </div>
       </main>
       </div>
 
