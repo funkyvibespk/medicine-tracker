@@ -124,7 +124,7 @@ export default function HistoryPage() {
     return { totalScheduled, totalTaken, pct: totalScheduled > 0 ? Math.round((totalTaken / totalScheduled) * 100) : null };
   }, [medicines, canonicalDoseRecords, todayStr, now]);
 
-  if (!isHydrated || !now) return <div className="min-h-screen bg-slate-50 dark:bg-slate-950" />;
+  if (!isHydrated || !now) return <div className="workspace-app min-h-screen bg-slate-50 dark:bg-slate-950" />;
 
   const getMed = (id: string) => medicines.find((m) => m.id === id);
 
@@ -141,7 +141,7 @@ export default function HistoryPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-100 pb-24">
+    <div className="workspace-app min-h-screen bg-slate-50 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-100 pb-24">
 
       <WorkspaceHeader />
 

@@ -451,10 +451,10 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
     return format12Hour(`${pad(d.getHours())}:${pad(d.getMinutes())}`);
   };
 
-  if (!isHydrated || now.getTime() === 0) return <div className="min-h-screen bg-slate-50 dark:bg-slate-950" />;
+  if (!isHydrated || now.getTime() === 0) return <div className="workspace-app min-h-screen bg-slate-50 dark:bg-slate-950" />;
 
   return (
-      <div className="min-h-screen bg-slate-50 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-100 pb-20">
+      <div className="workspace-app min-h-screen bg-slate-50 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-100 pb-20">
       
       <WorkspaceHeader />
 

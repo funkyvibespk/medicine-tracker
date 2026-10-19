@@ -6,8 +6,8 @@ export default function SetupPage() {
   const router = useRouter();
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-12 dark:bg-slate-950 sm:px-6 lg:px-8">
-      <div className="animate-in fade-in zoom-in-95 duration-500 max-w-md w-full text-center">
+    <div className="setup-page flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-12 dark:bg-slate-950 sm:px-6 lg:px-8">
+      <div className="setup-glass animate-in fade-in zoom-in-95 duration-500 max-w-md w-full rounded-3xl p-8 text-center sm:p-10">
         <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-teal-100 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8" aria-hidden="true">
             <path d="M5 12h14" />

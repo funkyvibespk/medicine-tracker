@@ -3,9 +3,34 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f8fcfb;
+  --foreground: #142b2a;
   color-scheme: light;
+}
+
+@theme {
+  --color-slate-50: #f8fcfb;
+  --color-slate-100: #eff8f5;
+  --color-slate-200: #dcece8;
+  --color-slate-300: #c7ddd8;
+  --color-slate-400: #829994;
+  --color-slate-500: #5d7774;
+  --color-slate-600: #46635f;
+  --color-slate-700: #284b48;
+  --color-slate-800: #1b3936;
+  --color-slate-900: #142b2a;
+  --color-slate-950: #102523;
+  --color-teal-50: #e6f8f4;
+  --color-teal-100: #c9f1e8;
+  --color-teal-200: #98e4d5;
+  --color-teal-300: #61d2bd;
+  --color-teal-400: #32b9a4;
+  --color-teal-500: #12a28f;
+  --color-teal-600: #008f80;
+  --color-teal-700: #00796d;
+  --color-teal-800: #00665d;
+  --color-teal-900: #00554f;
+  --color-teal-950: #073d39;
 }
 
 @theme inline {
@@ -20,6 +45,60 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   overflow-x: hidden;
+}
+
+.workspace-app {
+  color-scheme: light;
+}
+
+.workspace-app > header {
+  border-color: rgba(98, 190, 171, 0.28);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 12px 36px -28px rgba(0, 105, 93, 0.22);
+  -webkit-backdrop-filter: blur(26px);
+  backdrop-filter: blur(26px);
+}
+
+.workspace-app aside {
+  border-color: rgba(98, 190, 171, 0.28);
+  background: rgba(255, 255, 255, 0.68);
+  -webkit-backdrop-filter: blur(22px);
+  backdrop-filter: blur(22px);
+}
+
+.workspace-app [class*="rounded-2xl"][class*="border"][class*="bg-white"],
+.workspace-app [class*="rounded-xl"][class*="border"][class*="bg-white"],
+.workspace-app [role="dialog"] {
+  border-color: rgba(98, 190, 171, 0.3);
+  background-color: rgba(255, 255, 255, 0.7);
+  box-shadow:
+    0 24px 64px -42px rgba(0, 105, 93, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+}
+
+.workspace-app nav[aria-label="Main navigation"] {
+  border-color: rgba(98, 190, 171, 0.3);
+  background: rgba(255, 255, 255, 0.86);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+}
+
+.setup-page {
+  color-scheme: light;
+  background-color: #f8fcfb;
+  background-image:
+    radial-gradient(ellipse at 12% 14%, rgba(207, 246, 235, 0.9), transparent 42%),
+    radial-gradient(ellipse at 88% 84%, rgba(239, 236, 248, 0.68), transparent 44%);
+}
+
+.setup-page .setup-glass {
+  border: 1px solid rgba(98, 190, 171, 0.3);
+  background: rgba(255, 255, 255, 0.64);
+  box-shadow: 0 30px 76px -42px rgba(0, 105, 93, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  -webkit-backdrop-filter: blur(26px);
+  backdrop-filter: blur(26px);
 }
 
 /* Scoped ChillDose luxury-glass palette: these styles only apply to public and auth screens. */

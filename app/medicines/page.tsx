@@ -23,7 +23,7 @@ export default function MedicinesPage() {
   useDialogFocusRestore(Boolean(isAddModalOpen || editingMedicine || deletingMedicine || addingStockMed));
   const [searchQuery, setSearchQuery] = useState("");
 
-  if (!isHydrated) return <div className="min-h-screen bg-slate-50 dark:bg-slate-950" />;
+  if (!isHydrated) return <div className="workspace-app min-h-screen bg-slate-50 dark:bg-slate-950" />;
 
   const filtered = medicines.filter((m) =>
     m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -43,7 +43,7 @@ export default function MedicinesPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-100 pb-24">
+    <div className="workspace-app min-h-screen bg-slate-50 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-100 pb-24">
 
       <WorkspaceHeader />
 

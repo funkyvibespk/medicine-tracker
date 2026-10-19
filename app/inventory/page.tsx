@@ -16,7 +16,7 @@ export default function InventoryPage() {
   const [stockToAdd, setStockToAdd] = useState<number>(0);
   useDialogFocusRestore(Boolean(addingStockMedId));
 
-  if (!isHydrated) return <div className="min-h-screen bg-slate-50 dark:bg-slate-950" />;
+  if (!isHydrated) return <div className="workspace-app min-h-screen bg-slate-50 dark:bg-slate-950" />;
 
   const addingMed = medicines.find((m) => m.id === addingStockMedId) ?? null;
 
@@ -45,7 +45,7 @@ export default function InventoryPage() {
   });
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-100 pb-24">
+    <div className="workspace-app min-h-screen bg-slate-50 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-100 pb-24">
 
       <WorkspaceHeader />
 
