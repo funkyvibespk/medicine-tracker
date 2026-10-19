@@ -97,7 +97,7 @@ export default function Hero() {
 
           <div className="mt-6 flex justify-center">
             <Link
-              href="/auth?mode=signup"
+              href="/auth?mode=login"
               className="inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-teal-700 to-emerald-600 px-8 py-3 text-base font-bold text-white shadow-md shadow-teal-700/20 transition hover:-translate-y-0.5 hover:from-teal-600 hover:to-emerald-500 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 sm:w-auto"
             >
               Get Started <Arrow />

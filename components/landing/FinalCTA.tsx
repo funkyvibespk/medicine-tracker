@@ -18,7 +18,7 @@ export default function FinalCTA() {
         </p>
         <div className="mt-8 flex justify-center">
           <Link
-            href="/auth?mode=signup"
+            href="/auth?mode=login"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-white px-6 py-3.5 text-base font-semibold text-teal-700 shadow-lg shadow-teal-900/30 transition-all hover:bg-teal-50 hover:shadow-xl active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
           >
             <span>Get Started</span>

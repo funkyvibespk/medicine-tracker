@@ -19,7 +19,6 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
   const { activateProfile } = useMedicine();
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [showPassword, setShowPassword] = useState(false);
-  const [showSignupForm, setShowSignupForm] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [suggestedMode, setSuggestedMode] = useState<AuthMode | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -45,7 +44,6 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
   const goToMode = (nextMode: AuthMode) => {
     setMode(nextMode);
     setShowPassword(false);
-    setShowSignupForm(false);
     setFeedback("");
     setSuggestedMode(null);
     window.history.replaceState(null, "", `/auth?mode=${nextMode}`);
@@ -121,74 +119,58 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
             <BrandLogo markClassName="h-10 w-10" wordmarkClassName="sr-only" />
           </div>
 
-          <div className="mb-7 inline-flex rounded-xl bg-slate-100 p-1 dark:bg-slate-900" aria-label="Account flow">
-            <button type="button" onClick={() => goToMode("login")} aria-pressed={mode === "login"} className={`rounded-lg px-4 py-2 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${mode === "login" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white" : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"}`}>
-              Login
-            </button>
-            <button type="button" onClick={() => goToMode("signup")} aria-pressed={mode === "signup"} className={`rounded-lg px-4 py-2 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${mode === "signup" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white" : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"}`}>
-              Sign Up
-            </button>
-          </div>
+          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-8">
+            <h2 className="text-3xl font-bold tracking-tight">{mode === "login" ? "Welcome back" : "Create your account"}</h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+              {mode === "login" ? "Sign in to your account" : "Create a local demo account with your email."}
+            </p>
 
-          <h2 className="text-3xl font-bold tracking-tight">{mode === "login" ? "Welcome back" : "Start with ChillDose"}</h2>
-          <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-            {mode === "login" ? "Continue to your local medicine tracker." : "Create a local demo account with your email."}
-          </p>
-
-          {mode === "signup" && !showSignupForm && (
-            <div className="mt-7 space-y-4">
-              <button type="button" onClick={() => { setShowSignupForm(true); setFeedback(""); }} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-700 to-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:from-teal-600 hover:to-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2">
-                Continue with Email
-              </button>
-            </div>
-          )}
-
-          {(mode === "login" || (mode === "signup" && showSignupForm)) && (
-            <form key={mode} onSubmit={handleEmailSubmit} className={`${mode === "login" ? "mt-7" : "mt-5"} space-y-4`}>
+            <form key={mode} onSubmit={handleEmailSubmit} className="mt-7 space-y-4">
               <div>
                 <label htmlFor="auth-email" className="mb-1.5 block text-sm font-semibold text-slate-700 dark:text-slate-200">Email address</label>
-                <input id="auth-email" name="email" type="email" autoComplete="email" required placeholder="you@example.com" className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/15 dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
+                <input id="auth-email" name="email" type="email" autoComplete="email" required placeholder="Email" className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/15 dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
               </div>
               <div>
                 <label htmlFor="auth-password" className="mb-1.5 block text-sm font-semibold text-slate-700 dark:text-slate-200">Password</label>
                 <div className="relative">
-                  <input id="auth-password" name="password" type={showPassword ? "text" : "password"} autoComplete={mode === "login" ? "current-password" : "new-password"} required minLength={mode === "signup" ? 8 : undefined} placeholder={mode === "signup" ? "At least 8 characters" : "Enter your password"} className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 pr-20 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/15 dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
+                  <input id="auth-password" name="password" type={showPassword ? "text" : "password"} autoComplete={mode === "login" ? "current-password" : "new-password"} required minLength={mode === "signup" ? 8 : undefined} placeholder="Password" className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 pr-20 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/15 dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
                   <button type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword} className="absolute inset-y-0 right-3 my-auto rounded px-2 text-xs font-semibold text-slate-500 hover:text-teal-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:hover:text-teal-300">
                     {showPassword ? "Hide" : "Show"}
                   </button>
                 </div>
-                {mode === "login" && (
-                  <button
-                    type="button"
-                    onClick={() => setIsPasswordRecoveryOpen(true)}
-                    className="mt-2 block ml-auto rounded text-sm font-semibold text-teal-700 hover:text-teal-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:text-teal-300"
-                  >
-                    Forgot password?
-                  </button>
-                )}
               </div>
               <button type="submit" disabled={isSubmitting} className="inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-teal-700 to-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:from-teal-600 hover:to-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-70">
-                {isSubmitting ? "Checking locally…" : mode === "login" ? "Log In" : "Create local account"}
+                {isSubmitting ? "Checking locally…" : mode === "login" ? "Sign In" : "Create local account"}
               </button>
             </form>
-          )}
 
-          {feedback && <div className="mt-4 rounded-xl border border-teal-100 bg-teal-50 px-4 py-3 text-sm leading-relaxed text-teal-900 dark:border-teal-900/60 dark:bg-teal-950/40 dark:text-teal-200">
-            <p role="alert">{feedback}</p>
-            {suggestedMode && <button type="button" onClick={() => goToMode(suggestedMode)} className="mt-2 font-semibold underline underline-offset-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">
-              {suggestedMode === "login" ? "Go to Login" : "Go to Sign Up"}
-            </button>}
-          </div>}
+            {mode === "login" && (
+              <button
+                type="button"
+                onClick={() => setIsPasswordRecoveryOpen(true)}
+                className="mt-4 block ml-auto rounded text-sm font-semibold text-teal-700 hover:text-teal-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:text-teal-300"
+              >
+                Forgot password?
+              </button>
+            )}
 
-          <p className="mt-6 rounded-xl bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-500 dark:bg-slate-900 dark:text-slate-400">
+            {feedback && <div className="mt-4 rounded-xl border border-teal-100 bg-teal-50 px-4 py-3 text-sm leading-relaxed text-teal-900 dark:border-teal-900/60 dark:bg-teal-950/40 dark:text-teal-200">
+              <p role="alert">{feedback}</p>
+              {suggestedMode && <button type="button" onClick={() => goToMode(suggestedMode)} className="mt-2 font-semibold underline underline-offset-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">
+                {suggestedMode === "login" ? "Go to Login" : "Go to Sign Up"}
+              </button>}
+            </div>}
+
+            <p className="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
+              {mode === "login" ? "Don’t have an account? " : "Already have an account? "}
+              <button type="button" onClick={() => goToMode(mode === "login" ? "signup" : "login")} className="rounded font-semibold text-teal-700 hover:text-teal-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:text-teal-300">
+                {mode === "login" ? "Sign Up" : "Log In"}
+              </button>
+            </p>
+          </section>
+
+          <p className="mt-5 rounded-xl bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-500 dark:bg-slate-900 dark:text-slate-400">
             This is a local demo only, not secure authentication. Email and a salted PBKDF2 password hash are stored in this browser; passwords are never stored in plain text or sent to a server. Your local session stays active on this device until you log out. Tracker data without an assigned profile remains unassigned.
-          </p>
-
-          <p className="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
-            {mode === "login" ? "New to ChillDose? " : "Already using ChillDose? "}
-            <button type="button" onClick={() => goToMode(mode === "login" ? "signup" : "login")} className="font-semibold text-teal-700 hover:text-teal-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:text-teal-300">
-              {mode === "login" ? "Sign Up" : "Login"}
-            </button>
           </p>
           <Link href="/" className="mx-auto mt-6 block w-fit rounded px-2 py-1 text-xs font-medium text-slate-500 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:hover:text-white">Back to home</Link>
         </div>

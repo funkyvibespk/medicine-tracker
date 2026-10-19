@@ -90,7 +90,7 @@ export default function Header() {
         {/* Desktop primary action */}
         <div className="hidden sm:flex items-center gap-3">
           <Link
-            href="/auth?mode=signup"
+            href="/auth?mode=login"
             className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-teal-700 to-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-teal-700/20 hover:from-teal-600 hover:to-emerald-500 hover:shadow-md hover:shadow-teal-600/30 active:scale-[0.98] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
           >
             <span>Get Started</span>
@@ -190,7 +190,7 @@ export default function Header() {
             </a>
             <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-2">
               <Link
-                href="/auth?mode=signup"
+                href="/auth?mode=login"
                 onClick={() => setMobileMenuOpen(false)}
                 className="w-full text-center rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 py-2.5 text-sm font-semibold text-white shadow-sm hover:from-teal-500 hover:to-emerald-500"
               >

@@ -16,7 +16,7 @@ function AuthLoading() {
 async function AuthModeContent({ searchParams }: AuthPageProps) {
   const params = await searchParams;
   const requestedMode = Array.isArray(params.mode) ? params.mode[0] : params.mode;
-  const initialMode = requestedMode === "login" ? "login" : "signup";
+  const initialMode = requestedMode === "signup" ? "signup" : "login";
 
   return <AuthExperience key={initialMode} initialMode={initialMode} />;
 }
