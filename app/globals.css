@@ -112,9 +112,9 @@ body {
   backdrop-filter: blur(24px);
 }
 
-.workspace-app .workspace-profile-menu {
+.workspace-app [role="menu"].workspace-profile-menu {
   border-color: rgba(81, 153, 140, 0.48);
-  background: rgba(239, 247, 244, 0.99);
+  background-color: #eff7f4;
   color: #142b2a;
   box-shadow:
     0 20px 48px -24px rgba(20, 43, 42, 0.32),
@@ -128,14 +128,14 @@ body {
 }
 
 @media (max-width: 639px) {
-  .workspace-app .workspace-profile-menu {
+  .workspace-app [role="menu"].workspace-profile-menu {
     position: fixed;
     top: 4.75rem;
     left: 50%;
     right: auto;
     width: min(20rem, calc(100vw - 2rem));
     transform: translateX(-50%);
-    background: rgba(247, 252, 250, 0.99);
+    background-color: #f7fcfa;
   }
 
   .workspace-app .workspace-profile-menu > div:first-child {
