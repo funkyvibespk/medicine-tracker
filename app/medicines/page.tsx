@@ -237,8 +237,8 @@ export default function MedicinesPage() {
 
       {/* Add/Edit Modal */}
       {(isAddModalOpen || editingMedicine) && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-xs">
-          <div role="dialog" aria-modal="true" aria-labelledby="medicine-dialog-title" onKeyDown={keepDialogFocusInside} className="relative my-8 w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+        <div className="workspace-modal-backdrop fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-xs">
+          <div role="dialog" aria-modal="true" aria-labelledby="medicine-dialog-title" onKeyDown={keepDialogFocusInside} className="workspace-glass-panel relative my-8 w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
             <h2 id="medicine-dialog-title" className="text-xl font-bold mb-4 text-slate-900 dark:text-white">
               {editingMedicine ? "Edit Medicine" : "Add Medicine"}
             </h2>
@@ -268,8 +268,8 @@ export default function MedicinesPage() {
       )}
 
       {addingStockMed && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
-          <div role="dialog" aria-modal="true" aria-labelledby="medicines-add-stock-title" onKeyDown={keepDialogFocusInside} className="relative w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+        <div className="workspace-modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
+          <div role="dialog" aria-modal="true" aria-labelledby="medicines-add-stock-title" onKeyDown={keepDialogFocusInside} className="workspace-glass-panel relative w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
             <h3 id="medicines-add-stock-title" className="text-lg font-bold text-slate-900 dark:text-white">Add stock to existing inventory</h3>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{addingStockMed.name} · current balance {addingStockMed.inventoryAmount} {inventoryUnitFor(addingStockMed)}</p>
             <form onSubmit={(event) => { event.preventDefault(); if (stockToAdd > 0 && inventoryUnitsCompatible(addingStockMed)) { addStock(addingStockMed.id, stockToAdd); setAddingStockMed(null); setStockToAdd(0); } }}>

@@ -199,8 +199,8 @@ export default function InventoryPage() {
 
       {/* Add Stock Modal */}
       {addingMed && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
-          <div role="dialog" aria-modal="true" aria-labelledby="inventory-add-stock-title" onKeyDown={keepDialogFocusInside} className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+        <div className="workspace-modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
+          <div role="dialog" aria-modal="true" aria-labelledby="inventory-add-stock-title" onKeyDown={keepDialogFocusInside} className="workspace-glass-panel relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
             <h3 id="inventory-add-stock-title" className="text-lg font-bold text-slate-900 dark:text-white mb-1">Add Stock</h3>
             <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">
               {addingMed.name} · Current: {addingMed.inventoryAmount} {inventoryUnitFor(addingMed)}

@@ -795,8 +795,8 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
       
       {/* Add/Edit Modal */}
       {(isAddModalOpen || editingMedicine) && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-slate-950/60 p-4 backdrop-blur-xs sm:items-center">
-          <div role="dialog" aria-modal="true" aria-labelledby="medicine-dialog-title" onKeyDown={keepDialogFocusInside} className="relative my-0 max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900 sm:my-8">
+        <div className="workspace-modal-backdrop fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-slate-950/60 p-4 backdrop-blur-xs sm:items-center">
+          <div role="dialog" aria-modal="true" aria-labelledby="medicine-dialog-title" onKeyDown={keepDialogFocusInside} className="workspace-glass-panel relative my-0 max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900 sm:my-8">
             <h2 id="medicine-dialog-title" className="text-xl font-bold mb-4">{editingMedicine ? "Edit Medicine" : "Add Medicine"}</h2>
             <MedicineForm
               key={editingMedicine?.id ?? "new-medicine"}
@@ -884,8 +884,8 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
 
       {/* Add Stock Dialog */}
       {addingStockMed && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
-          <div role="dialog" aria-modal="true" aria-labelledby="dashboard-add-stock-title" onKeyDown={keepDialogFocusInside} className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+        <div className="workspace-modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
+          <div role="dialog" aria-modal="true" aria-labelledby="dashboard-add-stock-title" onKeyDown={keepDialogFocusInside} className="workspace-glass-panel relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
             <h3 id="dashboard-add-stock-title" className="text-lg font-bold text-slate-900 dark:text-white mb-4">Add Stock</h3>
             <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">Current stock: {addingStockMed.inventoryAmount} {inventoryUnitFor(addingStockMed)}</p>
             <form onSubmit={(e) => {
