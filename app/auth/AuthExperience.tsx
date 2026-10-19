@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
+import type { KeyboardEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BrandLogo } from "@/components/BrandLogo";
@@ -8,6 +9,7 @@ import { useMedicine } from "@/contexts/MedicineContext";
 import { normalizeDemoEmail } from "@/lib/demoProfiles";
 import { DemoAccountAlreadyExistsError, DemoAccountNotFoundError, registerDemoAccount, verifyDemoAccount } from "@/lib/demoAuth";
 import { writeDemoSession } from "@/lib/demoSession";
+import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
 
 type AuthMode = "login" | "signup";
 type AuthExperienceProps = { initialMode: AuthMode };
@@ -21,6 +23,24 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
   const [feedback, setFeedback] = useState("");
   const [suggestedMode, setSuggestedMode] = useState<AuthMode | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPasswordRecoveryOpen, setIsPasswordRecoveryOpen] = useState(false);
+  const gotItButtonRef = useRef<HTMLButtonElement>(null);
+
+  useDialogFocusRestore(isPasswordRecoveryOpen);
+
+  useEffect(() => {
+    if (isPasswordRecoveryOpen) gotItButtonRef.current?.focus();
+  }, [isPasswordRecoveryOpen]);
+
+  const handlePasswordRecoveryKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setIsPasswordRecoveryOpen(false);
+      return;
+    }
+
+    keepDialogFocusInside(event);
+  };
 
   const goToMode = (nextMode: AuthMode) => {
     setMode(nextMode);
@@ -137,6 +157,15 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
                     {showPassword ? "Hide" : "Show"}
                   </button>
                 </div>
+                {mode === "login" && (
+                  <button
+                    type="button"
+                    onClick={() => setIsPasswordRecoveryOpen(true)}
+                    className="mt-2 block ml-auto rounded text-sm font-semibold text-teal-700 hover:text-teal-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:text-teal-300"
+                  >
+                    Forgot password?
+                  </button>
+                )}
               </div>
               <button type="submit" disabled={isSubmitting} className="inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-teal-700 to-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:from-teal-600 hover:to-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-70">
                 {isSubmitting ? "Checking locally…" : mode === "login" ? "Log In" : "Create local account"}
@@ -164,6 +193,35 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
           <Link href="/" className="mx-auto mt-6 block w-fit rounded px-2 py-1 text-xs font-medium text-slate-500 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:hover:text-white">Back to home</Link>
         </div>
       </main>
+
+      {isPasswordRecoveryOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 sm:p-6">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="password-recovery-title"
+            aria-describedby="password-recovery-message"
+            onKeyDown={handlePasswordRecoveryKeyDown}
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-7"
+          >
+            <p className="text-sm font-semibold text-teal-700 dark:text-teal-300">Password recovery</p>
+            <h2 id="password-recovery-title" className="mt-2 text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+              Password reset isn&apos;t available yet
+            </h2>
+            <p id="password-recovery-message" className="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+              For now, ChillDose doesn&apos;t support password recovery. Email-based password resets will be available in a future update.
+            </p>
+            <button
+              ref={gotItButtonRef}
+              type="button"
+              onClick={() => setIsPasswordRecoveryOpen(false)}
+              className="mt-6 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-gradient-to-r from-teal-700 to-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:from-teal-600 hover:to-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
