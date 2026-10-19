@@ -110,7 +110,7 @@ export default function WorkspaceHeader() {
               {getDemoAvatarInitials(activeProfileEmail)}
             </button>
             {profileMenuOpen && <>
-              <div role="menu" className="workspace-profile-menu absolute right-0 top-12 z-20 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+              <div id="workspace-profile-menu" role="menu" className="workspace-profile-menu absolute right-0 top-12 z-20 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900">
                 <div className="border-b border-slate-100 px-3 py-3 dark:border-slate-800">
                   <p className="text-sm font-semibold text-slate-900 dark:text-white">Local demo profile</p>
                   <p className="mt-1 break-all text-xs leading-relaxed text-slate-500 dark:text-slate-400">{activeProfileEmail ?? "No email profile selected"}</p>

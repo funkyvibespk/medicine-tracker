@@ -468,7 +468,7 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
           description={view === "overview" ? `A clear overview of your medicine routine for ${now.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}.` : `Today’s scheduled doses for ${now.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}.`}
           action={<>
             <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300"><span className="h-1.5 w-1.5 rounded-full bg-amber-500"/>Local prototype</span>
-            <button aria-label="Add medicine" onClick={() => setIsAddModalOpen(true)} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-teal-600/20 transition-all hover:bg-teal-500 active:scale-95">
+            <button aria-label="Add medicine" onClick={() => setIsAddModalOpen(true)} className="workspace-primary-button inline-flex min-h-10 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition-all active:scale-95">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="M5 12h14" /><path d="M12 5v14" /></svg>
               <span className="hidden sm:inline">Add Medicine</span>
             </button>
@@ -741,7 +741,7 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
                       disabled={!unitsCompatible || dose.med.inventoryAmount < dose.med.doseAmount || dose.identityAmbiguous}
                       title={dose.identityAmbiguous ? "An older dose at this repeated local time cannot be safely assigned to either occurrence." : undefined}
                       onClick={() => handleTakeDose(dose)}
-                      className="w-full cursor-pointer flex min-h-11 items-center justify-center gap-2 rounded-xl py-2.5 px-4 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-500 shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="workspace-primary-button w-full cursor-pointer flex min-h-11 items-center justify-center gap-2 rounded-xl py-2.5 px-4 text-sm font-semibold text-white active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><polyline points="20 6 9 17 4 12" /></svg>
                       <span>Mark as Taken</span>
@@ -780,7 +780,7 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
                       <p key={record.id} className="mt-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">Taken at {record.actualTakenTime ? formatIsoTo12Hour(record.actualTakenTime) : "—"}</p>
                     ))}
                   </div>
-                  <button type="button" disabled={prnTakenToday || !inventoryUnitsCompatible(med) || med.inventoryAmount < med.doseAmount} onClick={() => recordPrnDose(med)} className="mt-5 w-full rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-50">{prnTakenToday ? "Taken ✓" : "Mark as Taken"}</button>
+                    <button type="button" disabled={prnTakenToday || !inventoryUnitsCompatible(med) || med.inventoryAmount < med.doseAmount} onClick={() => recordPrnDose(med)} className="workspace-primary-button mt-5 w-full rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{prnTakenToday ? "Taken ✓" : "Mark as Taken"}</button>
                 </div>;
               })}
             </div>
