@@ -164,7 +164,7 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
             <p className="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
               {mode === "login" ? "Don’t have an account? " : "Already have an account? "}
               <button type="button" onClick={() => goToMode(mode === "login" ? "signup" : "login")} className="rounded font-semibold text-teal-700 hover:text-teal-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:text-teal-300">
-                {mode === "login" ? "Sign Up" : "Log In"}
+                {mode === "login" ? "Sign Up" : "Sign In"}
               </button>
             </p>
           </section>
