@@ -113,7 +113,7 @@ export default function Header() {
             type="button"
             ref={mobileMenuButtonRef}
             onClick={() => setMobileMenuOpen((open) => !open)}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#60CDB4]/40 text-[#5D7774] transition-colors hover:bg-[#DFF6EF]/60 hover:text-[#142B2A] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#60CDB4]"
+            className={`flex h-9 w-9 items-center justify-center rounded-lg border border-[#60CDB4]/40 text-[#5D7774] transition-colors hover:bg-[#DFF6EF]/60 hover:text-[#142B2A] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#60CDB4] ${mobileMenuOpen ? "bg-[#DFF6EF]/70 text-[#007F73]" : ""}`}
             aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
             aria-expanded={mobileMenuOpen}
             aria-controls="landing-mobile-menu"
@@ -129,8 +129,7 @@ export default function Header() {
                 strokeLinejoin="round"
                 className="h-5 w-5"
               >
-                <path d="M18 6 6 18" />
-                <path d="m6 6 12 12" />
+                <path d="m6 14 6-6 6 6" />
               </svg>
             ) : (
               <svg
@@ -153,38 +152,44 @@ export default function Header() {
       </div>
 
       {/* Mobile Menu Dropdown */}
-      {mobileMenuOpen && (
-        <div ref={mobileMenuRef} id="landing-mobile-menu" className="landing-glass md:hidden border-b border-white/80 px-4 pt-2 pb-5 animate-in slide-in-from-top-2 duration-200">
-          <nav className="flex flex-col space-y-3 pt-2" aria-label="Mobile Navigation">
+      <div
+        ref={mobileMenuRef}
+        id="landing-mobile-menu"
+        data-open={mobileMenuOpen}
+        aria-hidden={!mobileMenuOpen}
+        inert={!mobileMenuOpen}
+        className="landing-mobile-menu landing-glass md:hidden border-b border-white/80 px-4 pt-2 pb-5"
+      >
+          <nav className="mx-auto flex w-full max-w-sm flex-col items-center gap-2 pt-2" aria-label="Mobile Navigation">
             <a
               href="#features"
               onClick={() => setMobileMenuOpen(false)}
-              className="rounded-lg px-3 py-2 text-base font-medium text-[#007F73] transition-colors hover:bg-[#DFF6EF]/60 hover:text-[#142B2A]"
+              className="block w-full rounded-lg px-3 py-2 text-center text-base font-medium text-[#007F73] transition-colors hover:bg-[#DFF6EF]/60 hover:text-[#142B2A]"
             >
               Features
             </a>
             <Link
               href="/#product-demo"
               onClick={() => setMobileMenuOpen(false)}
-              className="rounded-lg px-3 py-2 text-base font-medium text-[#007F73] transition-colors hover:bg-[#DFF6EF]/60 hover:text-[#142B2A]"
+              className="block w-full rounded-lg px-3 py-2 text-center text-base font-medium text-[#007F73] transition-colors hover:bg-[#DFF6EF]/60 hover:text-[#142B2A]"
             >
               Product Demo
             </Link>
             <a
               href="#how-it-works"
               onClick={() => setMobileMenuOpen(false)}
-              className="rounded-lg px-3 py-2 text-base font-medium text-[#007F73] transition-colors hover:bg-[#DFF6EF]/60 hover:text-[#142B2A]"
+              className="block w-full rounded-lg px-3 py-2 text-center text-base font-medium text-[#007F73] transition-colors hover:bg-[#DFF6EF]/60 hover:text-[#142B2A]"
             >
               How It Works
             </a>
             <a
               href="#privacy"
               onClick={() => setMobileMenuOpen(false)}
-              className="rounded-lg px-3 py-2 text-base font-medium text-[#007F73] transition-colors hover:bg-[#DFF6EF]/60 hover:text-[#142B2A]"
+              className="block w-full rounded-lg px-3 py-2 text-center text-base font-medium text-[#007F73] transition-colors hover:bg-[#DFF6EF]/60 hover:text-[#142B2A]"
             >
               Privacy
             </a>
-            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-2">
+            <div className="mt-2 flex w-full flex-col items-center gap-2 border-t border-[#d9ece7] pt-4">
               <Link
                 href="/auth?mode=login"
                 onClick={() => setMobileMenuOpen(false)}
@@ -194,8 +199,7 @@ export default function Header() {
               </Link>
             </div>
           </nav>
-        </div>
-      )}
+      </div>
     </header>
   );
 }
