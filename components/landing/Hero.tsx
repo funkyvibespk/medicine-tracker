@@ -25,10 +25,10 @@ function HeroNote({
   tone: "mint" | "blue" | "amber" | "rose";
 }) {
   const tones = {
-    mint: "border-white/80 bg-white/58 text-emerald-600 shadow-emerald-950/10",
-    blue: "border-white/80 bg-white/58 text-blue-600 shadow-blue-950/10",
-    amber: "border-white/80 bg-white/58 text-amber-600 shadow-amber-950/10",
-    rose: "border-white/80 bg-white/58 text-rose-600 shadow-rose-950/10",
+    mint: "border-white/80 bg-white/90 supports-[backdrop-filter:blur(1px)]:bg-white/58 text-emerald-600 shadow-emerald-950/10",
+    blue: "border-white/80 bg-white/90 supports-[backdrop-filter:blur(1px)]:bg-white/58 text-blue-600 shadow-blue-950/10",
+    amber: "border-white/80 bg-white/90 supports-[backdrop-filter:blur(1px)]:bg-white/58 text-amber-600 shadow-amber-950/10",
+    rose: "border-white/80 bg-white/90 supports-[backdrop-filter:blur(1px)]:bg-white/58 text-rose-600 shadow-rose-950/10",
   };
 
   return (
@@ -79,7 +79,7 @@ export default function Hero() {
         />
 
         <div className="mx-auto max-w-4xl">
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/62 px-4 py-2 text-xs font-semibold text-teal-800 shadow-lg shadow-slate-900/[0.06] backdrop-blur-[24px] sm:text-sm dark:border-teal-900/70 dark:bg-slate-900/78 dark:text-teal-200">
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/90 supports-[backdrop-filter:blur(1px)]:bg-white/62 px-4 py-2 text-xs font-semibold text-teal-800 shadow-lg shadow-slate-900/[0.06] backdrop-blur-[24px] sm:text-sm dark:border-teal-900/70 dark:bg-slate-900/90 dark:supports-[backdrop-filter:blur(1px)]:bg-slate-900/78 dark:text-teal-200">
             <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 text-teal-500" aria-hidden="true"><path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Zm7 12 .9 3.1L23 18l-3.1.9L19 22l-.9-3.1L15 18l3.1-.9L19 14ZM5 15l.7 2.3L8 18l-2.3.7L5 21l-.7-2.3L2 18l2.3-.7L5 15Z" /></svg>
             A smarter way to manage your medicines
           </div>

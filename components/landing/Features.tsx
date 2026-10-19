@@ -86,7 +86,7 @@ export default function Features() {
             return (
               <div
                 key={feature.title}
-                className="group rounded-2xl border border-white/85 bg-white/58 p-6 shadow-[0_14px_38px_rgba(15,23,42,0.09),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-[24px] transition-all hover:shadow-[0_18px_44px_rgba(15,23,42,0.12),inset_0_1px_0_rgba(255,255,255,0.95)] hover:border-white dark:border-slate-700/75 dark:bg-slate-900/72 dark:hover:border-slate-700"
+                className="group rounded-2xl border border-white/85 bg-white/90 supports-[backdrop-filter:blur(1px)]:bg-white/58 p-6 shadow-[0_14px_38px_rgba(15,23,42,0.09),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-[24px] transition-all hover:shadow-[0_18px_44px_rgba(15,23,42,0.12),inset_0_1px_0_rgba(255,255,255,0.95)] hover:border-white dark:border-slate-700/75 dark:bg-slate-900/90 dark:supports-[backdrop-filter:blur(1px)]:bg-slate-900/72 dark:hover:border-slate-700"
               >
                 <div
                   className={`inline-flex h-12 w-12 items-center justify-center rounded-xl ${styles.bg} ${styles.icon} ring-1 ${styles.ring} transition-transform group-hover:scale-105`}

@@ -43,8 +43,8 @@ export default function Header() {
     <header
       className={`sticky top-0 z-50 transition-all duration-200 ${
         scrolled
-          ? "bg-white/70 dark:bg-slate-900/78 shadow-lg shadow-slate-900/[0.06] backdrop-blur-[24px] border-b border-white/80 dark:border-slate-700/70"
-          : "bg-white/76 dark:bg-slate-900/80 shadow-sm shadow-slate-900/[0.04] backdrop-blur-[24px] border-b border-white/85 dark:border-slate-800/60"
+          ? "bg-white/90 supports-[backdrop-filter:blur(1px)]:bg-white/70 dark:bg-slate-900/90 dark:supports-[backdrop-filter:blur(1px)]:bg-slate-900/78 shadow-lg shadow-slate-900/[0.06] backdrop-blur-[24px] border-b border-white/80 dark:border-slate-700/70"
+          : "bg-white/90 supports-[backdrop-filter:blur(1px)]:bg-white/76 dark:bg-slate-900/90 dark:supports-[backdrop-filter:blur(1px)]:bg-slate-900/80 shadow-sm shadow-slate-900/[0.04] backdrop-blur-[24px] border-b border-white/85 dark:border-slate-800/60"
       }`}
     >
       <div className="mx-auto flex max-w-[1480px] items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
@@ -158,7 +158,7 @@ export default function Header() {
 
       {/* Mobile Menu Dropdown */}
       {mobileMenuOpen && (
-        <div ref={mobileMenuRef} id="landing-mobile-menu" className="md:hidden border-b border-white/80 bg-white/70 px-4 pt-2 pb-5 shadow-lg shadow-slate-900/[0.08] backdrop-blur-[24px] dark:border-slate-700/80 dark:bg-slate-900/78 animate-in slide-in-from-top-2 duration-200">
+        <div ref={mobileMenuRef} id="landing-mobile-menu" className="md:hidden border-b border-white/80 bg-white/90 supports-[backdrop-filter:blur(1px)]:bg-white/70 px-4 pt-2 pb-5 shadow-lg shadow-slate-900/[0.08] backdrop-blur-[24px] dark:border-slate-700/80 dark:bg-slate-900/90 dark:supports-[backdrop-filter:blur(1px)]:bg-slate-900/78 animate-in slide-in-from-top-2 duration-200">
           <nav className="flex flex-col space-y-3 pt-2" aria-label="Mobile Navigation">
             <a
               href="#features"

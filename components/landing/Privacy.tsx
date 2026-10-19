@@ -19,7 +19,7 @@ export default function Privacy() {
         </p>
 
         <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div className="rounded-xl border border-white/85 bg-white/58 p-5 shadow-[0_14px_38px_rgba(15,23,42,0.09),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-[24px] dark:border-slate-700/75 dark:bg-slate-900/72">
+          <div className="rounded-xl border border-white/85 bg-white/90 supports-[backdrop-filter:blur(1px)]:bg-white/58 p-5 shadow-[0_14px_38px_rgba(15,23,42,0.09),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-[24px] dark:border-slate-700/75 dark:bg-slate-900/90 dark:supports-[backdrop-filter:blur(1px)]:bg-slate-900/72">
             <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
                 <circle cx="12" cy="12" r="10" />
@@ -33,7 +33,7 @@ export default function Privacy() {
             </p>
           </div>
 
-          <div className="rounded-xl border border-white/85 bg-white/58 p-5 shadow-[0_14px_38px_rgba(15,23,42,0.09),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-[24px] dark:border-slate-700/75 dark:bg-slate-900/72">
+          <div className="rounded-xl border border-white/85 bg-white/90 supports-[backdrop-filter:blur(1px)]:bg-white/58 p-5 shadow-[0_14px_38px_rgba(15,23,42,0.09),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-[24px] dark:border-slate-700/75 dark:bg-slate-900/90 dark:supports-[backdrop-filter:blur(1px)]:bg-slate-900/72">
             <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
                 <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
@@ -46,7 +46,7 @@ export default function Privacy() {
             </p>
           </div>
 
-          <div className="rounded-xl border border-white/85 bg-white/58 p-5 shadow-[0_14px_38px_rgba(15,23,42,0.09),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-[24px] dark:border-slate-700/75 dark:bg-slate-900/72">
+          <div className="rounded-xl border border-white/85 bg-white/90 supports-[backdrop-filter:blur(1px)]:bg-white/58 p-5 shadow-[0_14px_38px_rgba(15,23,42,0.09),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-[24px] dark:border-slate-700/75 dark:bg-slate-900/90 dark:supports-[backdrop-filter:blur(1px)]:bg-slate-900/72">
             <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
                 <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />

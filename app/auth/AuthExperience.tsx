@@ -119,7 +119,7 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
             <BrandLogo markClassName="h-10 w-10" wordmarkClassName="sr-only" />
           </div>
 
-          <section className="rounded-3xl border border-white/85 bg-white/62 p-6 shadow-[0_22px_64px_rgba(15,23,42,0.13),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-[24px] dark:border-slate-700/75 dark:bg-slate-900/72 sm:p-8">
+          <section className="rounded-3xl border border-white/85 bg-white/90 supports-[backdrop-filter:blur(1px)]:bg-white/62 p-6 shadow-[0_22px_64px_rgba(15,23,42,0.13),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-[24px] dark:border-slate-700/75 dark:bg-slate-900/90 dark:supports-[backdrop-filter:blur(1px)]:bg-slate-900/72 sm:p-8">
             <h2 className="text-3xl font-bold tracking-tight">{mode === "login" ? "Welcome back" : "Create your account"}</h2>
             <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
               {mode === "login" ? "Sign in to your account" : "Create a local demo account with your email."}
@@ -184,7 +184,7 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
             aria-labelledby="password-recovery-title"
             aria-describedby="password-recovery-message"
             onKeyDown={handlePasswordRecoveryKeyDown}
-            className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-white/85 bg-white/76 p-6 shadow-[0_24px_70px_rgba(15,23,42,0.24),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-[24px] dark:border-slate-700/75 dark:bg-slate-900/80 sm:p-7"
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-white/85 bg-white/94 supports-[backdrop-filter:blur(1px)]:bg-white/76 p-6 shadow-[0_24px_70px_rgba(15,23,42,0.24),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-[24px] dark:border-slate-700/75 dark:bg-slate-900/94 dark:supports-[backdrop-filter:blur(1px)]:bg-slate-900/80 sm:p-7"
           >
             <p className="text-sm font-semibold text-teal-700 dark:text-teal-300">Password recovery</p>
             <h2 id="password-recovery-title" className="mt-2 text-xl font-bold tracking-tight text-slate-900 dark:text-white">
