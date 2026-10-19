@@ -69,7 +69,7 @@ export default function Features() {
   };
 
   return (
-    <section id="features" className="flex min-h-[calc(100svh-4.5rem)] scroll-mt-20 flex-col justify-center py-16 sm:scroll-mt-24 sm:py-20 lg:py-24">
+    <section id="features" className="flex min-h-[calc(100svh-4.5rem)] scroll-mt-20 flex-col justify-center bg-[radial-gradient(ellipse_at_10%_45%,rgba(186,230,253,0.52),transparent_42%),radial-gradient(ellipse_at_90%_55%,rgba(221,214,254,0.40),transparent_44%),linear-gradient(135deg,rgba(248,250,252,0.58),rgba(239,246,255,0.46))] py-16 sm:scroll-mt-24 sm:py-20 lg:py-24 dark:bg-[radial-gradient(ellipse_at_10%_45%,rgba(13,148,136,0.18),transparent_42%),radial-gradient(ellipse_at_90%_55%,rgba(109,40,217,0.12),transparent_44%)]">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-10 sm:mb-14">
           <h2 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl dark:text-white">
@@ -86,7 +86,7 @@ export default function Features() {
             return (
               <div
                 key={feature.title}
-                className="group rounded-2xl border border-white/90 bg-white/85 p-6 shadow-sm shadow-slate-900/[0.04] backdrop-blur-lg transition-all hover:shadow-md hover:border-slate-200 dark:border-slate-700/80 dark:bg-slate-900/85 dark:hover:border-slate-700"
+                className="group rounded-2xl border border-white/85 bg-white/58 p-6 shadow-[0_14px_38px_rgba(15,23,42,0.09),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-[24px] transition-all hover:shadow-[0_18px_44px_rgba(15,23,42,0.12),inset_0_1px_0_rgba(255,255,255,0.95)] hover:border-white dark:border-slate-700/75 dark:bg-slate-900/72 dark:hover:border-slate-700"
               >
                 <div
                   className={`inline-flex h-12 w-12 items-center justify-center rounded-xl ${styles.bg} ${styles.icon} ring-1 ${styles.ring} transition-transform group-hover:scale-105`}
