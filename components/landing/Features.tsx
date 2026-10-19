@@ -47,24 +47,24 @@ export default function Features() {
 
   const colorStyles: Record<string, { bg: string; icon: string; ring: string }> = {
     silver: {
-      bg: "bg-[#EAF3F9]",
-      icon: "text-[#34495E]",
-      ring: "ring-[#789BB8]/35",
+      bg: "bg-[#E4FAF4]",
+      icon: "text-[#009688]",
+      ring: "ring-[#51C7AE]/40",
     },
     mist: {
-      bg: "bg-[#EEF3F7]",
-      icon: "text-[#617486]",
-      ring: "ring-[#789BB8]/30",
+      bg: "bg-[#FFF6DF]",
+      icon: "text-[#D97706]",
+      ring: "ring-[#F4BD55]/40",
     },
     blue: {
-      bg: "bg-[#E4F0F8]",
-      icon: "text-[#49647C]",
-      ring: "ring-[#789BB8]/35",
+      bg: "bg-[#EAF2FF]",
+      icon: "text-[#2563EB]",
+      ring: "ring-[#76A5FA]/40",
     },
     ice: {
-      bg: "bg-[#F0F4F7]",
-      icon: "text-[#526A80]",
-      ring: "ring-[#789BB8]/30",
+      bg: "bg-[#E9FBF2]",
+      icon: "text-[#059669]",
+      ring: "ring-[#5DD9A6]/40",
     },
   };
 

@@ -26,17 +26,17 @@ export default function Footer() {
             </h3>
             <ul className="mt-3 space-y-2">
               <li>
-                <a href="#features" className="text-sm text-[#617486] transition-colors hover:text-[#34495E]">
+                <a href="#features" className="text-sm text-[#5D7774] transition-colors hover:text-[#007F73]">
                   Features
                 </a>
               </li>
               <li>
-                <a href="#how-it-works" className="text-sm text-[#617486] transition-colors hover:text-[#34495E]">
+                <a href="#how-it-works" className="text-sm text-[#5D7774] transition-colors hover:text-[#007F73]">
                   How It Works
                 </a>
               </li>
               <li>
-                <Link href="/#product-demo" className="text-sm text-[#617486] transition-colors hover:text-[#34495E]">
+                <Link href="/#product-demo" className="text-sm text-[#5D7774] transition-colors hover:text-[#007F73]">
                   Product Demo
                 </Link>
               </li>
@@ -50,7 +50,7 @@ export default function Footer() {
             </h3>
             <ul className="mt-3 space-y-2">
               <li>
-                <a href="#privacy" className="text-sm text-[#617486] transition-colors hover:text-[#34495E]">
+                <a href="#privacy" className="text-sm text-[#5D7774] transition-colors hover:text-[#007F73]">
                   Privacy
                 </a>
               </li>
@@ -69,7 +69,7 @@ export default function Footer() {
             </h3>
             <ul className="mt-3 space-y-2">
               <li>
-                <Link href="/auth?mode=login" className="text-sm text-[#617486] transition-colors hover:text-[#34495E]">
+                <Link href="/auth?mode=login" className="text-sm text-[#5D7774] transition-colors hover:text-[#007F73]">
                   Get Started
                 </Link>
               </li>

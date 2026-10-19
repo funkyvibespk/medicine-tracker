@@ -40,12 +40,12 @@ export default function WelcomePage() {
                     "Bottom navigation for quick access",
                   ].map((item) => (
                     <li key={item} className="flex items-start gap-2.5">
-                      <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[#D9EAF7] text-[#34495E]">
+                      <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[#DFF6EF] text-[#007F73]">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3" aria-hidden="true">
                           <polyline points="20 6 9 17 4 12" />
                         </svg>
                       </div>
-                      <span className="text-sm text-[#34495E]">{item}</span>
+                      <span className="text-sm text-[#284B48]">{item}</span>
                     </li>
                   ))}
                 </ul>

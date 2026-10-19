@@ -25,10 +25,10 @@ function HeroNote({
   tone: "silver" | "blue" | "mist" | "slate";
 }) {
   const tones = {
-    silver: "text-[#34495E]",
-    blue: "text-[#49647C]",
-    mist: "text-[#526A80]",
-    slate: "text-[#617486]",
+    silver: "text-[#008F80]",
+    blue: "text-[#2563EB]",
+    mist: "text-[#C77900]",
+    slate: "text-[#E11D48]",
   };
 
   return (
@@ -45,8 +45,8 @@ function HeroNote({
 export default function Hero() {
   return (
     <section className="landing-hero-wash relative isolate overflow-hidden pb-24 pt-7 sm:pb-32 sm:pt-9 lg:pb-36 lg:pt-5">
-      <div className="pointer-events-none absolute -left-44 top-40 -z-10 h-80 w-80 rounded-full bg-sky-100/70 blur-3xl sm:h-96 sm:w-96" aria-hidden="true" />
-      <div className="pointer-events-none absolute -right-48 top-12 -z-10 h-96 w-96 rounded-full bg-[#E6EAF3]/80 blur-3xl sm:h-[30rem] sm:w-[30rem]" aria-hidden="true" />
+      <div className="pointer-events-none absolute -left-44 top-40 -z-10 h-80 w-80 rounded-full bg-emerald-100/70 blur-3xl sm:h-96 sm:w-96" aria-hidden="true" />
+      <div className="pointer-events-none absolute -right-48 top-12 h-96 w-96 rounded-full bg-violet-100/60 blur-3xl sm:h-[30rem] sm:w-[30rem]" aria-hidden="true" />
 
       <div className="relative mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
         <HeroNote
@@ -54,7 +54,7 @@ export default function Hero() {
           tone="silver"
           title="Taken"
           detail="8:00 AM · Today"
-          icon={<span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#789BB8]"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-4 w-4" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg></span>}
+          icon={<span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#00A884]"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-4 w-4" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg></span>}
         />
         <HeroNote
           className="left-10 top-56 xl:left-8 2xl:left-5"
@@ -79,14 +79,14 @@ export default function Hero() {
         />
 
         <div className="mx-auto max-w-4xl">
-          <div className="landing-glass-pill inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-[#34495E] shadow-lg sm:text-sm">
-            <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 text-[#789BB8]" aria-hidden="true"><path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Zm7 12 .9 3.1L23 18l-3.1.9L19 22l-.9-3.1L15 18l3.1-.9L19 14ZM5 15l.7 2.3L8 18l-2.3.7L5 21l-.7-2.3L2 18l2.3-.7L5 15Z" /></svg>
+          <div className="landing-glass-pill inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-[#007F73] shadow-lg sm:text-sm">
+            <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 text-[#00A884]" aria-hidden="true"><path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Zm7 12 .9 3.1L23 18l-3.1.9L19 22l-.9-3.1L15 18l3.1-.9L19 14ZM5 15l.7 2.3L8 18l-2.3.7L5 21l-.7-2.3L2 18l2.3-.7L5 15Z" /></svg>
             A smarter way to manage your medicines
           </div>
 
-          <h1 className="mx-auto mt-5 max-w-4xl text-[2.45rem] font-extrabold leading-[1.06] tracking-[-0.05em] text-[#263746] sm:text-6xl md:text-7xl lg:text-[4.5rem] dark:text-white">
+          <h1 className="mx-auto mt-5 max-w-4xl text-[2.45rem] font-extrabold leading-[1.06] tracking-[-0.05em] text-[#142B2A] sm:text-6xl md:text-7xl lg:text-[4.5rem]">
             Your medication routine,
-            <span className="mt-1 block bg-gradient-to-r from-[#34495E] via-[#49647C] to-[#789BB8] bg-clip-text text-transparent">
+            <span className="mt-1 block bg-gradient-to-r from-[#008F80] via-[#00A884] to-[#62CEB5] bg-clip-text text-transparent">
               made simple.
             </span>
           </h1>
@@ -98,7 +98,7 @@ export default function Hero() {
           <div className="mt-6 flex justify-center">
             <Link
               href="/auth?mode=login"
-              className="cd-primary-button inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-xl px-8 py-3 text-base font-bold text-white transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#789BB8] focus-visible:ring-offset-2 sm:w-auto"
+              className="cd-primary-button inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-xl px-8 py-3 text-base font-bold text-white transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#60CDB4] focus-visible:ring-offset-2 sm:w-auto"
             >
               Get Started <Arrow />
             </Link>

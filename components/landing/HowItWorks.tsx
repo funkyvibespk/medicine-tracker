@@ -59,12 +59,12 @@ export default function HowItWorks() {
               )}
 
               {/* Step circle */}
-              <div className="relative z-10 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#34495E] to-[#789BB8] text-white shadow-lg shadow-[#34495E]/20">
+              <div className="relative z-10 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#008F80] to-[#00A884] text-white shadow-lg shadow-[#008F80]/20">
                 {step.icon}
               </div>
 
               {/* Step number badge */}
-              <div className="absolute top-0 right-[calc(50%-2.5rem)] flex h-6 w-6 items-center justify-center rounded-full bg-white text-[11px] font-extrabold text-[#34495E] ring-2 ring-[#D9EAF7] shadow-xs">
+              <div className="absolute top-0 right-[calc(50%-2.5rem)] flex h-6 w-6 items-center justify-center rounded-full bg-white text-[11px] font-extrabold text-[#007F73] ring-2 ring-[#DFF6EF] shadow-xs">
                 {step.number}
               </div>
 
