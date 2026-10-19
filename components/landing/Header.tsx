@@ -43,8 +43,8 @@ export default function Header() {
     <header
       className={`sticky top-0 z-50 transition-all duration-200 ${
         scrolled
-          ? "bg-white/90 dark:bg-slate-900/90 shadow-sm backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800"
-          : "bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-100 dark:border-slate-800/60"
+          ? "bg-white/85 dark:bg-slate-900/85 shadow-sm backdrop-blur-xl border-b border-white/70 dark:border-slate-700/70"
+          : "bg-white/90 dark:bg-slate-900/90 backdrop-blur-lg border-b border-white/75 dark:border-slate-800/60"
       }`}
     >
       <div className="mx-auto flex max-w-[1480px] items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
@@ -158,7 +158,7 @@ export default function Header() {
 
       {/* Mobile Menu Dropdown */}
       {mobileMenuOpen && (
-        <div ref={mobileMenuRef} id="landing-mobile-menu" className="md:hidden border-b border-slate-200 bg-white/95 px-4 pt-2 pb-5 shadow-lg backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/95 animate-in slide-in-from-top-2 duration-200">
+        <div ref={mobileMenuRef} id="landing-mobile-menu" className="md:hidden border-b border-white/80 bg-white/95 px-4 pt-2 pb-5 shadow-lg shadow-slate-900/5 backdrop-blur-xl dark:border-slate-700/80 dark:bg-slate-900/95 animate-in slide-in-from-top-2 duration-200">
           <nav className="flex flex-col space-y-3 pt-2" aria-label="Mobile Navigation">
             <a
               href="#features"

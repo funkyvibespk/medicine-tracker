@@ -110,7 +110,7 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
         <p className="relative z-10 text-xs text-slate-500">ChillDose local prototype · Data stays in this browser</p>
       </aside>
 
-      <main className="flex flex-1 flex-col justify-center px-5 py-10 sm:px-10 lg:px-16 xl:px-24">
+      <main className="flex flex-1 flex-col justify-center bg-[radial-gradient(ellipse_at_50%_40%,rgba(20,184,166,0.07),transparent_70%)] px-5 py-10 sm:px-10 lg:px-16 xl:px-24">
         <div className="mx-auto w-full max-w-md">
           <Link href="/" className="mb-8 inline-flex items-center gap-2 text-sm font-medium text-slate-500 transition hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 lg:hidden dark:hover:text-white">
             <span aria-hidden="true">←</span> Back to ChillDose
@@ -119,7 +119,7 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
             <BrandLogo markClassName="h-10 w-10" wordmarkClassName="sr-only" />
           </div>
 
-          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-8">
+          <section className="rounded-3xl border border-white/90 bg-white/90 p-6 shadow-xl shadow-slate-900/[0.06] backdrop-blur-xl dark:border-slate-700/80 dark:bg-slate-900/85 sm:p-8">
             <h2 className="text-3xl font-bold tracking-tight">{mode === "login" ? "Welcome back" : "Create your account"}</h2>
             <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
               {mode === "login" ? "Sign in to your account" : "Create a local demo account with your email."}
@@ -184,7 +184,7 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
             aria-labelledby="password-recovery-title"
             aria-describedby="password-recovery-message"
             onKeyDown={handlePasswordRecoveryKeyDown}
-            className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-7"
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-white/90 bg-white/95 p-6 shadow-2xl shadow-slate-950/20 backdrop-blur-xl dark:border-slate-700/80 dark:bg-slate-900/95 sm:p-7"
           >
             <p className="text-sm font-semibold text-teal-700 dark:text-teal-300">Password recovery</p>
             <h2 id="password-recovery-title" className="mt-2 text-xl font-bold tracking-tight text-slate-900 dark:text-white">

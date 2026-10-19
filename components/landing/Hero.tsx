@@ -25,14 +25,14 @@ function HeroNote({
   tone: "mint" | "blue" | "amber" | "rose";
 }) {
   const tones = {
-    mint: "border-emerald-100 bg-white/95 text-emerald-600 shadow-emerald-950/5",
-    blue: "border-blue-100 bg-white/95 text-blue-600 shadow-blue-950/5",
-    amber: "border-amber-100 bg-white/95 text-amber-600 shadow-amber-950/5",
-    rose: "border-rose-100 bg-white/95 text-rose-600 shadow-rose-950/5",
+    mint: "border-white/80 bg-white/85 text-emerald-600 shadow-emerald-950/5",
+    blue: "border-white/80 bg-white/85 text-blue-600 shadow-blue-950/5",
+    amber: "border-white/80 bg-white/85 text-amber-600 shadow-amber-950/5",
+    rose: "border-white/80 bg-white/85 text-rose-600 shadow-rose-950/5",
   };
 
   return (
-    <div className={`absolute z-10 hidden items-center gap-3 rounded-2xl border px-4 py-3 text-left shadow-lg backdrop-blur 2xl:flex ${tones[tone]} ${className}`}>
+    <div className={`absolute z-10 hidden items-center gap-3 rounded-2xl border px-4 py-3 text-left shadow-lg backdrop-blur-xl 2xl:flex ${tones[tone]} ${className}`}>
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-50">{icon}</span>
       <span>
         <span className="block text-sm font-bold text-slate-900">{title}</span>
@@ -79,7 +79,7 @@ export default function Hero() {
         />
 
         <div className="mx-auto max-w-4xl">
-          <div className="inline-flex items-center gap-2 rounded-full border border-teal-100/90 bg-white/90 px-4 py-2 text-xs font-semibold text-teal-800 shadow-sm shadow-teal-950/[0.04] backdrop-blur sm:text-sm dark:border-teal-900/70 dark:bg-slate-900/85 dark:text-teal-200">
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/85 px-4 py-2 text-xs font-semibold text-teal-800 shadow-md shadow-teal-950/[0.05] backdrop-blur-xl sm:text-sm dark:border-teal-900/70 dark:bg-slate-900/85 dark:text-teal-200">
             <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 text-teal-500" aria-hidden="true"><path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Zm7 12 .9 3.1L23 18l-3.1.9L19 22l-.9-3.1L15 18l3.1-.9L19 14ZM5 15l.7 2.3L8 18l-2.3.7L5 21l-.7-2.3L2 18l2.3-.7L5 15Z" /></svg>
             A smarter way to manage your medicines
           </div>
