@@ -25,32 +25,69 @@ body {
 /* Scoped ChillDose luxury-glass palette: these styles only apply to public and auth screens. */
 .landing-page,
 .auth-page {
-  --cd-pearl: #f7f6f1;
+  --cd-pearl: #f3f8fc;
   --cd-frosted: rgba(255, 255, 255, 0.68);
   --cd-mist: #edf1f2;
-  --cd-icy: #dceaf0;
-  --cd-lavender: #e9e3f4;
-  --cd-charcoal: #202522;
-  --cd-muted: #69736f;
-  --cd-forest: #294d42;
-  --cd-glass-border: rgba(255, 255, 255, 0.82);
+  --cd-icy: #d9eaf7;
+  --cd-lavender: #e6eaf3;
+  --cd-charcoal: #263746;
+  --cd-muted: #617486;
+  --cd-accent: #34495e;
+  --cd-glass-border: rgba(120, 155, 184, 0.32);
   background-color: var(--cd-pearl);
   color: var(--cd-charcoal);
+}
+
+.landing-page .text-slate-950,
+.landing-page .text-slate-900,
+.auth-page .text-slate-950,
+.auth-page .text-slate-900 {
+  color: var(--cd-charcoal);
+}
+
+.landing-page .text-slate-800,
+.landing-page .text-slate-700,
+.auth-page .text-slate-800,
+.auth-page .text-slate-700 {
+  color: var(--cd-accent);
+}
+
+.landing-page .text-slate-600,
+.landing-page .text-slate-500,
+.landing-page .text-slate-400,
+.auth-page .text-slate-600,
+.auth-page .text-slate-500,
+.auth-page .text-slate-400 {
+  color: var(--cd-muted);
+}
+
+.landing-page .text-slate-300,
+.auth-page .text-slate-300 {
+  color: rgba(120, 155, 184, 0.72);
 }
 
 .landing-page .landing-hero-wash {
   background-color: var(--cd-pearl);
   background-image:
-    radial-gradient(ellipse at 14% 38%, rgba(220, 234, 240, 0.94), transparent 42%),
-    radial-gradient(ellipse at 86% 46%, rgba(233, 227, 244, 0.82), transparent 44%),
+    radial-gradient(ellipse at 14% 38%, rgba(217, 234, 247, 0.96), transparent 42%),
+    radial-gradient(ellipse at 86% 46%, rgba(230, 234, 243, 0.84), transparent 44%),
     radial-gradient(ellipse at 52% 5%, rgba(255, 255, 255, 0.98), transparent 56%);
 }
 
 .landing-page .landing-section-wash {
   background-color: var(--cd-pearl);
   background-image:
-    radial-gradient(ellipse at 10% 42%, rgba(220, 234, 240, 0.84), transparent 40%),
-    radial-gradient(ellipse at 90% 62%, rgba(233, 227, 244, 0.72), transparent 42%);
+    radial-gradient(ellipse at 10% 42%, rgba(217, 234, 247, 0.88), transparent 40%),
+    radial-gradient(ellipse at 90% 62%, rgba(230, 234, 243, 0.76), transparent 42%);
+}
+
+.landing-page .landing-preview-stage {
+  background: radial-gradient(ellipse at 50% 35%, rgba(217, 234, 247, 0.64), transparent 68%);
+}
+
+.landing-page .landing-preview-frame {
+  border-color: var(--cd-glass-border);
+  box-shadow: 0 30px 76px -34px rgba(52, 73, 94, 0.3);
 }
 
 .landing-page .landing-header-glass,
@@ -61,100 +98,100 @@ body {
   border: 1px solid var(--cd-glass-border);
   background: var(--cd-frosted);
   box-shadow:
-    0 24px 70px -38px rgba(32, 37, 34, 0.32),
+    0 24px 70px -38px rgba(52, 73, 94, 0.28),
     inset 0 1px 0 rgba(255, 255, 255, 0.95);
   -webkit-backdrop-filter: blur(26px);
   backdrop-filter: blur(26px);
 }
 
 .landing-page .landing-header-glass {
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 12px 36px -28px rgba(32, 37, 34, 0.3);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 12px 36px -28px rgba(52, 73, 94, 0.3);
 }
 
 .landing-page .landing-header-glass.landing-header-scrolled {
-  box-shadow: 0 16px 42px -30px rgba(32, 37, 34, 0.38);
+  box-shadow: 0 16px 42px -30px rgba(52, 73, 94, 0.34);
 }
 
 .landing-page .landing-glass-pill {
   background: rgba(255, 255, 255, 0.62);
   box-shadow:
-    0 12px 32px -22px rgba(32, 37, 34, 0.35),
+    0 12px 32px -22px rgba(52, 73, 94, 0.28),
     inset 0 1px 0 rgba(255, 255, 255, 0.98);
 }
 
 .auth-page {
   min-height: 100vh;
   background-image:
-    radial-gradient(ellipse at 12% 14%, rgba(220, 234, 240, 0.9), transparent 42%),
-    radial-gradient(ellipse at 88% 84%, rgba(233, 227, 244, 0.8), transparent 44%),
-    linear-gradient(135deg, #f7f6f1, #f4f5f3);
+    radial-gradient(ellipse at 12% 14%, rgba(217, 234, 247, 0.94), transparent 42%),
+    radial-gradient(ellipse at 88% 84%, rgba(230, 234, 243, 0.84), transparent 44%),
+    linear-gradient(135deg, #f3f8fc, #edf3f8);
 }
 
 .auth-page .auth-aside-wash {
   background-image:
-    radial-gradient(ellipse at 5% 12%, rgba(220, 234, 240, 0.94), transparent 45%),
-    radial-gradient(ellipse at 96% 90%, rgba(233, 227, 244, 0.78), transparent 48%),
-    linear-gradient(145deg, rgba(247, 246, 241, 0.72), rgba(237, 241, 242, 0.76));
+    radial-gradient(ellipse at 5% 12%, rgba(217, 234, 247, 0.96), transparent 45%),
+    radial-gradient(ellipse at 96% 90%, rgba(230, 234, 243, 0.82), transparent 48%),
+    linear-gradient(145deg, rgba(243, 248, 252, 0.76), rgba(237, 243, 248, 0.82));
 }
 
 .auth-page .auth-main-wash {
   background-image:
-    radial-gradient(ellipse at 15% 20%, rgba(220, 234, 240, 0.74), transparent 46%),
-    radial-gradient(ellipse at 88% 78%, rgba(233, 227, 244, 0.64), transparent 48%);
+    radial-gradient(ellipse at 15% 20%, rgba(217, 234, 247, 0.8), transparent 46%),
+    radial-gradient(ellipse at 88% 78%, rgba(230, 234, 243, 0.7), transparent 48%);
 }
 
 .auth-page .auth-glass {
   background: rgba(255, 255, 255, 0.68);
-  border-color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(120, 155, 184, 0.3);
   box-shadow:
-    0 34px 90px -48px rgba(32, 37, 34, 0.38),
+    0 34px 90px -48px rgba(52, 73, 94, 0.3),
     inset 0 1px 0 rgba(255, 255, 255, 0.98),
     0 0 0 1px rgba(255, 255, 255, 0.25);
 }
 
 .auth-page .auth-glass-dialog {
   background: rgba(255, 255, 255, 0.82);
-  border-color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(120, 155, 184, 0.34);
 }
 
 .landing-page .landing-cta-stage {
   background-color: var(--cd-pearl);
   background-image:
-    radial-gradient(ellipse at 14% 40%, rgba(220, 234, 240, 0.84), transparent 42%),
-    radial-gradient(ellipse at 88% 60%, rgba(233, 227, 244, 0.74), transparent 46%);
+    radial-gradient(ellipse at 14% 40%, rgba(217, 234, 247, 0.9), transparent 42%),
+    radial-gradient(ellipse at 88% 60%, rgba(230, 234, 243, 0.78), transparent 46%);
 }
 
 .landing-page .landing-cta-card {
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(120, 155, 184, 0.3);
   background: rgba(255, 255, 255, 0.7);
   box-shadow:
-    0 34px 80px -42px rgba(32, 37, 34, 0.26),
+    0 34px 80px -42px rgba(52, 73, 94, 0.22),
     inset 0 1px 0 rgba(255, 255, 255, 0.96);
   -webkit-backdrop-filter: blur(24px);
   backdrop-filter: blur(24px);
 }
 
 .landing-page .landing-footer {
-  border-color: rgba(255, 255, 255, 0.78);
-  background: rgba(255, 255, 255, 0.48);
+  border-color: var(--cd-glass-border);
+  background: rgba(255, 255, 255, 0.56);
   -webkit-backdrop-filter: blur(24px);
   backdrop-filter: blur(24px);
 }
 
 .landing-page .cd-primary-button {
-  background: linear-gradient(135deg, #294d42, #3a6658);
-  box-shadow: 0 14px 30px -18px rgba(41, 77, 66, 0.7);
+  background: linear-gradient(135deg, #34495e, #49647c);
+  box-shadow: 0 14px 30px -18px rgba(52, 73, 94, 0.52);
 }
 
 .landing-page .cd-primary-button:hover,
 .auth-page .cd-primary-button:hover {
-  background: linear-gradient(135deg, #203e35, #31584b);
+  background: linear-gradient(135deg, #263746, #3b536a);
 }
 
 .auth-page .cd-primary-button {
-  background: linear-gradient(135deg, #294d42, #3a6658);
-  box-shadow: 0 14px 30px -18px rgba(41, 77, 66, 0.7);
+  background: linear-gradient(135deg, #34495e, #49647c);
+  box-shadow: 0 14px 30px -18px rgba(52, 73, 94, 0.52);
 }
 
 @supports not (backdrop-filter: blur(1px)) {
@@ -163,11 +200,11 @@ body {
   .landing-page .landing-glass-pill,
   .auth-page .auth-glass,
   .auth-page .auth-glass-dialog {
-    background: rgba(255, 255, 255, 0.96);
+    background: rgba(248, 251, 253, 0.97);
   }
 
   .landing-page .landing-cta-card {
-    background: #ffffff;
+    background: #f8fbfd;
   }
 }
 

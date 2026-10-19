@@ -19,7 +19,7 @@ export default function FinalCTA() {
         <div className="mt-8 flex justify-center">
           <Link
             href="/auth?mode=login"
-            className="cd-primary-button inline-flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-base font-semibold transition-all hover:-translate-y-0.5 hover:shadow-lg active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#294D42] focus-visible:ring-offset-2 sm:w-auto"
+            className="cd-primary-button inline-flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-base font-semibold transition-all hover:-translate-y-0.5 hover:shadow-lg active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#789BB8] focus-visible:ring-offset-2 sm:w-auto"
           >
             <span>Get Started</span>
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">

@@ -22,13 +22,13 @@ function HeroNote({
   icon: ReactNode;
   title: string;
   detail: string;
-  tone: "mint" | "blue" | "amber" | "rose";
+  tone: "silver" | "blue" | "mist" | "slate";
 }) {
   const tones = {
-    mint: "text-emerald-700",
-    blue: "text-blue-700",
-    amber: "text-amber-700",
-    rose: "text-rose-700",
+    silver: "text-[#34495E]",
+    blue: "text-[#49647C]",
+    mist: "text-[#526A80]",
+    slate: "text-[#617486]",
   };
 
   return (
@@ -46,19 +46,19 @@ export default function Hero() {
   return (
     <section className="landing-hero-wash relative isolate overflow-hidden pb-24 pt-7 sm:pb-32 sm:pt-9 lg:pb-36 lg:pt-5">
       <div className="pointer-events-none absolute -left-44 top-40 -z-10 h-80 w-80 rounded-full bg-sky-100/70 blur-3xl sm:h-96 sm:w-96" aria-hidden="true" />
-      <div className="pointer-events-none absolute -right-48 top-12 -z-10 h-96 w-96 rounded-full bg-[#E9E3F4]/75 blur-3xl sm:h-[30rem] sm:w-[30rem]" aria-hidden="true" />
+      <div className="pointer-events-none absolute -right-48 top-12 -z-10 h-96 w-96 rounded-full bg-[#E6EAF3]/80 blur-3xl sm:h-[30rem] sm:w-[30rem]" aria-hidden="true" />
 
       <div className="relative mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
         <HeroNote
           className="left-3 top-16 xl:left-5 2xl:left-0"
-          tone="mint"
+          tone="silver"
           title="Taken"
           detail="8:00 AM · Today"
-          icon={<span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-emerald-500"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-4 w-4" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg></span>}
+          icon={<span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#789BB8]"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-4 w-4" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg></span>}
         />
         <HeroNote
           className="left-10 top-56 xl:left-8 2xl:left-5"
-          tone="amber"
+          tone="mist"
           title="Upcoming"
           detail="2:00 PM · Today"
           icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-7 w-7" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></svg>}
@@ -72,21 +72,21 @@ export default function Hero() {
         />
         <HeroNote
           className="right-10 top-56 xl:right-8 2xl:right-5"
-          tone="rose"
+          tone="slate"
           title="Stock check"
           detail="Know when it is time to refill"
           icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-7 w-7" aria-hidden="true"><path d="M12 3 2.8 19h18.4L12 3Z" /><path d="M12 9v4m0 3h.01" /></svg>}
         />
 
         <div className="mx-auto max-w-4xl">
-          <div className="landing-glass-pill inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-[#294D42] shadow-lg sm:text-sm">
-            <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 text-teal-500" aria-hidden="true"><path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Zm7 12 .9 3.1L23 18l-3.1.9L19 22l-.9-3.1L15 18l3.1-.9L19 14ZM5 15l.7 2.3L8 18l-2.3.7L5 21l-.7-2.3L2 18l2.3-.7L5 15Z" /></svg>
+          <div className="landing-glass-pill inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-[#34495E] shadow-lg sm:text-sm">
+            <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 text-[#789BB8]" aria-hidden="true"><path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Zm7 12 .9 3.1L23 18l-3.1.9L19 22l-.9-3.1L15 18l3.1-.9L19 14ZM5 15l.7 2.3L8 18l-2.3.7L5 21l-.7-2.3L2 18l2.3-.7L5 15Z" /></svg>
             A smarter way to manage your medicines
           </div>
 
-          <h1 className="mx-auto mt-5 max-w-4xl text-[2.45rem] font-extrabold leading-[1.06] tracking-[-0.05em] text-slate-950 sm:text-6xl md:text-7xl lg:text-[4.5rem] dark:text-white">
+          <h1 className="mx-auto mt-5 max-w-4xl text-[2.45rem] font-extrabold leading-[1.06] tracking-[-0.05em] text-[#263746] sm:text-6xl md:text-7xl lg:text-[4.5rem] dark:text-white">
             Your medication routine,
-            <span className="mt-1 block bg-gradient-to-r from-[#294D42] via-[#3A6658] to-[#5D8277] bg-clip-text text-transparent">
+            <span className="mt-1 block bg-gradient-to-r from-[#34495E] via-[#49647C] to-[#789BB8] bg-clip-text text-transparent">
               made simple.
             </span>
           </h1>
@@ -98,7 +98,7 @@ export default function Hero() {
           <div className="mt-6 flex justify-center">
             <Link
               href="/auth?mode=login"
-              className="cd-primary-button inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-xl px-8 py-3 text-base font-bold text-white transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#294D42] focus-visible:ring-offset-2 sm:w-auto"
+              className="cd-primary-button inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-xl px-8 py-3 text-base font-bold text-white transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#789BB8] focus-visible:ring-offset-2 sm:w-auto"
             >
               Get Started <Arrow />
             </Link>

@@ -26,17 +26,17 @@ export default function Footer() {
             </h3>
             <ul className="mt-3 space-y-2">
               <li>
-                <a href="#features" className="text-sm text-slate-600 hover:text-teal-600 transition-colors dark:text-slate-400 dark:hover:text-teal-400">
+                <a href="#features" className="text-sm text-[#617486] transition-colors hover:text-[#34495E]">
                   Features
                 </a>
               </li>
               <li>
-                <a href="#how-it-works" className="text-sm text-slate-600 hover:text-teal-600 transition-colors dark:text-slate-400 dark:hover:text-teal-400">
+                <a href="#how-it-works" className="text-sm text-[#617486] transition-colors hover:text-[#34495E]">
                   How It Works
                 </a>
               </li>
               <li>
-                <Link href="/#product-demo" className="text-sm text-slate-600 hover:text-teal-600 transition-colors dark:text-slate-400 dark:hover:text-teal-400">
+                <Link href="/#product-demo" className="text-sm text-[#617486] transition-colors hover:text-[#34495E]">
                   Product Demo
                 </Link>
               </li>
@@ -50,7 +50,7 @@ export default function Footer() {
             </h3>
             <ul className="mt-3 space-y-2">
               <li>
-                <a href="#privacy" className="text-sm text-slate-600 hover:text-teal-600 transition-colors dark:text-slate-400 dark:hover:text-teal-400">
+                <a href="#privacy" className="text-sm text-[#617486] transition-colors hover:text-[#34495E]">
                   Privacy
                 </a>
               </li>
@@ -69,7 +69,7 @@ export default function Footer() {
             </h3>
             <ul className="mt-3 space-y-2">
               <li>
-                <Link href="/auth?mode=login" className="text-sm text-slate-600 hover:text-teal-600 transition-colors dark:text-slate-400 dark:hover:text-teal-400">
+                <Link href="/auth?mode=login" className="text-sm text-[#617486] transition-colors hover:text-[#34495E]">
                   Get Started
                 </Link>
               </li>

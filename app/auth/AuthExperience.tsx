@@ -95,13 +95,13 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
           <div className="absolute -left-20 top-8 h-80 w-80 rounded-full bg-sky-300/60 blur-3xl" />
           <div className="absolute -right-12 bottom-10 h-96 w-96 rounded-full bg-violet-300/55 blur-3xl" />
         </div>
-        <Link href="/" aria-label="ChillDose home" className="relative z-10 w-fit rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">
+        <Link href="/" aria-label="ChillDose home" className="relative z-10 w-fit rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#789BB8]">
           <BrandLogo markClassName="h-10 w-10" wordmarkClassName="text-xl font-bold tracking-tight" />
         </Link>
         <div className="relative z-10 max-w-lg">
-          <p className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-[#294D42]">Your routine, made calmer</p>
+          <p className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-[#34495E]">Your routine, made calmer</p>
           <h1 className="text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl">
-            Your medication routine, <span className="bg-gradient-to-r from-[#294D42] via-[#3A6658] to-[#5D8277] bg-clip-text text-transparent">made simple.</span>
+            Your medication routine, <span className="bg-gradient-to-r from-[#34495E] via-[#49647C] to-[#789BB8] bg-clip-text text-transparent">made simple.</span>
           </h1>
           <p className="mt-6 max-w-md text-lg leading-relaxed text-slate-600 dark:text-slate-400">
             Keep your schedule, doses, and medicine stock together in one clear place on this device.
@@ -112,7 +112,7 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
 
       <main className="auth-main-wash flex flex-1 flex-col justify-center px-5 py-10 sm:px-10 lg:px-16 xl:px-24">
         <div className="mx-auto w-full max-w-md">
-          <Link href="/" className="mb-8 inline-flex items-center gap-2 text-sm font-medium text-slate-500 transition hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 lg:hidden dark:hover:text-white">
+          <Link href="/" className="mb-8 inline-flex items-center gap-2 text-sm font-medium text-[#617486] transition hover:text-[#263746] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#789BB8] lg:hidden">
             <span aria-hidden="true">←</span> Back to ChillDose
           </Link>
           <div className="mb-8 lg:hidden">
@@ -128,18 +128,18 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
             <form key={mode} onSubmit={handleEmailSubmit} className="mt-7 space-y-4">
               <div>
                 <label htmlFor="auth-email" className="mb-1.5 block text-sm font-semibold text-slate-700 dark:text-slate-200">Email address</label>
-                <input id="auth-email" name="email" type="email" autoComplete="email" required placeholder="Email" className="w-full rounded-xl border border-slate-300 bg-white/75 px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-[#294D42] focus:ring-4 focus:ring-[#294D42]/15 dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
+                <input id="auth-email" name="email" type="email" autoComplete="email" required placeholder="Email" className="w-full rounded-xl border border-[#789BB8]/45 bg-white/75 px-4 py-3 text-sm text-[#263746] shadow-sm outline-none transition placeholder:text-[#8295A5] focus:border-[#789BB8] focus:ring-4 focus:ring-[#789BB8]/20" />
               </div>
               <div>
                 <label htmlFor="auth-password" className="mb-1.5 block text-sm font-semibold text-slate-700 dark:text-slate-200">Password</label>
                 <div className="relative">
-                  <input id="auth-password" name="password" type={showPassword ? "text" : "password"} autoComplete={mode === "login" ? "current-password" : "new-password"} required minLength={mode === "signup" ? 8 : undefined} placeholder="Password" className="w-full rounded-xl border border-slate-300 bg-white/75 px-4 py-3 pr-20 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-[#294D42] focus:ring-4 focus:ring-[#294D42]/15 dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
-                  <button type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword} className="absolute inset-y-0 right-3 my-auto rounded px-2 text-xs font-semibold text-slate-500 hover:text-teal-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:hover:text-teal-300">
+                  <input id="auth-password" name="password" type={showPassword ? "text" : "password"} autoComplete={mode === "login" ? "current-password" : "new-password"} required minLength={mode === "signup" ? 8 : undefined} placeholder="Password" className="w-full rounded-xl border border-[#789BB8]/45 bg-white/75 px-4 py-3 pr-20 text-sm text-[#263746] shadow-sm outline-none transition placeholder:text-[#8295A5] focus:border-[#789BB8] focus:ring-4 focus:ring-[#789BB8]/20" />
+                  <button type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword} className="absolute inset-y-0 right-3 my-auto rounded px-2 text-xs font-semibold text-[#617486] hover:text-[#34495E] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#789BB8]">
                     {showPassword ? "Hide" : "Show"}
                   </button>
                 </div>
               </div>
-              <button type="submit" disabled={isSubmitting} className="cd-primary-button inline-flex w-full items-center justify-center rounded-xl px-5 py-3 text-sm font-bold text-white shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#294D42] focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-70">
+              <button type="submit" disabled={isSubmitting} className="cd-primary-button inline-flex w-full items-center justify-center rounded-xl px-5 py-3 text-sm font-bold text-white shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#789BB8] focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-70">
                 {isSubmitting ? "Checking locally…" : mode === "login" ? "Sign In" : "Create local account"}
               </button>
             </form>
@@ -148,22 +148,22 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
               <button
                 type="button"
                 onClick={() => setIsPasswordRecoveryOpen(true)}
-              className="mt-4 block ml-auto rounded text-sm font-semibold text-[#294D42] hover:text-[#203E35] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#294D42]"
+              className="mt-4 block ml-auto rounded text-sm font-semibold text-[#34495E] hover:text-[#263746] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#789BB8]"
               >
                 Forgot password?
               </button>
             )}
 
-            {feedback && <div className="mt-4 rounded-xl border border-teal-100 bg-teal-50 px-4 py-3 text-sm leading-relaxed text-teal-900 dark:border-teal-900/60 dark:bg-teal-950/40 dark:text-teal-200">
+            {feedback && <div className="mt-4 rounded-xl border border-[#789BB8]/35 bg-[#EAF2F8] px-4 py-3 text-sm leading-relaxed text-[#34495E]">
               <p role="alert">{feedback}</p>
-              {suggestedMode && <button type="button" onClick={() => goToMode(suggestedMode)} className="mt-2 font-semibold underline underline-offset-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">
+              {suggestedMode && <button type="button" onClick={() => goToMode(suggestedMode)} className="mt-2 font-semibold underline underline-offset-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#789BB8]">
                 {suggestedMode === "login" ? "Go to Login" : "Go to Sign Up"}
               </button>}
             </div>}
 
             <p className="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
               {mode === "login" ? "Don’t have an account? " : "Already have an account? "}
-              <button type="button" onClick={() => goToMode(mode === "login" ? "signup" : "login")} className="rounded font-semibold text-[#294D42] hover:text-[#203E35] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#294D42]">
+              <button type="button" onClick={() => goToMode(mode === "login" ? "signup" : "login")} className="rounded font-semibold text-[#34495E] hover:text-[#263746] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#789BB8]">
                 {mode === "login" ? "Sign Up" : "Sign In"}
               </button>
             </p>
@@ -172,7 +172,7 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
           <p className="auth-glass-pill mt-5 rounded-xl px-4 py-3 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
             This is a local demo only, not secure authentication. Email and a salted PBKDF2 password hash are stored in this browser; passwords are never stored in plain text or sent to a server. Your local session stays active on this device until you log out. Tracker data without an assigned profile remains unassigned.
           </p>
-          <Link href="/" className="mx-auto mt-6 block w-fit rounded px-2 py-1 text-xs font-medium text-slate-500 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:hover:text-white">Back to home</Link>
+          <Link href="/" className="mx-auto mt-6 block w-fit rounded px-2 py-1 text-xs font-medium text-[#617486] hover:text-[#263746] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#789BB8]">Back to home</Link>
         </div>
       </main>
 
@@ -186,7 +186,7 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
             onKeyDown={handlePasswordRecoveryKeyDown}
             className="auth-glass-dialog max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-[1.75rem] p-6 sm:p-7"
           >
-            <p className="text-sm font-semibold text-teal-700 dark:text-teal-300">Password recovery</p>
+            <p className="text-sm font-semibold text-[#34495E]">Password recovery</p>
             <h2 id="password-recovery-title" className="mt-2 text-xl font-bold tracking-tight text-slate-900 dark:text-white">
               Password reset isn&apos;t available yet
             </h2>
@@ -197,7 +197,7 @@ export default function AuthExperience({ initialMode }: AuthExperienceProps) {
               ref={gotItButtonRef}
               type="button"
               onClick={() => setIsPasswordRecoveryOpen(false)}
-              className="cd-primary-button mt-6 inline-flex min-h-11 w-full items-center justify-center rounded-xl px-5 py-3 text-sm font-bold text-white shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#294D42] focus-visible:ring-offset-2"
+              className="cd-primary-button mt-6 inline-flex min-h-11 w-full items-center justify-center rounded-xl px-5 py-3 text-sm font-bold text-white shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#789BB8] focus-visible:ring-offset-2"
             >
               Got it
             </button>

@@ -9,7 +9,7 @@ export default function Features() {
           <path d="M16 2v4M8 2v4M3 10h18" />
         </svg>
       ),
-      color: "teal" as const,
+      color: "silver" as const,
     },
     {
       title: "Stock Management",
@@ -19,7 +19,7 @@ export default function Features() {
           <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
         </svg>
       ),
-      color: "amber" as const,
+      color: "mist" as const,
     },
     {
       title: "Dose History",
@@ -41,30 +41,30 @@ export default function Features() {
           <path d="m9 12 2 2 4-4" />
         </svg>
       ),
-      color: "emerald" as const,
+      color: "ice" as const,
     },
   ];
 
   const colorStyles: Record<string, { bg: string; icon: string; ring: string }> = {
-    teal: {
-      bg: "bg-teal-50 dark:bg-teal-950/40",
-      icon: "text-teal-600 dark:text-teal-400",
-      ring: "ring-teal-200/60 dark:ring-teal-800/60",
+    silver: {
+      bg: "bg-[#EAF3F9]",
+      icon: "text-[#34495E]",
+      ring: "ring-[#789BB8]/35",
     },
-    amber: {
-      bg: "bg-amber-50 dark:bg-amber-950/40",
-      icon: "text-amber-600 dark:text-amber-400",
-      ring: "ring-amber-200/60 dark:ring-amber-800/60",
+    mist: {
+      bg: "bg-[#EEF3F7]",
+      icon: "text-[#617486]",
+      ring: "ring-[#789BB8]/30",
     },
     blue: {
-      bg: "bg-blue-50 dark:bg-blue-950/40",
-      icon: "text-blue-600 dark:text-blue-400",
-      ring: "ring-blue-200/60 dark:ring-blue-800/60",
+      bg: "bg-[#E4F0F8]",
+      icon: "text-[#49647C]",
+      ring: "ring-[#789BB8]/35",
     },
-    emerald: {
-      bg: "bg-emerald-50 dark:bg-emerald-950/40",
-      icon: "text-emerald-600 dark:text-emerald-400",
-      ring: "ring-emerald-200/60 dark:ring-emerald-800/60",
+    ice: {
+      bg: "bg-[#F0F4F7]",
+      icon: "text-[#526A80]",
+      ring: "ring-[#789BB8]/30",
     },
   };
 
