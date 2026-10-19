@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 export default function MobileProductPreview() {
   return (
     <div className="relative mx-auto w-full max-w-[340px] select-none" aria-label="Static mobile dashboard preview">
@@ -7,44 +9,23 @@ export default function MobileProductPreview() {
           <div className="h-1.5 w-1.5 rounded-full bg-teal-500/80" />
         </div>
 
-        <div className="relative overflow-hidden rounded-[2.4rem] border border-slate-200/40 bg-slate-50 text-slate-900 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100">
-          <div className="flex items-center justify-between px-6 pb-1 pt-3 text-[11px] font-semibold text-slate-800 dark:text-slate-200">
+        <div className="relative overflow-hidden rounded-[2.4rem] border border-slate-200/40 bg-slate-50 text-slate-900">
+          <div className="flex items-center justify-between px-6 pb-1 pt-3 text-[11px] font-semibold text-slate-800">
             <span>9:41</span>
-            <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[9px] font-semibold text-teal-700 dark:bg-teal-950/60 dark:text-teal-300">Preview</span>
+            <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[9px] font-semibold text-teal-700">Preview</span>
           </div>
 
-          <div className="px-4 pb-20 pt-5">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-teal-600 dark:text-teal-400">Your local tracker</p>
-            <h3 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">Today&apos;s overview</h3>
+          <Image
+            src="/mobile-dashboard-preview.png"
+            alt="Mobile ChillDose dashboard showing dose summary, upcoming medicines, and weekly adherence"
+            width={720}
+            height={1275}
+            sizes="(max-width: 768px) 88vw, 312px"
+            className="block h-auto w-full"
+          />
 
-            <div className="mt-3 rounded-2xl bg-gradient-to-br from-teal-600 to-emerald-700 p-3.5 text-white shadow-md shadow-teal-800/20">
-              <p className="text-[11px] font-medium text-teal-100">Today&apos;s doses</p>
-              <p className="mt-1 text-2xl font-extrabold tracking-tight">—</p>
-              <p className="mt-1 text-[10px] text-teal-100">Your schedule appears here after setup.</p>
-            </div>
-
-            <div className="mt-4 flex items-center justify-between gap-2">
-              <h4 className="text-xs font-bold text-slate-900 dark:text-white">Upcoming doses</h4>
-              <span className="text-[9px] font-medium text-slate-400">Personal to your profile</span>
-            </div>
-            <div className="mt-2 flex min-h-24 items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white px-3 text-center text-[10px] leading-relaxed text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
-              Add a medicine to see your dose schedule here.
-            </div>
-
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
-                <p className="text-[9px] font-medium text-slate-500 dark:text-slate-400">Active medicines</p>
-                <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">—</p>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
-                <p className="text-[9px] font-medium text-slate-500 dark:text-slate-400">Stock alerts</p>
-                <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">—</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="absolute inset-x-0 bottom-0 flex items-center justify-around border-t border-slate-200 bg-white/95 px-3 py-2.5 text-[9px] font-semibold text-slate-400 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/95" aria-hidden="true">
-            <span className="text-teal-600 dark:text-teal-400">Today</span>
+          <div aria-hidden="true" className="flex h-9 shrink-0 items-center justify-around border-t border-slate-200 bg-white px-1 text-[7px] font-semibold text-slate-400">
+            <span className="text-teal-700">Today</span>
             <span>Medicines</span>
             <span>Inventory</span>
             <span>History</span>
