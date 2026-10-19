@@ -25,14 +25,14 @@ function HeroNote({
   tone: "mint" | "blue" | "amber" | "rose";
 }) {
   const tones = {
-    mint: "border-white/80 bg-white/90 supports-[backdrop-filter:blur(1px)]:bg-white/58 text-emerald-600 shadow-emerald-950/10",
-    blue: "border-white/80 bg-white/90 supports-[backdrop-filter:blur(1px)]:bg-white/58 text-blue-600 shadow-blue-950/10",
-    amber: "border-white/80 bg-white/90 supports-[backdrop-filter:blur(1px)]:bg-white/58 text-amber-600 shadow-amber-950/10",
-    rose: "border-white/80 bg-white/90 supports-[backdrop-filter:blur(1px)]:bg-white/58 text-rose-600 shadow-rose-950/10",
+    mint: "text-emerald-700",
+    blue: "text-blue-700",
+    amber: "text-amber-700",
+    rose: "text-rose-700",
   };
 
   return (
-    <div className={`absolute z-10 hidden items-center gap-3 rounded-2xl border px-4 py-3 text-left shadow-lg backdrop-blur-[24px] 2xl:flex ${tones[tone]} ${className}`}>
+    <div className={`landing-glass-pill absolute z-10 hidden items-center gap-3 rounded-2xl px-4 py-3 text-left shadow-lg 2xl:flex ${tones[tone]} ${className}`}>
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-50">{icon}</span>
       <span>
         <span className="block text-sm font-bold text-slate-900">{title}</span>
@@ -44,9 +44,9 @@ function HeroNote({
 
 export default function Hero() {
   return (
-    <section className="relative isolate overflow-hidden bg-[radial-gradient(ellipse_at_25%_40%,rgba(186,230,253,0.46),transparent_52%),radial-gradient(ellipse_at_78%_55%,rgba(221,214,254,0.34),transparent_54%),radial-gradient(ellipse_at_50%_42%,rgba(20,184,166,0.10),transparent_68%)] pb-24 pt-7 sm:pb-32 sm:pt-9 lg:pb-36 lg:pt-5">
-      <div className="pointer-events-none absolute -left-44 top-40 -z-10 h-80 w-80 rounded-full bg-sky-100/65 blur-3xl dark:bg-teal-900/20 sm:h-96 sm:w-96" aria-hidden="true" />
-      <div className="pointer-events-none absolute -right-48 top-12 -z-10 h-96 w-96 rounded-full bg-violet-100/55 blur-3xl dark:bg-emerald-900/15 sm:h-[30rem] sm:w-[30rem]" aria-hidden="true" />
+    <section className="landing-hero-wash relative isolate overflow-hidden pb-24 pt-7 sm:pb-32 sm:pt-9 lg:pb-36 lg:pt-5">
+      <div className="pointer-events-none absolute -left-44 top-40 -z-10 h-80 w-80 rounded-full bg-sky-100/70 blur-3xl sm:h-96 sm:w-96" aria-hidden="true" />
+      <div className="pointer-events-none absolute -right-48 top-12 -z-10 h-96 w-96 rounded-full bg-[#E9E3F4]/75 blur-3xl sm:h-[30rem] sm:w-[30rem]" aria-hidden="true" />
 
       <div className="relative mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
         <HeroNote
@@ -79,14 +79,14 @@ export default function Hero() {
         />
 
         <div className="mx-auto max-w-4xl">
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/90 supports-[backdrop-filter:blur(1px)]:bg-white/62 px-4 py-2 text-xs font-semibold text-teal-800 shadow-lg shadow-slate-900/[0.06] backdrop-blur-[24px] sm:text-sm dark:border-teal-900/70 dark:bg-slate-900/90 dark:supports-[backdrop-filter:blur(1px)]:bg-slate-900/78 dark:text-teal-200">
+          <div className="landing-glass-pill inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-[#294D42] shadow-lg sm:text-sm">
             <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 text-teal-500" aria-hidden="true"><path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Zm7 12 .9 3.1L23 18l-3.1.9L19 22l-.9-3.1L15 18l3.1-.9L19 14ZM5 15l.7 2.3L8 18l-2.3.7L5 21l-.7-2.3L2 18l2.3-.7L5 15Z" /></svg>
             A smarter way to manage your medicines
           </div>
 
           <h1 className="mx-auto mt-5 max-w-4xl text-[2.45rem] font-extrabold leading-[1.06] tracking-[-0.05em] text-slate-950 sm:text-6xl md:text-7xl lg:text-[4.5rem] dark:text-white">
             Your medication routine,
-            <span className="mt-1 block bg-gradient-to-r from-teal-700 via-teal-600 to-emerald-500 bg-clip-text text-transparent dark:from-teal-300 dark:via-teal-400 dark:to-emerald-300">
+            <span className="mt-1 block bg-gradient-to-r from-[#294D42] via-[#3A6658] to-[#5D8277] bg-clip-text text-transparent">
               made simple.
             </span>
           </h1>
@@ -98,7 +98,7 @@ export default function Hero() {
           <div className="mt-6 flex justify-center">
             <Link
               href="/auth?mode=login"
-              className="inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-teal-700 to-emerald-600 px-8 py-3 text-base font-bold text-white shadow-md shadow-teal-700/20 transition hover:-translate-y-0.5 hover:from-teal-600 hover:to-emerald-500 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 sm:w-auto"
+              className="cd-primary-button inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-xl px-8 py-3 text-base font-bold text-white transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#294D42] focus-visible:ring-offset-2 sm:w-auto"
             >
               Get Started <Arrow />
             </Link>

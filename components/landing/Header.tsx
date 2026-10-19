@@ -41,11 +41,7 @@ export default function Header() {
 
   return (
     <header
-      className={`sticky top-0 z-50 transition-all duration-200 ${
-        scrolled
-          ? "bg-white/90 supports-[backdrop-filter:blur(1px)]:bg-white/70 dark:bg-slate-900/90 dark:supports-[backdrop-filter:blur(1px)]:bg-slate-900/78 shadow-lg shadow-slate-900/[0.06] backdrop-blur-[24px] border-b border-white/80 dark:border-slate-700/70"
-          : "bg-white/90 supports-[backdrop-filter:blur(1px)]:bg-white/76 dark:bg-slate-900/90 dark:supports-[backdrop-filter:blur(1px)]:bg-slate-900/80 shadow-sm shadow-slate-900/[0.04] backdrop-blur-[24px] border-b border-white/85 dark:border-slate-800/60"
-      }`}
+      className={`landing-header-glass sticky top-0 z-50 border-b border-white/80 transition-all duration-200 ${scrolled ? "landing-header-scrolled" : ""}`}
     >
       <div className="mx-auto flex max-w-[1480px] items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
         {/* Brand Logo */}
@@ -91,7 +87,7 @@ export default function Header() {
         <div className="hidden sm:flex items-center gap-3">
           <Link
             href="/auth?mode=login"
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-teal-700 to-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-teal-700/20 hover:from-teal-600 hover:to-emerald-500 hover:shadow-md hover:shadow-teal-600/30 active:scale-[0.98] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+            className="cd-primary-button inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white active:scale-[0.98] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#294D42] focus-visible:ring-offset-2"
           >
             <span>Get Started</span>
             <svg
@@ -158,7 +154,7 @@ export default function Header() {
 
       {/* Mobile Menu Dropdown */}
       {mobileMenuOpen && (
-        <div ref={mobileMenuRef} id="landing-mobile-menu" className="md:hidden border-b border-white/80 bg-white/90 supports-[backdrop-filter:blur(1px)]:bg-white/70 px-4 pt-2 pb-5 shadow-lg shadow-slate-900/[0.08] backdrop-blur-[24px] dark:border-slate-700/80 dark:bg-slate-900/90 dark:supports-[backdrop-filter:blur(1px)]:bg-slate-900/78 animate-in slide-in-from-top-2 duration-200">
+        <div ref={mobileMenuRef} id="landing-mobile-menu" className="landing-glass md:hidden border-b border-white/80 px-4 pt-2 pb-5 animate-in slide-in-from-top-2 duration-200">
           <nav className="flex flex-col space-y-3 pt-2" aria-label="Mobile Navigation">
             <a
               href="#features"

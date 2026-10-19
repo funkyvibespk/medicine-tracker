@@ -39,7 +39,7 @@ export default function HowItWorks() {
   ];
 
   return (
-    <section id="how-it-works" className="flex min-h-[calc(100svh-4.5rem)] scroll-mt-20 flex-col justify-center py-16 sm:scroll-mt-24 sm:py-20 lg:py-24">
+    <section id="how-it-works" className="landing-section-wash flex min-h-[calc(100svh-4.5rem)] scroll-mt-20 flex-col justify-center py-16 sm:scroll-mt-24 sm:py-20 lg:py-24">
       <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-10 sm:mb-14">
           <h2 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl dark:text-white">
@@ -59,12 +59,12 @@ export default function HowItWorks() {
               )}
 
               {/* Step circle */}
-              <div className="relative z-10 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-600 to-emerald-600 text-white shadow-md shadow-teal-700/20">
+              <div className="relative z-10 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#294D42] to-[#4B7467] text-white shadow-lg shadow-[#294D42]/25">
                 {step.icon}
               </div>
 
               {/* Step number badge */}
-              <div className="absolute top-0 right-[calc(50%-2.5rem)] flex h-6 w-6 items-center justify-center rounded-full bg-white text-[11px] font-extrabold text-teal-700 ring-2 ring-teal-200 shadow-xs dark:bg-slate-800 dark:text-teal-300 dark:ring-teal-800">
+              <div className="absolute top-0 right-[calc(50%-2.5rem)] flex h-6 w-6 items-center justify-center rounded-full bg-white text-[11px] font-extrabold text-[#294D42] ring-2 ring-[#DCEAF0] shadow-xs">
                 {step.number}
               </div>
 

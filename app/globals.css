@@ -22,6 +22,155 @@ body {
   overflow-x: hidden;
 }
 
+/* Scoped ChillDose luxury-glass palette: these styles only apply to public and auth screens. */
+.landing-page,
+.auth-page {
+  --cd-pearl: #f7f6f1;
+  --cd-frosted: rgba(255, 255, 255, 0.68);
+  --cd-mist: #edf1f2;
+  --cd-icy: #dceaf0;
+  --cd-lavender: #e9e3f4;
+  --cd-charcoal: #202522;
+  --cd-muted: #69736f;
+  --cd-forest: #294d42;
+  --cd-glass-border: rgba(255, 255, 255, 0.82);
+  background-color: var(--cd-pearl);
+  color: var(--cd-charcoal);
+}
+
+.landing-page .landing-hero-wash {
+  background-color: var(--cd-pearl);
+  background-image:
+    radial-gradient(ellipse at 14% 38%, rgba(220, 234, 240, 0.94), transparent 42%),
+    radial-gradient(ellipse at 86% 46%, rgba(233, 227, 244, 0.82), transparent 44%),
+    radial-gradient(ellipse at 52% 5%, rgba(255, 255, 255, 0.98), transparent 56%);
+}
+
+.landing-page .landing-section-wash {
+  background-color: var(--cd-pearl);
+  background-image:
+    radial-gradient(ellipse at 10% 42%, rgba(220, 234, 240, 0.84), transparent 40%),
+    radial-gradient(ellipse at 90% 62%, rgba(233, 227, 244, 0.72), transparent 42%);
+}
+
+.landing-page .landing-header-glass,
+.landing-page .landing-glass,
+.landing-page .landing-glass-pill,
+.auth-page .auth-glass,
+.auth-page .auth-glass-dialog {
+  border: 1px solid var(--cd-glass-border);
+  background: var(--cd-frosted);
+  box-shadow:
+    0 24px 70px -38px rgba(32, 37, 34, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  -webkit-backdrop-filter: blur(26px);
+  backdrop-filter: blur(26px);
+}
+
+.landing-page .landing-header-glass {
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 12px 36px -28px rgba(32, 37, 34, 0.3);
+}
+
+.landing-page .landing-header-glass.landing-header-scrolled {
+  box-shadow: 0 16px 42px -30px rgba(32, 37, 34, 0.38);
+}
+
+.landing-page .landing-glass-pill {
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow:
+    0 12px 32px -22px rgba(32, 37, 34, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.98);
+}
+
+.auth-page {
+  min-height: 100vh;
+  background-image:
+    radial-gradient(ellipse at 12% 14%, rgba(220, 234, 240, 0.9), transparent 42%),
+    radial-gradient(ellipse at 88% 84%, rgba(233, 227, 244, 0.8), transparent 44%),
+    linear-gradient(135deg, #f7f6f1, #f4f5f3);
+}
+
+.auth-page .auth-aside-wash {
+  background-image:
+    radial-gradient(ellipse at 5% 12%, rgba(220, 234, 240, 0.94), transparent 45%),
+    radial-gradient(ellipse at 96% 90%, rgba(233, 227, 244, 0.78), transparent 48%),
+    linear-gradient(145deg, rgba(247, 246, 241, 0.72), rgba(237, 241, 242, 0.76));
+}
+
+.auth-page .auth-main-wash {
+  background-image:
+    radial-gradient(ellipse at 15% 20%, rgba(220, 234, 240, 0.74), transparent 46%),
+    radial-gradient(ellipse at 88% 78%, rgba(233, 227, 244, 0.64), transparent 48%);
+}
+
+.auth-page .auth-glass {
+  background: rgba(255, 255, 255, 0.68);
+  border-color: rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 34px 90px -48px rgba(32, 37, 34, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.98),
+    0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+.auth-page .auth-glass-dialog {
+  background: rgba(255, 255, 255, 0.82);
+  border-color: rgba(255, 255, 255, 0.9);
+}
+
+.landing-page .landing-cta-stage {
+  background-color: var(--cd-pearl);
+  background-image:
+    radial-gradient(ellipse at 14% 40%, rgba(220, 234, 240, 0.84), transparent 42%),
+    radial-gradient(ellipse at 88% 60%, rgba(233, 227, 244, 0.74), transparent 46%);
+}
+
+.landing-page .landing-cta-card {
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow:
+    0 34px 80px -42px rgba(32, 37, 34, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.96);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+}
+
+.landing-page .landing-footer {
+  border-color: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.48);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+}
+
+.landing-page .cd-primary-button {
+  background: linear-gradient(135deg, #294d42, #3a6658);
+  box-shadow: 0 14px 30px -18px rgba(41, 77, 66, 0.7);
+}
+
+.landing-page .cd-primary-button:hover,
+.auth-page .cd-primary-button:hover {
+  background: linear-gradient(135deg, #203e35, #31584b);
+}
+
+.auth-page .cd-primary-button {
+  background: linear-gradient(135deg, #294d42, #3a6658);
+  box-shadow: 0 14px 30px -18px rgba(41, 77, 66, 0.7);
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .landing-page .landing-header-glass,
+  .landing-page .landing-glass,
+  .landing-page .landing-glass-pill,
+  .auth-page .auth-glass,
+  .auth-page .auth-glass-dialog {
+    background: rgba(255, 255, 255, 0.96);
+  }
+
+  .landing-page .landing-cta-card {
+    background: #ffffff;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -12,7 +12,7 @@ import Footer from "@/components/landing/Footer";
 
 export default function WelcomePage() {
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="landing-page flex min-h-full flex-col">
       <Header />
 
       <main className="flex-1">
@@ -20,7 +20,7 @@ export default function WelcomePage() {
         <DashboardPreview />
 
         {/* Mobile Product Preview Section */}
-        <section className="py-16 sm:py-20 lg:py-24">
+        <section className="landing-section-wash py-16 sm:py-20 lg:py-24">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-16">
               {/* Text Column */}
