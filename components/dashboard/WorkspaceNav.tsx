@@ -27,7 +27,7 @@ export default function WorkspaceNav() {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden w-60 shrink-0 border-r border-slate-200 bg-white px-4 py-6 lg:block lg:min-h-[calc(100dvh-4.125rem)] dark:border-slate-800 dark:bg-slate-900/40">
+    <aside className="hidden w-60 shrink-0 border-r border-slate-200 bg-white px-4 py-6 lg:sticky lg:top-[4.125rem] lg:block lg:max-h-[calc(100dvh-4.125rem)] lg:min-h-[calc(100dvh-4.125rem)] lg:self-start lg:overflow-y-auto dark:border-slate-800 dark:bg-slate-900/40">
       <p className="px-3 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Workspace</p>
       <nav className="mt-3 space-y-1" aria-label="Dashboard navigation">
         {destinations.map(([href, label]) => {
