@@ -136,6 +136,10 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
     endDate: initialData?.endDate ?? "",
     instructions: initialData?.instructions ?? "",
     notes: initialData?.notes ?? "",
+    prescribingDoctor: initialData?.prescribingDoctor ?? "",
+    prescribingClinic: initialData?.prescribingClinic ?? "",
+    prescriptionDate: initialData?.prescriptionDate ?? "",
+    prescriptionNotes: initialData?.prescriptionNotes ?? "",
     inventoryAmount: initialData?.inventoryAmount ?? 0,
     inventoryCapacity: initialData?.inventoryCapacity ?? 0,
     inventoryContainerCapacity: initialData?.inventoryContainerCapacity ?? 0,
@@ -311,6 +315,10 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
       endDate: formData.endDate || undefined,
       instructions: formData.instructions?.trim() || "",
       notes: formData.notes?.trim() || "",
+      prescribingDoctor: formData.prescribingDoctor?.trim() || undefined,
+      prescribingClinic: formData.prescribingClinic?.trim() || undefined,
+      prescriptionDate: formData.prescriptionDate || undefined,
+      prescriptionNotes: formData.prescriptionNotes?.trim() || undefined,
       inventoryAmount,
       inventoryCapacity,
       inventoryContainerCapacity: currentType === "Syrup" ? Number(formData.inventoryContainerCapacity) || 0 : undefined,
@@ -632,10 +640,39 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
 
       <div className="border-t border-slate-100 dark:border-slate-800" />
 
+      {/* ── 3. Optional Prescription Details ───────────────────────────────── */}
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-teal-700 dark:text-teal-400">3. Prescription Details (Optional)</h3>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">These details are optional and saved as prescription history when they change.</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="prescribingDoctor" className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Prescribing Doctor (optional)</label>
+            <input id="prescribingDoctor" name="prescribingDoctor" type="text" value={formData.prescribingDoctor || ""} onChange={handleChange} className={inputCls} autoComplete="name" />
+          </div>
+          <div>
+            <label htmlFor="prescribingClinic" className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Clinic/Hospital (optional)</label>
+            <input id="prescribingClinic" name="prescribingClinic" type="text" value={formData.prescribingClinic || ""} onChange={handleChange} className={inputCls} />
+          </div>
+          <div>
+            <label htmlFor="prescriptionDate" className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Prescription Date (optional)</label>
+            <input id="prescriptionDate" name="prescriptionDate" type="date" value={formData.prescriptionDate || ""} onChange={handleChange} className={inputCls} />
+            <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Date written on or issued for the prescription, not the date entered here.</p>
+          </div>
+          <div>
+            <label htmlFor="prescriptionNotes" className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Prescription Notes (optional)</label>
+            <textarea id="prescriptionNotes" name="prescriptionNotes" rows={2} value={formData.prescriptionNotes || ""} onChange={handleChange} className={inputCls} />
+          </div>
+        </div>
+      </div>
+
+      <div className="border-t border-slate-100 dark:border-slate-800" />
+
       {/* ── 3. Inventory ────────────────────────────────────────────────────── */}
       <div className="space-y-4">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-teal-700 dark:text-teal-400">
-          3. Inventory
+          4. Inventory
         </h3>
 
         <div className="grid grid-cols-2 gap-4">
@@ -710,10 +747,10 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
 
       <div className="border-t border-slate-100 dark:border-slate-800" />
 
-      {/* ── 4. Notes ────────────────────────────────────────────────────────── */}
+      {/* ── 5. Notes ────────────────────────────────────────────────────────── */}
       <div className="space-y-4">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-teal-700 dark:text-teal-400">
-          4. Additional Notes
+          5. Additional Notes
         </h3>
         <div>
           <label htmlFor="instructions" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">

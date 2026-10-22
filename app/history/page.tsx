@@ -9,6 +9,7 @@ import WorkspacePageHeading from "@/components/dashboard/WorkspacePageHeading";
 import { getMedicineOccurrencesForDate, localDateString } from "@/lib/schedule";
 import { canonicalizeOccurrenceRecords, inventoryUnitsCompatible, scheduledOccurrenceKey } from "@/lib/medicineLogic";
 import BrandedLoadingScreen from "@/components/BrandedLoadingScreen";
+import { sortDoseHistoryRecords } from "@/lib/doseHistory";
 
 const pad = (n: number) => n.toString().padStart(2, "0");
 type ScheduledRecordLabel = { medicineId: string; scheduledDate: string; scheduledTime: string; scheduledInstant?: string };
@@ -60,15 +61,16 @@ export default function HistoryPage() {
   // Include unresolved overdue occurrences so they remain actionable until the next scheduled dose is due.
   const grouped = useMemo(() => {
     const historyRecords = canonicalDoseRecords.filter((record) => Boolean(record.actualTakenTime) || record.status === "missed" || record.status === "overdue" || record.status === "skipped");
-    const byDate: Record<string, typeof historyRecords> = {};
+    const byDate = new Map<string, typeof historyRecords>();
 
-    for (const record of historyRecords) {
-      if (!byDate[record.scheduledDate]) byDate[record.scheduledDate] = [];
-      byDate[record.scheduledDate].push(record);
+    for (const record of sortDoseHistoryRecords(historyRecords)) {
+      const dateRecords = byDate.get(record.scheduledDate) ?? [];
+      dateRecords.push(record);
+      byDate.set(record.scheduledDate, dateRecords);
     }
 
-    // Sort dates descending
-    return Object.entries(byDate).sort(([a], [b]) => b.localeCompare(a));
+    // Group by original scheduled date, ordered by each group's newest relevant event.
+    return Array.from(byDate.entries());
   }, [canonicalDoseRecords]);
 
   // Overall adherence stats (last 7 days)
@@ -209,8 +211,6 @@ export default function HistoryPage() {
 
                 <div className="space-y-2">
                   {records
-                    .slice()
-                    .sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime))
                     .map((record) => {
                       const med = getMed(record.medicineId);
                       const medicineName = record.medicineName ?? med?.name ?? "Deleted medicine";

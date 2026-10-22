@@ -11,6 +11,7 @@ import WorkspacePageHeading from "@/components/dashboard/WorkspacePageHeading";
 import { formatDuration, getMedicineOccurrencesForDate, isPrnMedicine, localDateString } from "@/lib/schedule";
 import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
 import BrandedLoadingScreen from "@/components/BrandedLoadingScreen";
+import { sortDoseHistoryRecords } from "@/lib/doseHistory";
 import { canonicalizeOccurrenceRecords, comparePhysicalStock, doseUnitFor, filterDoseRecords, findCloseDoseConflict, getOccurrenceTimeStatus, getOutstandingMissedOccurrences, getStockStatus, getUnscheduledSameDayMissedOccurrences, inventoryUnitFor, inventoryUnitsCompatible, minutesFromScheduledOccurrence, parseNonNegativeQuantity, PhysicalStockComparison, scheduledOccurrenceId, scheduledOccurrenceKey } from "@/lib/medicineLogic";
 
 // Helper to pad numbers
@@ -305,11 +306,9 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
     });
   }, [medicines, canonicalDoseRecords, now, todayStr]);
 
-  const recentActivity = useMemo(() => canonicalDoseRecords
-    .filter((record) => Boolean(record.actualTakenTime))
-    .slice()
-    .sort((a, b) => new Date(b.actualTakenTime!).getTime() - new Date(a.actualTakenTime!).getTime())
-    .slice(0, 5), [canonicalDoseRecords]);
+  const recentActivity = useMemo(() => sortDoseHistoryRecords(
+    canonicalDoseRecords.filter((record) => Boolean(record.actualTakenTime)),
+  ).slice(0, 5), [canonicalDoseRecords]);
 
   const weeklyExpected = weeklyAdherence.reduce((total, day) => total + day.expected, 0);
   const weeklyTaken = weeklyAdherence.reduce((total, day) => total + day.taken, 0);

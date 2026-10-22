@@ -13,6 +13,11 @@ import { applySkippedDose, applyTakenDose, validateInventoryThreshold } from "@/
 import { findBlockingMedicineIdentityMatch } from "@/lib/medicineIdentity";
 import { reconcileHistoricalMissedOccurrences } from "@/lib/missedDoses";
 import { addScheduleBaseline, localDateString } from "@/lib/schedule";
+import {
+  appendPrescriptionChange,
+  createPrescriptionHistoryEntry,
+  type PrescriptionHistoryEntry,
+} from "@/lib/prescriptionHistory";
 
 export type MedicineType = "Tablet" | "Capsule" | "Syrup" | "Sachet" | "Injection";
 
@@ -41,6 +46,10 @@ export interface Medicine {
   endDate?: string;
   /** Optional additive history. Missing history means the earlier schedule is unknown. */
   scheduleRevisions?: MedicineScheduleRevision[];
+  prescribingDoctor?: string;
+  prescribingClinic?: string;
+  prescriptionDate?: string;
+  prescriptionNotes?: string;
   instructions?: string;
   notes?: string;
   doseUnit?: string;
@@ -74,6 +83,7 @@ export interface DoseRecord {
 interface MedicineContextType {
   medicines: Medicine[];
   doseRecords: DoseRecord[];
+  prescriptionHistory: PrescriptionHistoryEntry[];
   addMedicine: (med: Medicine, options?: { allowLikelyDuplicate?: boolean }) => AddMedicineResult;
   updateMedicine: (id: string, med: Partial<Medicine>) => MedicineUpdateResult;
   deleteMedicine: (id: string) => void;
@@ -108,8 +118,10 @@ const MedicineContext = createContext<MedicineContextType | undefined>(undefined
 export function MedicineProvider({ children }: { children: ReactNode }) {
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [doseRecords, setDoseRecords] = useState<DoseRecord[]>([]);
+  const [prescriptionHistory, setPrescriptionHistory] = useState<PrescriptionHistoryEntry[]>([]);
   const medicinesRef = useRef<Medicine[]>([]);
   const doseRecordsRef = useRef<DoseRecord[]>([]);
+  const prescriptionHistoryRef = useRef<PrescriptionHistoryEntry[]>([]);
   const [profileStatus, setProfileStatus] = useState<"loading" | "ready" | "error">("loading");
   const [profileError, setProfileError] = useState<string | null>(null);
   const [activeProfileEmail, setActiveProfileEmail] = useState<string | null>(null);
@@ -126,9 +138,11 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
   const clearProfileState = useCallback((status: "loading" | "ready" | "error") => {
     medicinesRef.current = [];
     doseRecordsRef.current = [];
+    prescriptionHistoryRef.current = [];
     activeProfileEmailRef.current = null;
     setMedicines([]);
     setDoseRecords([]);
+    setPrescriptionHistory([]);
     setActiveProfileEmail(null);
     setProfileState(status);
   }, [setProfileState]);
@@ -148,9 +162,11 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
       if (generation !== loadGenerationRef.current || readDemoSession()?.email !== session.email) return;
       medicinesRef.current = addScheduleBaseline(profile.medicines as Medicine[]);
       doseRecordsRef.current = profile.doseRecords as DoseRecord[];
+      prescriptionHistoryRef.current = profile.prescriptionHistory ?? [];
       activeProfileEmailRef.current = session.email;
       setMedicines(medicinesRef.current);
       setDoseRecords(doseRecordsRef.current);
+      setPrescriptionHistory(prescriptionHistoryRef.current);
       setActiveProfileEmail(session.email);
       setProfileState("ready");
     } catch (error) {
@@ -176,9 +192,11 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
       if (generation !== loadGenerationRef.current) return;
       medicinesRef.current = addScheduleBaseline(profile.medicines as Medicine[]);
       doseRecordsRef.current = profile.doseRecords as DoseRecord[];
+      prescriptionHistoryRef.current = profile.prescriptionHistory ?? [];
       activeProfileEmailRef.current = email;
       setMedicines(medicinesRef.current);
       setDoseRecords(doseRecordsRef.current);
+      setPrescriptionHistory(prescriptionHistoryRef.current);
       setActiveProfileEmail(email);
       setProfileState("ready");
     } catch (error) {
@@ -215,13 +233,13 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (profileStatus !== "ready" || !activeProfileEmail) return;
     try {
-      saveDemoProfileForActiveSession(localStorage, { email: activeProfileEmail, medicines, doseRecords });
+      saveDemoProfileForActiveSession(localStorage, { email: activeProfileEmail, medicines, doseRecords, prescriptionHistory });
     } catch (error) {
       // This state update reports a failed write to the external storage system.
       const message = error instanceof Error ? error.message : "Changes could not be saved to this local profile.";
       queueMicrotask(() => setProfileState("error", message));
     }
-  }, [medicines, doseRecords, profileStatus, activeProfileEmail, setProfileState]);
+  }, [medicines, doseRecords, prescriptionHistory, profileStatus, activeProfileEmail, setProfileState]);
 
   useEffect(() => {
     if (profileStatus !== "ready" || !activeProfileEmail) return;
@@ -275,6 +293,9 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
         endDate: med.endDate,
       }],
     };
+    const prescriptionEntry = createPrescriptionHistoryEntry(medicine, createdAt, createPrescriptionHistoryId());
+    prescriptionHistoryRef.current = [...prescriptionHistoryRef.current, prescriptionEntry];
+    setPrescriptionHistory(prescriptionHistoryRef.current);
     medicinesRef.current = [...medicinesRef.current, medicine];
     setMedicines(medicinesRef.current);
     return { added: true };
@@ -290,6 +311,18 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
     );
     if (!quantityValidation.valid) {
       return { saved: false, validationError: quantityValidation.inventoryAmountError ?? quantityValidation.lowStockThresholdError };
+    }
+    const updatedPrescription = { ...existing, ...updates };
+    const updatedPrescriptionHistory = appendPrescriptionChange(
+      prescriptionHistoryRef.current,
+      existing,
+      updatedPrescription,
+      new Date().toISOString(),
+      createPrescriptionHistoryId,
+    );
+    if (updatedPrescriptionHistory.length !== prescriptionHistoryRef.current.length) {
+      prescriptionHistoryRef.current = updatedPrescriptionHistory;
+      setPrescriptionHistory(updatedPrescriptionHistory);
     }
     const now = new Date();
     if (existing && scheduleChanged(existing, updates)) {
@@ -402,8 +435,10 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
     if (!canMutateActiveProfile()) return;
     medicinesRef.current = [];
     doseRecordsRef.current = [];
+    prescriptionHistoryRef.current = [];
     setMedicines([]);
     setDoseRecords([]);
+    setPrescriptionHistory([]);
   };
 
   return (
@@ -411,6 +446,7 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
       value={{
         medicines,
         doseRecords,
+        prescriptionHistory,
         addMedicine,
         updateMedicine,
         deleteMedicine,
@@ -433,6 +469,14 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
     </MedicineContext.Provider>
   );
 }
+
+function createPrescriptionHistoryId() {
+  const uuid = typeof globalThis.crypto?.randomUUID === "function" ? globalThis.crypto.randomUUID() : null;
+  if (uuid) return `prescription-${uuid}`;
+  return `prescription-${Date.now()}-${++prescriptionIdFallbackCounter}`;
+}
+
+let prescriptionIdFallbackCounter = 0;
 
 function scheduleChanged(medicine: Medicine, updates: Partial<Medicine>) {
   return (updates.frequency !== undefined && updates.frequency !== medicine.frequency) ||

@@ -12,9 +12,10 @@ import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibilit
 import { doseUnitFor, getStockStatus, inventoryUnitFor, inventoryUnitsCompatible } from "@/lib/medicineLogic";
 import { findPotentialMedicineIdentityPairs } from "@/lib/medicineIdentity";
 import BrandedLoadingScreen from "@/components/BrandedLoadingScreen";
+import { sortPrescriptionHistory } from "@/lib/prescriptionHistory";
 
 export default function MedicinesPage() {
-  const { medicines, doseRecords, addMedicine, updateMedicine, deleteMedicine, addStock, isHydrated } = useMedicine();
+  const { medicines, doseRecords, prescriptionHistory, addMedicine, updateMedicine, deleteMedicine, addStock, isHydrated } = useMedicine();
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingMedicine, setEditingMedicine] = useState<Medicine | null>(null);
@@ -31,6 +32,11 @@ export default function MedicinesPage() {
     m.type.toLowerCase().includes(searchQuery.toLowerCase())
   );
   const possibleDuplicatePairs = findPotentialMedicineIdentityPairs(medicines);
+  const orderedPrescriptionHistory = sortPrescriptionHistory(prescriptionHistory);
+  const latestPrescriptionByMedicine = new Map<string, string>();
+  for (const entry of orderedPrescriptionHistory) {
+    if (!latestPrescriptionByMedicine.has(entry.medicineId)) latestPrescriptionByMedicine.set(entry.medicineId, entry.id);
+  }
 
   const typeColor = (type: string) => {
     switch (type) {
@@ -203,6 +209,14 @@ export default function MedicinesPage() {
                       {isUnknown && <span className="text-amber-700 dark:text-amber-300">Dose and inventory units are incompatible; stock was preserved.</span>}
                       {med.instructions && <span>· {med.instructions}</span>}
                     </div>
+                    {(med.prescribingDoctor || med.prescribingClinic || med.prescriptionDate) && (
+                      <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">
+                        {med.prescribingDoctor && <span>Prescribed by {med.prescribingDoctor}</span>}
+                        {med.prescribingDoctor && med.prescribingClinic && <span> · </span>}
+                        {med.prescribingClinic && <span>{med.prescribingClinic}</span>}
+                        {med.prescriptionDate && <span>{med.prescribingDoctor || med.prescribingClinic ? " · " : ""}Prescription date: {med.prescriptionDate}</span>}
+                      </p>
+                    )}
                   </div>
 
                   {/* Actions */}
@@ -233,6 +247,49 @@ export default function MedicinesPage() {
             })}
           </div>
         )}
+
+        <details className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
+          <summary className="flex cursor-pointer list-none flex-wrap items-baseline justify-between gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">Prescription History</h2>
+            <span className="text-xs text-slate-500 dark:text-slate-400">{orderedPrescriptionHistory.length} entr{orderedPrescriptionHistory.length === 1 ? "y" : "ies"}</span>
+          </summary>
+          {orderedPrescriptionHistory.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">New prescription details will appear here when a medicine is added or its prescribed details change. Existing medicines without history remain unchanged.</p>
+          ) : (
+            <ol className="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
+              {orderedPrescriptionHistory.map((entry) => {
+                const isCurrent = latestPrescriptionByMedicine.get(entry.medicineId) === entry.id;
+                const isTracked = medicines.some((medicine) => medicine.id === entry.medicineId);
+                const recordedAt = new Date(entry.recordedAt);
+                const recordedLabel = Number.isNaN(recordedAt.getTime()) ? "Date unavailable" : recordedAt.toLocaleString();
+                const schedule = entry.frequency === "As needed (PRN)"
+                  ? "As needed (PRN)"
+                  : entry.frequency === "Every X hours"
+                    ? `Every ${entry.intervalHours ?? 8} hours${entry.scheduleTimes.length ? `, from ${entry.scheduleTimes.join(", ")}` : ""}`
+                    : `${entry.frequency}${entry.scheduleTimes.length ? ` · ${entry.scheduleTimes.join(", ")}` : ""}`;
+                return (
+                  <li key={entry.id} className="py-4 first:pt-0 last:pb-0">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-900 dark:text-white">{entry.medicineName} <span className="font-normal text-slate-500 dark:text-slate-400">· {entry.medicineType}{entry.strength ? ` · ${entry.strength}` : ""}</span></p>
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{isTracked ? (isCurrent ? "Current prescription" : "Previous prescription") : "Medicine no longer tracked"}</p>
+                      </div>
+                      <span className="text-xs text-slate-500 dark:text-slate-400">Recorded in ChillDose: {recordedLabel}</span>
+                    </div>
+                    <div className="mt-2 grid gap-x-6 gap-y-1 text-sm text-slate-700 dark:text-slate-300 sm:grid-cols-2">
+                      <p>Doctor: {entry.prescribingDoctor || "Not recorded"}</p>
+                      {entry.prescribingClinic && <p>Clinic/Hospital: {entry.prescribingClinic}</p>}
+                      {entry.prescriptionDate && <p>Prescription issued: {entry.prescriptionDate}</p>}
+                      <p>Dose: {entry.doseAmount} {entry.doseUnit || "units"} · {schedule}</p>
+                      {entry.instructions && <p>Instructions: {entry.instructions}</p>}
+                      {entry.prescriptionNotes && <p>Prescription notes: {entry.prescriptionNotes}</p>}
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </details>
       </main>
       </div>
 

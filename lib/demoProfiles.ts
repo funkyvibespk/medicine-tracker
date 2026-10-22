@@ -7,10 +7,13 @@ export const GOOGLE_DEMO_EMAIL = "google-demo@chilldose.invalid";
 
 type StorageLike = Pick<Storage, "getItem" | "setItem">;
 
+import type { PrescriptionHistoryEntry } from "./prescriptionHistory";
+
 export interface DemoProfileData {
   email: string;
   medicines: unknown[];
   doseRecords: unknown[];
+  prescriptionHistory?: PrescriptionHistoryEntry[];
 }
 
 interface StoredProfile extends DemoProfileData {
@@ -46,13 +49,28 @@ function parseProfile(raw: string, email: string): DemoProfileData {
     (parsed as Partial<StoredProfile>).version !== 1 ||
     normalizeDemoEmail(String((parsed as Partial<StoredProfile>).email ?? "")) !== email ||
     !Array.isArray((parsed as Partial<StoredProfile>).medicines) ||
-    !Array.isArray((parsed as Partial<StoredProfile>).doseRecords)
+    !Array.isArray((parsed as Partial<StoredProfile>).doseRecords) ||
+    ((parsed as Partial<StoredProfile>).prescriptionHistory !== undefined &&
+      (!Array.isArray((parsed as Partial<StoredProfile>).prescriptionHistory) ||
+        !(parsed as Partial<StoredProfile>).prescriptionHistory!.every(isProfilePrescriptionEntry)))
   ) {
     throw new Error("This local demo profile could not be read safely. Its saved data was left unchanged.");
   }
 
   const profile = parsed as StoredProfile;
-  return { email, medicines: profile.medicines, doseRecords: profile.doseRecords };
+  return { email, medicines: profile.medicines, doseRecords: profile.doseRecords, prescriptionHistory: profile.prescriptionHistory ?? [] };
+}
+
+function isProfilePrescriptionEntry(value: unknown): value is PrescriptionHistoryEntry {
+  if (typeof value !== "object" || value === null) return false;
+  const entry = value as Partial<PrescriptionHistoryEntry>;
+  const requiredStrings = [entry.id, entry.medicineId, entry.recordedAt, entry.medicineName, entry.medicineType, entry.strength, entry.frequency, entry.startDate];
+  const optionalStrings = [entry.prescriptionDate, entry.prescribingDoctor, entry.prescribingClinic, entry.prescriptionNotes, entry.doseUnit, entry.endDate, entry.instructions];
+  return requiredStrings.every((field) => typeof field === "string") &&
+    optionalStrings.every((field) => field === undefined || typeof field === "string") &&
+    typeof entry.doseAmount === "number" && Number.isFinite(entry.doseAmount) &&
+    (entry.intervalHours === undefined || (typeof entry.intervalHours === "number" && Number.isFinite(entry.intervalHours))) &&
+    Array.isArray(entry.scheduleTimes) && entry.scheduleTimes.every((time) => typeof time === "string");
 }
 
 function parseAssignment(raw: string): MigrationAssignment {
@@ -86,7 +104,7 @@ export function loadDemoProfile(
   const mayImportLegacy = assignment?.ownerEmail === email || (assignment === null && options.migrateLegacy === true);
 
   if (!mayImportLegacy) {
-    return { email, medicines: [], doseRecords: [] };
+    return { email, medicines: [], doseRecords: [], prescriptionHistory: [] };
   }
 
   // Validate both legacy values before making any storage changes.
@@ -98,9 +116,9 @@ export function loadDemoProfile(
     storage.setItem(PROFILE_MIGRATION_STORAGE_KEY, JSON.stringify({ version: 1, ownerEmail: email }));
   }
 
-  const profile: StoredProfile = { version: 1, email, medicines, doseRecords };
+  const profile: StoredProfile = { version: 1, email, medicines, doseRecords, prescriptionHistory: [] };
   storage.setItem(profileKey, JSON.stringify(profile));
-  return { email, medicines, doseRecords };
+  return { email, medicines, doseRecords, prescriptionHistory: [] };
 }
 
 export function serializeDemoProfile(profile: DemoProfileData): string {
@@ -109,6 +127,7 @@ export function serializeDemoProfile(profile: DemoProfileData): string {
     email: normalizeDemoEmail(profile.email),
     medicines: profile.medicines,
     doseRecords: profile.doseRecords,
+    prescriptionHistory: profile.prescriptionHistory ?? [],
   } satisfies StoredProfile);
 }
 
