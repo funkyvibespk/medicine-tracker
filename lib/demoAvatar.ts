@@ -21,10 +21,12 @@ export function getDemoAvatarInitials(email: string | null | undefined): string 
 
   const localPart = normalized.slice(0, normalized.indexOf("@"));
   const firstCharacter = localPart.match(/[a-z0-9]/)?.[0];
+  if (!firstCharacter) return "?";
+  if (!localPart.includes(".")) return firstCharacter.toUpperCase();
+
   // Include a character from the account-specific portion of longer usernames,
   // so similar names such as kamran and kamrankhan don't both render as KD.
   const distinguishingCharacter = localPart.slice(6).match(/[a-z0-9]/)?.[0];
-  if (!firstCharacter) return "?";
   return `${firstCharacter}${distinguishingCharacter ?? localPart.slice(1).match(/[a-z0-9]/)?.[0] ?? firstCharacter}`.toUpperCase();
 }
 
