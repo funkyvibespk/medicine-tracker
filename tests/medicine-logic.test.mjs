@@ -13,6 +13,7 @@ import {
   applyTakenDose,
   doseUnitFor,
   canonicalizeOccurrenceRecords,
+  comparePhysicalStock,
   findCloseDoseConflict,
   filterDoseRecords,
   getOccurrenceTimeStatus,
@@ -203,6 +204,29 @@ test("stock units, capacity, and decimal liquid deduction remain separate", () =
   const result = applyTakenDose([syrup({ inventoryAmount: startingVolume })], [], takenRecord("2026-10-16", "10:00", new Date(2026, 9, 16, 10, 1).toISOString()), 0.5);
   assert.equal(result.medicines[0].inventoryAmount, 59.5);
   assert.equal(result.medicines[0].inventoryContainerCapacity, 60);
+});
+
+test("physical stock comparison reports lower, matching, and higher quantities without mutating tracker data", () => {
+  const medicine = syrup({ inventoryAmount: 8 });
+  const doseRecords = [takenRecord("2026-10-16", "08:00", "2026-10-16T08:02:00.000Z")];
+  const medicineBefore = structuredClone(medicine);
+  const recordsBefore = structuredClone(doseRecords);
+
+  assert.deepEqual(comparePhysicalStock(8, 7, "tablets", "tablets"), { available: true, difference: 1, result: "lower" });
+  assert.deepEqual(comparePhysicalStock(8, 8, "tablets", "tablets"), { available: true, difference: 0, result: "match" });
+  assert.deepEqual(comparePhysicalStock(8, 9, "tablets", "tablets"), { available: true, difference: -1, result: "higher" });
+  assert.deepEqual(medicine, medicineBefore);
+  assert.deepEqual(doseRecords, recordsBefore);
+});
+
+test("physical stock comparison allows zero and liquid decimals, and rejects invalid or unavailable values and incompatible units", () => {
+  assert.deepEqual(comparePhysicalStock(0, "0", "mL", "ml"), { available: true, difference: 0, result: "match" });
+  assert.deepEqual(comparePhysicalStock(8.5, "8.25", "ml", "ml"), { available: true, difference: 0.25, result: "lower" });
+  assert.deepEqual(comparePhysicalStock(8, "", "tablets", "tablets"), { available: false, reason: "invalid-physical-quantity" });
+  assert.deepEqual(comparePhysicalStock(8, -1, "tablets", "tablets"), { available: false, reason: "invalid-physical-quantity" });
+  assert.deepEqual(comparePhysicalStock(Number.NaN, 2, "tablets", "tablets"), { available: false, reason: "expected-unavailable" });
+  assert.deepEqual(comparePhysicalStock(8, 2, "tablets", "capsules"), { available: false, reason: "incompatible-units" });
+  assert.deepEqual(comparePhysicalStock(8, 2, "", ""), { available: false, reason: "expected-unavailable" });
 });
 
 test("incompatible legacy stock units are preserved and cannot be dose-deducted", () => {

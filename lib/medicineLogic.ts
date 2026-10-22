@@ -43,6 +43,35 @@ export function parseNonNegativeQuantity(value: unknown): number | null {
   return Number.isFinite(quantity) && quantity >= 0 ? quantity : null;
 }
 
+export type PhysicalStockComparison =
+  | { available: false; reason: "expected-unavailable" | "invalid-physical-quantity" | "incompatible-units" }
+  | { available: true; difference: number; result: "lower" | "match" | "higher" };
+
+/** Compare two quantities in the same unit without changing medicine or dose data. */
+export function comparePhysicalStock(
+  expectedStock: unknown,
+  physicalStock: unknown,
+  expectedUnit: string | null | undefined,
+  physicalUnit: string | null | undefined,
+): PhysicalStockComparison {
+  const expected = parseNonNegativeQuantity(expectedStock);
+  if (expected === null || !expectedUnit?.trim()) return { available: false, reason: "expected-unavailable" };
+
+  if (!physicalUnit?.trim() || expectedUnit.trim().toLowerCase() !== physicalUnit.trim().toLowerCase()) {
+    return { available: false, reason: "incompatible-units" };
+  }
+
+  const physical = parseNonNegativeQuantity(physicalStock);
+  if (physical === null) return { available: false, reason: "invalid-physical-quantity" };
+
+  const difference = Math.round((expected - physical + Number.EPSILON) * 1_000_000) / 1_000_000;
+  return {
+    available: true,
+    difference,
+    result: difference > 0 ? "lower" : difference < 0 ? "higher" : "match",
+  };
+}
+
 /** Validate saved inventory and its low-stock threshold in the same unit. */
 export function validateInventoryThreshold(inventoryAmount: unknown, lowStockThreshold: unknown): InventoryThresholdValidation {
   const stock = parseNonNegativeQuantity(inventoryAmount);

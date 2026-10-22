@@ -10,7 +10,7 @@ import WorkspaceHeader from "@/components/dashboard/WorkspaceHeader";
 import WorkspacePageHeading from "@/components/dashboard/WorkspacePageHeading";
 import { formatDuration, getMedicineOccurrencesForDate, isPrnMedicine, localDateString } from "@/lib/schedule";
 import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
-import { canonicalizeOccurrenceRecords, doseUnitFor, filterDoseRecords, findCloseDoseConflict, getOccurrenceTimeStatus, getOutstandingMissedOccurrences, getStockStatus, getUnscheduledSameDayMissedOccurrences, inventoryUnitFor, inventoryUnitsCompatible, minutesFromScheduledOccurrence, scheduledOccurrenceId, scheduledOccurrenceKey } from "@/lib/medicineLogic";
+import { canonicalizeOccurrenceRecords, comparePhysicalStock, doseUnitFor, filterDoseRecords, findCloseDoseConflict, getOccurrenceTimeStatus, getOutstandingMissedOccurrences, getStockStatus, getUnscheduledSameDayMissedOccurrences, inventoryUnitFor, inventoryUnitsCompatible, minutesFromScheduledOccurrence, parseNonNegativeQuantity, PhysicalStockComparison, scheduledOccurrenceId, scheduledOccurrenceKey } from "@/lib/medicineLogic";
 
 // Helper to pad numbers
 const pad = (n: number) => n.toString().padStart(2, "0");
@@ -55,9 +55,12 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
   const [changingDose, setChangingDose] = useState<ScheduledDose | null>(null);
   const [takingEarly, setTakingEarly] = useState<(ScheduledDose & { earlyBy: number }) | null>(null);
   const [addingStockMed, setAddingStockMed] = useState<Medicine | null>(null);
+  const [stockCheckDose, setStockCheckDose] = useState<ScheduledDose | null>(null);
+  const [physicalStockQuantity, setPhysicalStockQuantity] = useState("");
+  const [physicalStockResult, setPhysicalStockResult] = useState<PhysicalStockComparison | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [doseFilter, setDoseFilter] = useState<DoseFilter>("all");
-  useDialogFocusRestore(Boolean(isAddModalOpen || editingMedicine || deletingMedicine || changingDose || takingEarly || addingStockMed));
+  useDialogFocusRestore(Boolean(isAddModalOpen || editingMedicine || deletingMedicine || changingDose || takingEarly || addingStockMed || stockCheckDose));
   
   // Form states for dialogs
   const [newTime, setNewTime] = useState("");
@@ -84,6 +87,9 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
         setChangingDose(null);
         setTakingEarly(null);
         setAddingStockMed(null);
+        setStockCheckDose(null);
+        setPhysicalStockQuantity("");
+        setPhysicalStockResult(null);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -451,6 +457,55 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
     return format12Hour(`${pad(d.getHours())}:${pad(d.getMinutes())}`);
   };
 
+  const closeStockCheck = () => {
+    setStockCheckDose(null);
+    setPhysicalStockQuantity("");
+    setPhysicalStockResult(null);
+  };
+
+  const stockCheckUnit = stockCheckDose ? inventoryUnitFor(stockCheckDose.med) : "";
+  const expectedStock = stockCheckDose ? parseNonNegativeQuantity(stockCheckDose.med.inventoryAmount) : null;
+  const expectedStockAvailable = expectedStock !== null && Boolean(stockCheckUnit.trim());
+  const recentStockCheckHistory = stockCheckDose
+    ? canonicalDoseRecords
+        .filter((record) => !record.isPrn && record.medicineId === stockCheckDose.med.id &&
+          scheduledOccurrenceKey(record.medicineId, record.scheduledDate, record.scheduledTime, record.scheduledInstant) !==
+            scheduledOccurrenceKey(stockCheckDose.med.id, stockCheckDose.scheduledDate, stockCheckDose.time, stockCheckDose.scheduledInstant))
+        .slice()
+        .sort((a, b) => {
+          const timeFor = (record: DoseRecord) => record.scheduledInstant
+            ? new Date(record.scheduledInstant).getTime()
+            : new Date(`${record.scheduledDate}T${record.scheduledTime}`).getTime();
+          return timeFor(b) - timeFor(a);
+        })
+        .slice(0, 3)
+    : [];
+
+  const formatQuantityWithUnit = (quantity: number, unit: string) => {
+    const formattedQuantity = new Intl.NumberFormat(undefined, { maximumFractionDigits: 6 }).format(quantity);
+    const singularUnits: Record<string, string> = {
+      tablets: "tablet",
+      capsules: "capsule",
+      sachets: "sachet",
+      vials: "vial",
+      bottles: "bottle",
+    };
+    const normalizedUnit = unit.trim().toLowerCase();
+    const displayUnit = normalizedUnit === "ml" ? "mL" : quantity === 1 ? singularUnits[normalizedUnit] ?? unit : unit;
+    return `${formattedQuantity} ${displayUnit}`;
+  };
+
+  const handleComparePhysicalStock = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!stockCheckDose) return;
+    setPhysicalStockResult(comparePhysicalStock(
+      stockCheckDose.med.inventoryAmount,
+      physicalStockQuantity,
+      stockCheckUnit,
+      stockCheckUnit,
+    ));
+  };
+
   if (!isHydrated || now.getTime() === 0) return <div className="workspace-app min-h-screen bg-slate-50 dark:bg-slate-950" />;
 
   return (
@@ -704,6 +759,26 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
                         </span>
                       )}
                     </div>
+                    {dose.status === "overdue" && !dose.record?.actualTakenTime && (
+                      <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50/80 p-3 dark:border-sky-900/60 dark:bg-sky-950/25">
+                        <p className="flex items-center gap-2 text-xs font-semibold text-sky-900 dark:text-sky-200">
+                          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0"><path d="M9 18h6M10 22h4M8.5 14.5a7 7 0 1 1 7 0c-.8.6-1.2 1.3-1.4 2.5h-4.2c-.2-1.2-.6-1.9-1.4-2.5Z" /></svg>
+                          Not sure if you took this dose?
+                        </p>
+                        <p className="mt-1 text-xs leading-relaxed text-sky-800 dark:text-sky-300">Compare your expected medicine stock with the quantity you physically have to look for clues.</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPhysicalStockQuantity("");
+                            setPhysicalStockResult(null);
+                            setStockCheckDose(dose);
+                          }}
+                          className="mt-2.5 inline-flex min-h-9 items-center justify-center rounded-lg border border-sky-300 bg-white px-3 py-1.5 text-xs font-semibold text-sky-800 transition hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:border-sky-800 dark:bg-slate-900 dark:text-sky-200 dark:hover:bg-sky-950/60"
+                        >
+                          Check My Stock
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -928,6 +1003,103 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
                 <button type="submit" disabled={!stockToAdd || stockToAdd <= 0} className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Add Stock</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {stockCheckDose && (
+        <div
+          className="workspace-modal-backdrop fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-slate-950/60 p-4 backdrop-blur-xs sm:items-center"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) closeStockCheck(); }}
+        >
+          <div role="dialog" aria-modal="true" aria-labelledby="stock-check-title" onKeyDown={keepDialogFocusInside} className="workspace-glass-panel my-0 max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-800 dark:bg-slate-900 sm:my-8 sm:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 id="stock-check-title" className="text-lg font-bold text-slate-900 dark:text-white">Check My Stock</h2>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Use your physical count as a clue only; it cannot confirm whether a dose was taken.</p>
+              </div>
+              <button type="button" onClick={closeStockCheck} aria-label="Close stock comparison" className="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:hover:bg-slate-800">✕</button>
+            </div>
+
+            <div className="mt-5 rounded-xl border border-slate-200 bg-white/70 p-4 dark:border-slate-700 dark:bg-slate-950/50">
+              <h3 className="font-semibold text-slate-900 dark:text-white">{stockCheckDose.med.name}</h3>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{stockCheckDose.med.type}{stockCheckDose.med.strength ? ` · ${stockCheckDose.med.strength}` : ""}</p>
+              <p className="mt-2 text-sm text-slate-700 dark:text-slate-200">Scheduled dose: {stockCheckDose.med.doseAmount} {stockCheckDose.med.doseUnit ?? doseUnitFor(stockCheckDose.med)} at {formatDoseTime(stockCheckDose)}</p>
+              <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-700">
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Expected remaining stock tracked by ChillDose</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">
+                  {expectedStockAvailable ? formatQuantityWithUnit(expectedStock!, stockCheckUnit) : "Comparison unavailable"}
+                </p>
+                {!expectedStockAvailable && <p className="mt-1 text-xs leading-relaxed text-amber-800 dark:text-amber-300">The saved quantity or its unit is unavailable, so no expected amount can be compared reliably.</p>}
+                {expectedStockAvailable && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Unit: {stockCheckUnit}</p>}
+              </div>
+            </div>
+
+            <form noValidate onSubmit={handleComparePhysicalStock} className="mt-5">
+              <label htmlFor="physical-stock-quantity" className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
+                How much do you physically have?{stockCheckUnit ? ` (${stockCheckUnit})` : ""}
+              </label>
+              <input
+                id="physical-stock-quantity"
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step={stockCheckDose.med.type === "Syrup" && /^(ml|millilit(er|re)s?)$/i.test(stockCheckUnit.trim()) ? "any" : "1"}
+                value={physicalStockQuantity}
+                onChange={(event) => { setPhysicalStockQuantity(event.target.value); setPhysicalStockResult(null); }}
+                aria-describedby="physical-stock-help"
+                className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-base text-slate-900 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+              />
+              <p id="physical-stock-help" className="mt-1 text-xs text-slate-500 dark:text-slate-400">Enter zero if none remains. Liquid amounts support decimals where the inventory unit is a volume.</p>
+              <button type="submit" disabled={!expectedStockAvailable} className="workspace-primary-button mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">Compare Stock</button>
+            </form>
+
+            {physicalStockResult && !physicalStockResult.available && (
+              <p role="alert" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+                {physicalStockResult.reason === "expected-unavailable"
+                  ? "Expected stock is unavailable, so this comparison cannot be made reliably."
+                  : physicalStockResult.reason === "incompatible-units"
+                    ? "The expected and physical quantities use incompatible units, so they cannot be compared."
+                    : "Enter a valid non-negative quantity to compare stock."}
+              </p>
+            )}
+            {physicalStockResult?.available && (
+              <div role="status" aria-live="polite" className={`mt-4 rounded-xl border px-4 py-3 ${physicalStockResult.result === "lower" ? "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100" : physicalStockResult.result === "higher" ? "border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-100" : "border-teal-200 bg-teal-50 text-teal-950 dark:border-teal-900/60 dark:bg-teal-950/30 dark:text-teal-100"}`}>
+                <h3 className="font-bold">
+                  {physicalStockResult.result === "lower" ? "Possible unrecorded dose" : physicalStockResult.result === "higher" ? "Inventory discrepancy" : "No stock difference found"}
+                </h3>
+                <p className="mt-1.5 text-sm leading-relaxed">
+                  {physicalStockResult.result === "lower"
+                    ? `Your physical stock is ${formatQuantityWithUnit(physicalStockResult.difference, stockCheckUnit)} lower than expected. You may have taken a dose without marking it as taken, or some of it may be missing for another reason. Review your dose history and think back to your routine.`
+                    : physicalStockResult.result === "higher"
+                      ? "Your physical stock is higher than expected. Check your inventory and recent dose records."
+                      : "Your physical stock matches the expected quantity. This does not confirm whether you took this dose. Review your dose history and consider what you remember."}
+                </p>
+              </div>
+            )}
+
+            <section className="mt-5 border-t border-slate-200 pt-4 dark:border-slate-700" aria-labelledby="stock-check-history-title">
+              <h3 id="stock-check-history-title" className="text-sm font-semibold text-slate-900 dark:text-white">Recent dose history</h3>
+              {recentStockCheckHistory.length ? (
+                <ul className="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
+                  {recentStockCheckHistory.map((record) => {
+                    const scheduledDate = new Date(`${record.scheduledDate}T00:00`);
+                    const outcome = record.actualTakenTime
+                      ? `Taken at ${formatIsoTo12Hour(record.actualTakenTime)}`
+                      : record.status === "skipped" ? "Skipped" : record.status === "missed" ? "Missed" : record.status === "overdue" ? "Overdue" : "Unresolved";
+                    return <li key={record.id} className="flex flex-wrap justify-between gap-x-4 gap-y-1 py-2 text-xs text-slate-600 dark:text-slate-300">
+                      <span>Scheduled {scheduledDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })} at {format12Hour(record.scheduledTime)}</span>
+                      <span className="font-medium">{outcome}</span>
+                    </li>;
+                  })}
+                </ul>
+              ) : <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">No other dose history is recorded for this medicine.</p>}
+            </section>
+
+            <p className="mt-4 text-xs leading-relaxed text-slate-600 dark:text-slate-300">Stock is only a clue and cannot prove what happened. If you are still unsure, follow your medicine&apos;s instructions or contact a pharmacist or healthcare professional. Do not take an extra dose based only on this comparison.</p>
+            <div className="mt-5 flex justify-end">
+              <button type="button" onClick={closeStockCheck} className="min-h-10 rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">Close</button>
+            </div>
           </div>
         </div>
       )}
