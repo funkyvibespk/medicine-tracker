@@ -5,7 +5,7 @@ import { registerHooks } from "node:module";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { addScheduleBaseline, getMedicineOccurrencesForDate, getScheduledTimesForDate } from "../lib/schedule.ts";
-import { demoProfileStorageKey, loadDemoProfile, serializeDemoProfile } from "../lib/demoProfiles.ts";
+import { ACTIVE_DEMO_EMAIL_KEY, ACTIVE_DEMO_SESSION_KEY, demoProfileStorageKey, loadDemoProfile, saveDemoProfileForActiveSession, serializeDemoProfile } from "../lib/demoProfiles.ts";
 import { findBlockingMedicineIdentityMatch, findMedicineIdentityMatches, findPotentialMedicineIdentityPairs } from "../lib/medicineIdentity.ts";
 import {
   availableVolumeFromContainers,
@@ -39,6 +39,8 @@ registerHooks({
 });
 
 const { reconcileHistoricalMissedOccurrences } = await import("../lib/missedDoses.ts");
+const { clearDemoSession, DEMO_SESSION_CHANGE_EVENT, readDemoSession, writeDemoSession } = await import("../lib/demoSession.ts");
+const { registerDemoAccount, verifyDemoAccount, DemoAccountAlreadyExistsError, DemoPasswordMismatchError } = await import("../lib/demoAuth.ts");
 
 function syrup(overrides = {}) {
   return {
@@ -445,6 +447,99 @@ test("legacy local profile shape remains readable and new optional schedule hist
   const roundTrip = loadDemoProfile(syntheticStorage, "compat@example.invalid");
   assert.equal(roundTrip.medicines[0].scheduleRevisions[0].scheduleTimes[0], "08:00");
   assert.equal(roundTrip.doseRecords[0].id, oldDose.id);
+});
+
+test("profile persistence rejects a stale owner after the active session changes", () => {
+  const storage = new Map();
+  const syntheticStorage = {
+    getItem: (key) => storage.get(key) ?? null,
+    setItem: (key, value) => storage.set(key, value),
+  };
+  const profileA = { email: "account-a@example.invalid", medicines: [{ id: "A" }], doseRecords: [] };
+  const profileB = { email: "account-b@example.invalid", medicines: [{ id: "B" }], doseRecords: [] };
+
+  storage.set(ACTIVE_DEMO_SESSION_KEY, "active");
+  storage.set(ACTIVE_DEMO_EMAIL_KEY, "account-a@example.invalid");
+  assert.equal(saveDemoProfileForActiveSession(syntheticStorage, profileA), true);
+  const savedA = storage.get(demoProfileStorageKey(profileA.email));
+
+  // Simulate another tab switching the shared session before a queued old-profile save runs.
+  storage.set(ACTIVE_DEMO_EMAIL_KEY, "account-b@example.invalid");
+  assert.equal(saveDemoProfileForActiveSession(syntheticStorage, { ...profileA, medicines: [{ id: "stale" }] }), false);
+  assert.equal(storage.get(demoProfileStorageKey(profileA.email)), savedA);
+  assert.equal(saveDemoProfileForActiveSession(syntheticStorage, profileB), true);
+  assert.deepEqual(loadDemoProfile(syntheticStorage, profileB.email).medicines, [{ id: "B" }]);
+});
+
+test("malformed profile data is rejected without replacing the stored value", () => {
+  const storage = new Map();
+  const email = "malformed-profile@example.invalid";
+  const key = demoProfileStorageKey(email);
+  const malformed = "{not valid profile json";
+  storage.set(key, malformed);
+
+  assert.throws(() => loadDemoProfile({ getItem: (storageKey) => storage.get(storageKey) ?? null }, email));
+  assert.equal(storage.get(key), malformed);
+});
+
+test("a legitimate empty profile remains loadable and writable for its active session", () => {
+  const storage = new Map();
+  const syntheticStorage = {
+    getItem: (key) => storage.get(key) ?? null,
+    setItem: (key, value) => storage.set(key, value),
+  };
+  const profile = { email: "empty-profile@example.invalid", medicines: [], doseRecords: [] };
+  storage.set(ACTIVE_DEMO_SESSION_KEY, "active");
+  storage.set(ACTIVE_DEMO_EMAIL_KEY, profile.email);
+
+  assert.deepEqual(loadDemoProfile(syntheticStorage, profile.email), profile);
+  assert.equal(saveDemoProfileForActiveSession(syntheticStorage, profile), true);
+  assert.deepEqual(loadDemoProfile(syntheticStorage, profile.email), profile);
+});
+
+test("session login, refresh restoration, logout, and same-tab notification retain the active identity", () => {
+  const values = () => new Map();
+  const makeStorage = (map) => ({
+    getItem: (key) => map.get(key) ?? null,
+    setItem: (key, value) => map.set(key, String(value)),
+    removeItem: (key) => map.delete(key),
+  });
+  const persistent = values();
+  const tab = values();
+  const target = new EventTarget();
+  target.localStorage = makeStorage(persistent);
+  target.sessionStorage = makeStorage(tab);
+  let notifications = 0;
+  target.addEventListener(DEMO_SESSION_CHANGE_EVENT, () => { notifications += 1; });
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  Object.defineProperty(globalThis, "window", { configurable: true, value: target });
+  try {
+    writeDemoSession("  Person@Example.invalid ");
+    assert.deepEqual(readDemoSession(), { email: "person@example.invalid" });
+    assert.equal(notifications, 1);
+    // A fresh provider load after refresh reads the same persistent identity.
+    assert.deepEqual(readDemoSession(), { email: "person@example.invalid" });
+    clearDemoSession();
+    assert.equal(readDemoSession(), null);
+    assert.equal(notifications, 2);
+  } finally {
+    if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test("synthetic local account registration and login still enforce credentials", async () => {
+  const storage = new Map();
+  const syntheticStorage = {
+    getItem: (key) => storage.get(key) ?? null,
+    setItem: (key, value) => storage.set(key, value),
+  };
+  const email = "auth-regression@example.invalid";
+  const registeredEmail = await registerDemoAccount(syntheticStorage, ` ${email.toUpperCase()} `, "synthetic-password-123");
+  assert.equal(registeredEmail, email);
+  assert.equal(await verifyDemoAccount(syntheticStorage, email, "synthetic-password-123"), email);
+  await assert.rejects(registerDemoAccount(syntheticStorage, email.toUpperCase(), "another-synthetic-password"), DemoAccountAlreadyExistsError);
+  await assert.rejects(verifyDemoAccount(syntheticStorage, email, "incorrect-synthetic-password"), DemoPasswordMismatchError);
 });
 
 test("legacy hydration baseline keeps today's earlier scheduled dose visible after profile reload", () => {

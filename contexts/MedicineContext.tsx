@@ -1,13 +1,14 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from "react";
 import {
-  demoProfileStorageKey,
+  ACTIVE_DEMO_EMAIL_KEY,
+  ACTIVE_DEMO_SESSION_KEY,
   loadDemoProfile,
   normalizeDemoEmail,
-  serializeDemoProfile,
+  saveDemoProfileForActiveSession,
 } from "@/lib/demoProfiles";
-import { readDemoSession } from "@/lib/demoSession";
+import { DEMO_SESSION_CHANGE_EVENT, readDemoSession } from "@/lib/demoSession";
 import { applySkippedDose, applyTakenDose, validateInventoryThreshold } from "@/lib/medicineLogic";
 import { findBlockingMedicineIdentityMatch } from "@/lib/medicineIdentity";
 import { reconcileHistoricalMissedOccurrences } from "@/lib/missedDoses";
@@ -82,6 +83,9 @@ interface MedicineContextType {
   updateInventory: (medicineId: string, amount: number) => void;
   addStock: (medicineId: string, amount: number) => void;
   isHydrated: boolean;
+  profileStatus: "loading" | "ready" | "error";
+  profileError: string | null;
+  retryProfileLoad: () => void;
   clearAll: () => void;
   activeProfileEmail: string | null;
   activateProfile: (email: string, options?: { migrateLegacy?: boolean }) => void;
@@ -106,62 +110,121 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
   const [doseRecords, setDoseRecords] = useState<DoseRecord[]>([]);
   const medicinesRef = useRef<Medicine[]>([]);
   const doseRecordsRef = useRef<DoseRecord[]>([]);
-  const [isHydrated, setIsHydrated] = useState(false);
+  const [profileStatus, setProfileStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [activeProfileEmail, setActiveProfileEmail] = useState<string | null>(null);
+  const activeProfileEmailRef = useRef<string | null>(null);
+  const profileStatusRef = useRef<"loading" | "ready" | "error">("loading");
+  const loadGenerationRef = useRef(0);
 
-  const activateProfile = (emailInput: string, options?: { migrateLegacy?: boolean }) => {
-    const email = normalizeDemoEmail(emailInput);
-    const profile = loadDemoProfile(localStorage, email, options);
-    medicinesRef.current = addScheduleBaseline(profile.medicines as Medicine[]);
-    doseRecordsRef.current = profile.doseRecords as DoseRecord[];
-    setIsHydrated(false);
-    setMedicines(medicinesRef.current);
-    setDoseRecords(doseRecordsRef.current);
-    setActiveProfileEmail(email);
-    setIsHydrated(true);
-  };
+  const setProfileState = useCallback((status: "loading" | "ready" | "error", error: string | null = null) => {
+    profileStatusRef.current = status;
+    setProfileStatus(status);
+    setProfileError(error);
+  }, []);
 
-  const deactivateProfile = () => {
+  const clearProfileState = useCallback((status: "loading" | "ready" | "error") => {
     medicinesRef.current = [];
     doseRecordsRef.current = [];
-    setIsHydrated(false);
+    activeProfileEmailRef.current = null;
     setMedicines([]);
     setDoseRecords([]);
     setActiveProfileEmail(null);
-    setIsHydrated(true);
+    setProfileState(status);
+  }, [setProfileState]);
+
+  const loadSessionProfile = useCallback(() => {
+    const generation = ++loadGenerationRef.current;
+    const session = readDemoSession();
+    if (!session) {
+      clearProfileState("ready");
+      return;
+    }
+
+    if (session.email === activeProfileEmailRef.current && profileStatusRef.current === "ready") return;
+    clearProfileState("loading");
+    try {
+      const profile = loadDemoProfile(localStorage, session.email, { migrateLegacy: false });
+      if (generation !== loadGenerationRef.current || readDemoSession()?.email !== session.email) return;
+      medicinesRef.current = addScheduleBaseline(profile.medicines as Medicine[]);
+      doseRecordsRef.current = profile.doseRecords as DoseRecord[];
+      activeProfileEmailRef.current = session.email;
+      setMedicines(medicinesRef.current);
+      setDoseRecords(doseRecordsRef.current);
+      setActiveProfileEmail(session.email);
+      setProfileState("ready");
+    } catch (error) {
+      if (generation !== loadGenerationRef.current) return;
+      clearProfileState("error");
+      activeProfileEmailRef.current = session.email;
+      setActiveProfileEmail(session.email);
+      setProfileError(error instanceof Error ? error.message : "This local profile could not be loaded safely.");
+    }
+  }, [clearProfileState, setProfileState]);
+
+  const canMutateActiveProfile = () => {
+    const email = activeProfileEmailRef.current;
+    return profileStatusRef.current === "ready" && Boolean(email) && readDemoSession()?.email === email;
+  };
+
+  const activateProfile = (emailInput: string, options?: { migrateLegacy?: boolean }) => {
+    const email = normalizeDemoEmail(emailInput);
+    const generation = ++loadGenerationRef.current;
+    clearProfileState("loading");
+    try {
+      const profile = loadDemoProfile(localStorage, email, options);
+      if (generation !== loadGenerationRef.current) return;
+      medicinesRef.current = addScheduleBaseline(profile.medicines as Medicine[]);
+      doseRecordsRef.current = profile.doseRecords as DoseRecord[];
+      activeProfileEmailRef.current = email;
+      setMedicines(medicinesRef.current);
+      setDoseRecords(doseRecordsRef.current);
+      setActiveProfileEmail(email);
+      setProfileState("ready");
+    } catch (error) {
+      if (generation === loadGenerationRef.current) {
+        clearProfileState("error");
+        activeProfileEmailRef.current = email;
+        setActiveProfileEmail(email);
+        setProfileError(error instanceof Error ? error.message : "This local profile could not be loaded safely.");
+      }
+      throw error;
+    }
+  };
+
+  const deactivateProfile = () => {
+    loadGenerationRef.current += 1;
+    clearProfileState("ready");
   };
 
   useEffect(() => {
+    queueMicrotask(loadSessionProfile);
+    const onSessionStorage = (event: StorageEvent) => {
+      if (event.key === ACTIVE_DEMO_SESSION_KEY || event.key === ACTIVE_DEMO_EMAIL_KEY || event.key === null) loadSessionProfile();
+    };
+    window.addEventListener(DEMO_SESSION_CHANGE_EVENT, loadSessionProfile);
+    window.addEventListener("storage", onSessionStorage);
+    window.addEventListener("pageshow", loadSessionProfile);
+    return () => {
+      window.removeEventListener(DEMO_SESSION_CHANGE_EVENT, loadSessionProfile);
+      window.removeEventListener("storage", onSessionStorage);
+      window.removeEventListener("pageshow", loadSessionProfile);
+    };
+  }, [loadSessionProfile]);
+
+  useEffect(() => {
+    if (profileStatus !== "ready" || !activeProfileEmail) return;
     try {
-      const session = readDemoSession();
-      if (session) {
-        const profile = loadDemoProfile(localStorage, session.email, {
-          migrateLegacy: false,
-        });
-        // localStorage can only be read after hydration; restore saved client state here.
-        medicinesRef.current = addScheduleBaseline(profile.medicines as Medicine[]);
-        doseRecordsRef.current = profile.doseRecords as DoseRecord[];
-        setMedicines(medicinesRef.current);
-        setDoseRecords(doseRecordsRef.current);
-        setActiveProfileEmail(session.email);
-      }
-    } catch (e) {
-      console.error("Failed to load the local demo profile safely", e);
+      saveDemoProfileForActiveSession(localStorage, { email: activeProfileEmail, medicines, doseRecords });
+    } catch (error) {
+      // This state update reports a failed write to the external storage system.
+      const message = error instanceof Error ? error.message : "Changes could not be saved to this local profile.";
+      queueMicrotask(() => setProfileState("error", message));
     }
-    setIsHydrated(true);
-  }, []);
+  }, [medicines, doseRecords, profileStatus, activeProfileEmail, setProfileState]);
 
   useEffect(() => {
-    if (isHydrated && activeProfileEmail) {
-      localStorage.setItem(
-        demoProfileStorageKey(activeProfileEmail),
-        serializeDemoProfile({ email: activeProfileEmail, medicines, doseRecords }),
-      );
-    }
-  }, [medicines, doseRecords, isHydrated, activeProfileEmail]);
-
-  useEffect(() => {
-    if (!isHydrated || !activeProfileEmail) return;
+    if (profileStatus !== "ready" || !activeProfileEmail) return;
 
     let scannedLocalDate: string | null = null;
     const reconcileMissed = () => {
@@ -189,9 +252,10 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
     reconcileMissed();
     const timer = setInterval(reconcileMissed, 60000);
     return () => clearInterval(timer);
-  }, [isHydrated, activeProfileEmail]);
+  }, [profileStatus, activeProfileEmail]);
 
   const addMedicine = (med: Medicine, options?: { allowLikelyDuplicate?: boolean }): AddMedicineResult => {
+    if (!canMutateActiveProfile()) return { added: false, validationError: "The active local profile is not ready. Reload it before making changes." };
     const quantityValidation = validateInventoryThreshold(med.inventoryAmount, med.lowStockThreshold);
     if (!quantityValidation.valid) {
       return { added: false, validationError: quantityValidation.inventoryAmountError ?? quantityValidation.lowStockThresholdError };
@@ -217,6 +281,7 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
   };
 
   const updateMedicine = (id: string, updates: Partial<Medicine>) => {
+    if (!canMutateActiveProfile()) return { saved: false, validationError: "The active local profile is not ready. Reload it before making changes." };
     const existing = medicinesRef.current.find((medicine) => medicine.id === id);
     if (!existing) return { saved: false, validationError: "This medicine could not be found." };
     const quantityValidation = validateInventoryThreshold(
@@ -255,6 +320,7 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteMedicine = (id: string) => {
+    if (!canMutateActiveProfile()) return;
     const medicine = medicinesRef.current.find((item) => item.id === id);
     if (medicine) {
       const reconciled = reconcileHistoricalMissedOccurrences(medicinesRef.current, doseRecordsRef.current, new Date());
@@ -274,6 +340,7 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
   };
 
   const recordTakenDose = (record: DoseRecord, doseAmount: number) => {
+    if (!canMutateActiveProfile()) return false;
     const medicine = medicinesRef.current.find((item) => item.id === record.medicineId);
     if (!medicine) return false;
     const enrichedRecord: DoseRecord = {
@@ -292,6 +359,7 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
   };
 
   const skipDoseOccurrence = (record: DoseRecord) => {
+    if (!canMutateActiveProfile()) return false;
     if (record.status !== "overdue" && record.status !== "missed") return false;
     const medicine = medicinesRef.current.find((item) => item.id === record.medicineId);
     const enrichedRecord: DoseRecord = {
@@ -309,11 +377,13 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
   };
 
   const updateDoseRecord = (id: string, updates: Partial<DoseRecord>) => {
+    if (!canMutateActiveProfile()) return;
     doseRecordsRef.current = doseRecordsRef.current.map((d) => (d.id === id ? { ...d, ...updates } : d));
     setDoseRecords(doseRecordsRef.current);
   };
 
   const updateInventory = (medicineId: string, amount: number) => {
+    if (!canMutateActiveProfile()) return;
     medicinesRef.current = medicinesRef.current.map((m) => m.id === medicineId
       ? { ...m, inventoryAmount: Math.max(0, amount) }
       : m);
@@ -321,6 +391,7 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
   };
 
   const addStock = (medicineId: string, amountToAdd: number) => {
+    if (!canMutateActiveProfile()) return;
     medicinesRef.current = medicinesRef.current.map((m) => m.id === medicineId
       ? { ...m, inventoryAmount: Math.max(0, m.inventoryAmount + amountToAdd) }
       : m);
@@ -328,6 +399,7 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
   };
 
   const clearAll = () => {
+    if (!canMutateActiveProfile()) return;
     medicinesRef.current = [];
     doseRecordsRef.current = [];
     setMedicines([]);
@@ -347,7 +419,10 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
         updateDoseRecord,
         updateInventory,
         addStock,
-        isHydrated,
+        isHydrated: profileStatus === "ready",
+        profileStatus,
+        profileError,
+        retryProfileLoad: loadSessionProfile,
         clearAll,
         activeProfileEmail,
         activateProfile,

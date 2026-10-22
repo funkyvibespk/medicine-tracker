@@ -111,3 +111,14 @@ export function serializeDemoProfile(profile: DemoProfileData): string {
     doseRecords: profile.doseRecords,
   } satisfies StoredProfile);
 }
+
+/** Persist only when the browser's current session still owns this profile. */
+export function saveDemoProfileForActiveSession(storage: StorageLike, profile: DemoProfileData): boolean {
+  const email = normalizeDemoEmail(profile.email);
+  const sessionActive = storage.getItem(ACTIVE_DEMO_SESSION_KEY) === "active";
+  const sessionEmail = sessionActive ? normalizeDemoEmail(storage.getItem(ACTIVE_DEMO_EMAIL_KEY) ?? "") : "";
+  if (!email || sessionEmail !== email) return false;
+
+  storage.setItem(demoProfileStorageKey(email), serializeDemoProfile({ ...profile, email }));
+  return true;
+}

@@ -4,6 +4,12 @@ export interface DemoSession {
   email: string;
 }
 
+export const DEMO_SESSION_CHANGE_EVENT = "chilldose:demo-session-change";
+
+function notifySessionChange() {
+  window.dispatchEvent(new Event(DEMO_SESSION_CHANGE_EVENT));
+}
+
 function readSession(storage: Storage): DemoSession | null {
   const active = storage.getItem(ACTIVE_DEMO_SESSION_KEY) === "active";
   const email = active ? normalizeDemoEmail(storage.getItem(ACTIVE_DEMO_EMAIL_KEY) ?? "") : "";
@@ -46,6 +52,7 @@ export function writeDemoSession(emailInput: string): DemoSession {
   window.localStorage.setItem(ACTIVE_DEMO_EMAIL_KEY, email);
   window.localStorage.setItem(ACTIVE_DEMO_SESSION_KEY, "active");
   removeSession(window.sessionStorage);
+  notifySessionChange();
   return { email };
 }
 
@@ -53,4 +60,5 @@ export function clearDemoSession(): void {
   if (typeof window === "undefined") return;
   removeSession(window.localStorage);
   removeSession(window.sessionStorage);
+  notifySessionChange();
 }
