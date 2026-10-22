@@ -12,7 +12,7 @@ import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibilit
 import { doseUnitFor, getStockStatus, inventoryUnitFor, inventoryUnitsCompatible } from "@/lib/medicineLogic";
 import { findPotentialMedicineIdentityPairs } from "@/lib/medicineIdentity";
 import BrandedLoadingScreen from "@/components/BrandedLoadingScreen";
-import { sortPrescriptionHistory } from "@/lib/prescriptionHistory";
+import { normalizeDoctorName, sortPrescriptionHistory } from "@/lib/prescriptionHistory";
 
 export default function MedicinesPage() {
   const { medicines, doseRecords, prescriptionHistory, addMedicine, updateMedicine, deleteMedicine, addStock, isHydrated } = useMedicine();
@@ -147,6 +147,7 @@ export default function MedicinesPage() {
               const isLow = stockStatus === "low";
               const isOut = stockStatus === "out";
               const isUnknown = stockStatus === "unknown";
+              const prescribingDoctor = normalizeDoctorName(med.prescribingDoctor);
               const dosesPerDay = estimatedDosesPerDay(med);
               const daysLeft = inventoryUnitsCompatible(med) && dosesPerDay !== null && dosesPerDay > 0 && med.doseAmount > 0
                 ? Math.floor(med.inventoryAmount / (dosesPerDay * med.doseAmount))
@@ -209,12 +210,12 @@ export default function MedicinesPage() {
                       {isUnknown && <span className="text-amber-700 dark:text-amber-300">Dose and inventory units are incompatible; stock was preserved.</span>}
                       {med.instructions && <span>· {med.instructions}</span>}
                     </div>
-                    {(med.prescribingDoctor || med.prescribingClinic || med.prescriptionDate) && (
+                    {(prescribingDoctor || med.prescribingClinic || med.prescriptionDate) && (
                       <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">
-                        {med.prescribingDoctor && <span>Prescribed by {med.prescribingDoctor}</span>}
-                        {med.prescribingDoctor && med.prescribingClinic && <span> · </span>}
+                        {prescribingDoctor && <span>Prescribed by {prescribingDoctor}</span>}
+                        {prescribingDoctor && med.prescribingClinic && <span> · </span>}
                         {med.prescribingClinic && <span>{med.prescribingClinic}</span>}
-                        {med.prescriptionDate && <span>{med.prescribingDoctor || med.prescribingClinic ? " · " : ""}Prescription date: {med.prescriptionDate}</span>}
+                        {med.prescriptionDate && <span>{prescribingDoctor || med.prescribingClinic ? " · " : ""}Prescription date: {med.prescriptionDate}</span>}
                       </p>
                     )}
                   </div>
@@ -277,7 +278,7 @@ export default function MedicinesPage() {
                       <span className="text-xs text-slate-500 dark:text-slate-400">Recorded in ChillDose: {recordedLabel}</span>
                     </div>
                     <div className="mt-2 grid gap-x-6 gap-y-1 text-sm text-slate-700 dark:text-slate-300 sm:grid-cols-2">
-                      <p>Doctor: {entry.prescribingDoctor || "Not recorded"}</p>
+                      <p>Doctor: {normalizeDoctorName(entry.prescribingDoctor) || "Not recorded"}</p>
                       {entry.prescribingClinic && <p>Clinic/Hospital: {entry.prescribingClinic}</p>}
                       {entry.prescriptionDate && <p>Prescription issued: {entry.prescriptionDate}</p>}
                       <p>Dose: {entry.doseAmount} {entry.doseUnit || "units"} · {schedule}</p>

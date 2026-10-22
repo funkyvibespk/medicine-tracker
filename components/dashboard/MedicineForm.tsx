@@ -6,6 +6,7 @@ import { Medicine, MedicineType, type AddMedicineResult, type DoseRecord } from 
 import { localDateString } from "@/lib/schedule";
 import { availableVolumeFromContainers, inventoryUnitFor, inventoryUnitsCompatible, parseNonNegativeQuantity, validateInventoryThreshold } from "@/lib/medicineLogic";
 import { findMedicineIdentityMatches, type MedicineIdentityMatch } from "@/lib/medicineIdentity";
+import { normalizeDoctorName } from "@/lib/prescriptionHistory";
 
 // ─── Per-type strength configuration ──────────────────────────────────────────
 
@@ -315,7 +316,7 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
       endDate: formData.endDate || undefined,
       instructions: formData.instructions?.trim() || "",
       notes: formData.notes?.trim() || "",
-      prescribingDoctor: formData.prescribingDoctor?.trim() || undefined,
+      prescribingDoctor: normalizeDoctorName(formData.prescribingDoctor) || undefined,
       prescribingClinic: formData.prescribingClinic?.trim() || undefined,
       prescriptionDate: formData.prescriptionDate || undefined,
       prescriptionNotes: formData.prescriptionNotes?.trim() || undefined,

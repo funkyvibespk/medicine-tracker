@@ -5,7 +5,7 @@ import { registerHooks } from "node:module";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { sortDoseHistoryRecords } from "../lib/doseHistory.ts";
-import { appendPrescriptionChange, createPrescriptionHistoryEntry, sortPrescriptionHistory } from "../lib/prescriptionHistory.ts";
+import { appendPrescriptionChange, createPrescriptionHistoryEntry, normalizeDoctorName, sortPrescriptionHistory } from "../lib/prescriptionHistory.ts";
 import { addScheduleBaseline, getMedicineOccurrencesForDate, getScheduledTimesForDate } from "../lib/schedule.ts";
 import { ACTIVE_DEMO_EMAIL_KEY, ACTIVE_DEMO_SESSION_KEY, demoProfileStorageKey, loadDemoProfile, saveDemoProfileForActiveSession, serializeDemoProfile } from "../lib/demoProfiles.ts";
 import { findBlockingMedicineIdentityMatch, findMedicineIdentityMatches, findPotentialMedicineIdentityPairs } from "../lib/medicineIdentity.ts";
@@ -1085,7 +1085,7 @@ test("new medicine prescription snapshots work with or without optional doctor f
     prescriptionDate: "2026-10-20",
     prescriptionNotes: "Synthetic note",
   }), "2026-10-22T10:00:00.000Z", "entry-2");
-  assert.equal(withDoctor.prescribingDoctor, "Dr Example");
+  assert.equal(withDoctor.prescribingDoctor, "Dr. Example");
   assert.equal(withDoctor.prescribingClinic, "Synthetic Clinic");
   assert.equal(withDoctor.prescriptionDate, "2026-10-20");
   assert.equal(withDoctor.prescriptionNotes, "Synthetic note");
@@ -1097,9 +1097,9 @@ test("meaningful prescription edits append snapshots while inventory and unchang
   const changed = { ...previous, prescribingDoctor: "Dr Second", strength: "20 mg" };
   const history = appendPrescriptionChange([initial], previous, changed, "2026-10-22T11:00:00.000Z", (() => { let n = 1; return () => `entry-${++n}`; })());
   assert.equal(history.length, 2);
-  assert.equal(history[0].prescribingDoctor, "Dr First");
+  assert.equal(history[0].prescribingDoctor, "Dr. First");
   assert.equal(history[0].strength, "10 mg");
-  assert.equal(history[1].prescribingDoctor, "Dr Second");
+  assert.equal(history[1].prescribingDoctor, "Dr. Second");
   assert.equal(history[1].strength, "20 mg");
 
   const inventoryOnly = { ...changed, inventoryAmount: 4, lowStockThreshold: 2 };
@@ -1113,7 +1113,7 @@ test("first prescription change on a legacy medicine captures the prior and upda
   const history = appendPrescriptionChange([], previous, updated, "2026-10-22T12:00:00.000Z", (() => { let n = 0; return () => `legacy-entry-${++n}`; })());
   assert.equal(history.length, 2);
   assert.equal(history[0].prescribingDoctor, undefined);
-  assert.equal(history[1].prescribingDoctor, "Dr New");
+  assert.equal(history[1].prescribingDoctor, "Dr. New");
   assert.equal(previous.prescribingDoctor, undefined);
   assert.equal(previous.scheduleTimes[0], "08:00");
 });
@@ -1163,5 +1163,25 @@ test("prescription entries sort newest first and preserve equal-time insertion o
   const sameTimeEarlier = createPrescriptionHistoryEntry(medicine, "2026-10-22T10:00:00.000Z", "same-1");
   const sameTimeLater = createPrescriptionHistoryEntry(medicine, "2026-10-22T10:00:00.000Z", "same-2");
   assert.deepEqual(sortPrescriptionHistory([older, sameTimeEarlier, sameTimeLater]).map((entry) => entry.id), ["same-2", "same-1", "older"]);
+});
+
+test("doctor display normalization adds one canonical prefix and preserves empty input", () => {
+  assert.equal(normalizeDoctorName("Ahmed Khan"), "Dr. Ahmed Khan");
+  assert.equal(normalizeDoctorName("Dr. Ahmed Khan"), "Dr. Ahmed Khan");
+  assert.equal(normalizeDoctorName("dr. Ahmed Khan"), "Dr. Ahmed Khan");
+  assert.equal(normalizeDoctorName("DR. Ahmed Khan"), "Dr. Ahmed Khan");
+  assert.equal(normalizeDoctorName("  Ahmed   Khan  "), "Dr. Ahmed Khan");
+  assert.equal(normalizeDoctorName("  "), "");
+  assert.equal(normalizeDoctorName("Dr. Dr. Ahmed Khan"), "Dr. Ahmed Khan");
+  assert.equal(normalizeDoctorName(normalizeDoctorName("Ahmed Khan")), "Dr. Ahmed Khan");
+});
+
+test("doctor prefix case or presence alone does not create a prescription-history change", () => {
+  const previous = prescriptionMedicine({ prescribingDoctor: "dr. Ahmed Khan" });
+  const updated = { ...previous, prescribingDoctor: "  DR.   Ahmed Khan  " };
+  assert.equal(appendPrescriptionChange([], previous, updated, "2026-10-22T12:00:00.000Z", () => "unused").length, 0);
+
+  const unprefixed = { ...previous, prescribingDoctor: "Ahmed Khan" };
+  assert.equal(appendPrescriptionChange([], unprefixed, previous, "2026-10-22T12:00:00.000Z", () => "unused").length, 0);
 });
 

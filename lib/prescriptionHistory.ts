@@ -42,6 +42,19 @@ function normalizedText(value: string | undefined): string {
   return value?.trim() ?? "";
 }
 
+/** Canonical display/storage form for an optional doctor's name. */
+export function normalizeDoctorName(value: string | undefined): string {
+  const name = normalizedText(value)
+    .replace(/\s+/g, " ")
+    .replace(/^(?:dr\.\s*|dr\s+)+/i, "")
+    .trim();
+  return name ? `Dr. ${name}` : "";
+}
+
+function doctorIdentity(value: string | undefined): string {
+  return normalizeDoctorName(value).replace(/^Dr\.\s*/i, "").toLowerCase();
+}
+
 function scheduleTimesKey(times: string[] | undefined): string {
   return JSON.stringify([...(times ?? [])].sort());
 }
@@ -60,7 +73,7 @@ export function samePrescriptionDetails(a: PrescribableMedicine, b: Prescribable
     normalizedText(a.startDate) === normalizedText(b.startDate) &&
     normalizedText(a.endDate) === normalizedText(b.endDate) &&
     normalizedText(a.instructions) === normalizedText(b.instructions) &&
-    normalizedText(a.prescribingDoctor) === normalizedText(b.prescribingDoctor) &&
+    doctorIdentity(a.prescribingDoctor) === doctorIdentity(b.prescribingDoctor) &&
     normalizedText(a.prescribingClinic) === normalizedText(b.prescribingClinic) &&
     normalizedText(a.prescriptionDate) === normalizedText(b.prescriptionDate) &&
     normalizedText(a.prescriptionNotes) === normalizedText(b.prescriptionNotes);
@@ -76,7 +89,7 @@ export function createPrescriptionHistoryEntry(
     medicineId: medicine.id,
     recordedAt,
     prescriptionDate: normalizedText(medicine.prescriptionDate) || undefined,
-    prescribingDoctor: normalizedText(medicine.prescribingDoctor) || undefined,
+    prescribingDoctor: normalizeDoctorName(medicine.prescribingDoctor) || undefined,
     prescribingClinic: normalizedText(medicine.prescribingClinic) || undefined,
     prescriptionNotes: normalizedText(medicine.prescriptionNotes) || undefined,
     medicineName: medicine.name,
