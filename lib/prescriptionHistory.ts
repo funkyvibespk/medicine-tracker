@@ -67,6 +67,41 @@ export interface PrescriptionHistoryFilters {
   medicine?: string;
 }
 
+export interface PrescriptionHistoryGroup {
+  /** Stable grouping key. Entries without a usable medicine ID get a unique key. */
+  key: string;
+  medicineId?: string;
+  entries: PrescriptionHistoryEntry[];
+}
+
+export function createEmptyPrescriptionHistoryFilters(): PrescriptionHistoryFilters {
+  return { doctor: "", prescriptionDateFrom: "", prescriptionDateTo: "", medicine: "" };
+}
+
+export function hasActivePrescriptionHistoryFilters(filters: PrescriptionHistoryFilters): boolean {
+  return Boolean(filters.doctor?.trim() || filters.prescriptionDateFrom || filters.prescriptionDateTo || filters.medicine?.trim());
+}
+
+/** Groups snapshots only by their stored medicine ID; unlinked entries stay separate. */
+export function groupPrescriptionHistoryByMedicine(
+  entries: readonly PrescriptionHistoryEntry[],
+): PrescriptionHistoryGroup[] {
+  const groups = new Map<string, PrescriptionHistoryGroup>();
+  entries.forEach((entry, index) => {
+    const medicineId = typeof entry.medicineId === "string" && entry.medicineId.trim()
+      ? entry.medicineId
+      : undefined;
+    const key = medicineId ? `medicine:${medicineId}` : `entry:${index}:${entry.id}`;
+    const group = groups.get(key);
+    if (group) group.entries.push(entry);
+    else groups.set(key, { key, medicineId, entries: [entry] });
+  });
+  return [...groups.values()].map((group) => ({
+    ...group,
+    entries: sortPrescriptionHistory(group.entries),
+  }));
+}
+
 /** Filters historical snapshots, never current medicine metadata or dose events. */
 export function filterPrescriptionHistory(
   entries: readonly PrescriptionHistoryEntry[],

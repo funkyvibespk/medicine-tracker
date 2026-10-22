@@ -5,7 +5,7 @@ import { registerHooks } from "node:module";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { sortDoseHistoryRecords } from "../lib/doseHistory.ts";
-import { appendPrescriptionChange, createPrescriptionHistoryEntry, filterPrescriptionHistory, normalizeDoctorName, sortPrescriptionHistory } from "../lib/prescriptionHistory.ts";
+import { appendPrescriptionChange, createEmptyPrescriptionHistoryFilters, createPrescriptionHistoryEntry, filterPrescriptionHistory, groupPrescriptionHistoryByMedicine, hasActivePrescriptionHistoryFilters, normalizeDoctorName, sortPrescriptionHistory } from "../lib/prescriptionHistory.ts";
 import { applyMedicineUpdatePreservingCreationDate, formatMedicineAddedAt, sortMedicinesNewestFirst } from "../lib/medicineList.ts";
 import { addScheduleBaseline, getMedicineOccurrencesForDate, getScheduledTimesForDate } from "../lib/schedule.ts";
 import { ACTIVE_DEMO_EMAIL_KEY, ACTIVE_DEMO_SESSION_KEY, demoProfileStorageKey, loadDemoProfile, saveDemoProfileForActiveSession, serializeDemoProfile } from "../lib/demoProfiles.ts";
@@ -1240,5 +1240,48 @@ test("prescription history filters use historical doctor, issued date, and medic
   assert.deepEqual(filterPrescriptionHistory(entries, { doctor: "Sara", prescriptionDateFrom: "2026-09-01" }).map((entry) => entry.id), ["alpha-new"]);
   assert.deepEqual(filterPrescriptionHistory(entries, { doctor: "Missing" }), []);
   assert.deepEqual(entries, original);
+});
+
+test("prescription snapshots group only by medicine ID and show newest versions first", () => {
+  const sameMedicineNewest = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Shared name", strength: "20 mg", prescribingDoctor: "Same Doctor" }), "2026-10-20T10:00:00.000Z", "a-new");
+  const otherMedicine = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-b", name: "Shared name", strength: "10 mg", prescribingDoctor: "Same Doctor" }), "2026-10-18T10:00:00.000Z", "b-only");
+  const sameMedicineOlder = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Shared name", strength: "10 mg", prescribingDoctor: "Same Doctor" }), "2026-10-10T10:00:00.000Z", "a-old");
+
+  const groups = groupPrescriptionHistoryByMedicine([sameMedicineOlder, otherMedicine, sameMedicineNewest]);
+  assert.deepEqual(groups.map((group) => [group.medicineId, group.entries.map((entry) => entry.id)]), [
+    ["med-a", ["a-new", "a-old"]],
+    ["med-b", ["b-only"]],
+  ]);
+});
+
+test("missing medicine IDs stay in separate history groups and unknown IDs remain distinct", () => {
+  const missingIdA = { ...createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Legacy medicine" }), "2026-10-10T10:00:00.000Z", "missing-a"), medicineId: "" };
+  const missingIdB = { ...createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Legacy medicine" }), "2026-10-11T10:00:00.000Z", "missing-b"), medicineId: undefined };
+  const unknownA = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "deleted-a", name: "Same legacy name" }), "2026-10-12T10:00:00.000Z", "unknown-a");
+  const unknownB = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "deleted-b", name: "Same legacy name" }), "2026-10-13T10:00:00.000Z", "unknown-b");
+
+  const groups = groupPrescriptionHistoryByMedicine([missingIdA, missingIdB, unknownA, unknownB]);
+  assert.equal(groups.length, 4);
+  assert.equal(new Set(groups.map((group) => group.key)).size, 4);
+  assert.deepEqual(groups.map((group) => group.entries[0].id), ["missing-a", "missing-b", "unknown-a", "unknown-b"]);
+});
+
+test("history filters match older snapshots before grouping and clearing filters restores every entry", () => {
+  const older = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Medicine Alpha", strength: "10 mg", prescribingDoctor: "Dr. Ahmed Khan", prescriptionDate: "2026-08-01" }), "2026-08-03T10:00:00.000Z", "alpha-old-filter");
+  const latest = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Medicine Alpha", strength: "20 mg", prescribingDoctor: "Sara Noor", prescriptionDate: "2026-09-10" }), "2026-09-12T10:00:00.000Z", "alpha-latest-filter");
+  const other = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-b", name: "Medicine Beta", prescribingDoctor: "Ahmed Khan", prescriptionDate: "2026-08-15" }), "2026-08-16T10:00:00.000Z", "beta-filter");
+  const entries = [older, latest, other];
+  const olderMatch = filterPrescriptionHistory(entries, { doctor: "ahmed", medicine: "alpha", prescriptionDateFrom: "2026-08-01", prescriptionDateTo: "2026-08-01" });
+  const groups = groupPrescriptionHistoryByMedicine(olderMatch);
+  assert.deepEqual(groups.map((group) => group.entries.map((entry) => entry.id)), [["alpha-old-filter"]]);
+  assert.deepEqual(filterPrescriptionHistory(entries, { doctor: "nobody" }), []);
+  assert.deepEqual(groupPrescriptionHistoryByMedicine([]), []);
+
+  const activeFilters = { doctor: " Dr. Ahmed ", prescriptionDateFrom: "2026-08-01" };
+  assert.equal(hasActivePrescriptionHistoryFilters(activeFilters), true);
+  const clearedFilters = createEmptyPrescriptionHistoryFilters();
+  assert.equal(hasActivePrescriptionHistoryFilters(clearedFilters), false);
+  assert.deepEqual(filterPrescriptionHistory(entries, clearedFilters).map((entry) => entry.id), entries.map((entry) => entry.id));
+  assert.equal(hasActivePrescriptionHistoryFilters({ doctor: "   ", medicine: "  " }), false);
 });
 
