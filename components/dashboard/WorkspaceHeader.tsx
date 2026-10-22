@@ -6,7 +6,7 @@ import { useMedicine } from "@/contexts/MedicineContext";
 import { BrandLogo } from "@/components/BrandLogo";
 import { clearDemoSession } from "@/lib/demoSession";
 import { changeDemoPassword, DEMO_PASSWORD_MIN_LENGTH } from "@/lib/demoAuth";
-import { getDemoAvatarInitials } from "@/lib/demoAvatar";
+import { getDemoAvatarColor, getDemoAvatarInitials } from "@/lib/demoAvatar";
 import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
 
 export default function WorkspaceHeader() {
@@ -93,6 +93,8 @@ export default function WorkspaceHeader() {
     }
   };
 
+  const avatarColor = getDemoAvatarColor(activeProfileEmail);
+
   return (
     <>
       <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/80 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/80">
@@ -105,7 +107,7 @@ export default function WorkspaceHeader() {
               aria-label={`Open profile menu for ${getDemoAvatarInitials(activeProfileEmail)}`}
               aria-haspopup="menu"
               aria-expanded={profileMenuOpen}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-teal-100 text-sm font-bold text-teal-800 ring-2 ring-white transition hover:bg-teal-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:bg-teal-900/60 dark:text-teal-200 dark:ring-slate-900 dark:hover:bg-teal-900"
+              className={`flex h-10 w-10 items-center justify-center rounded-full ${avatarColor} text-sm font-bold ring-2 ring-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:ring-slate-900`}
             >
               {getDemoAvatarInitials(activeProfileEmail)}
             </button>
