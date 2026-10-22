@@ -12,7 +12,8 @@ import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibilit
 import { doseUnitFor, getStockStatus, inventoryUnitFor, inventoryUnitsCompatible } from "@/lib/medicineLogic";
 import { findPotentialMedicineIdentityPairs } from "@/lib/medicineIdentity";
 import BrandedLoadingScreen from "@/components/BrandedLoadingScreen";
-import { normalizeDoctorName, sortPrescriptionHistory } from "@/lib/prescriptionHistory";
+import { filterPrescriptionHistory, normalizeDoctorName, sortPrescriptionHistory } from "@/lib/prescriptionHistory";
+import { formatMedicineAddedAt, sortMedicinesNewestFirst } from "@/lib/medicineList";
 
 export default function MedicinesPage() {
   const { medicines, doseRecords, prescriptionHistory, addMedicine, updateMedicine, deleteMedicine, addStock, isHydrated } = useMedicine();
@@ -24,15 +25,27 @@ export default function MedicinesPage() {
   const [stockToAdd, setStockToAdd] = useState(0);
   useDialogFocusRestore(Boolean(isAddModalOpen || editingMedicine || deletingMedicine || addingStockMed));
   const [searchQuery, setSearchQuery] = useState("");
+  const [prescriptionDoctorQuery, setPrescriptionDoctorQuery] = useState("");
+  const [prescriptionDateFrom, setPrescriptionDateFrom] = useState("");
+  const [prescriptionDateTo, setPrescriptionDateTo] = useState("");
+  const [prescriptionMedicineQuery, setPrescriptionMedicineQuery] = useState("");
 
   if (!isHydrated) return <BrandedLoadingScreen />;
 
-  const filtered = medicines.filter((m) =>
+  const newestFirstMedicines = sortMedicinesNewestFirst(medicines);
+  const filtered = newestFirstMedicines.filter((m) =>
     m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     m.type.toLowerCase().includes(searchQuery.toLowerCase())
   );
   const possibleDuplicatePairs = findPotentialMedicineIdentityPairs(medicines);
   const orderedPrescriptionHistory = sortPrescriptionHistory(prescriptionHistory);
+  const filteredPrescriptionHistory = filterPrescriptionHistory(orderedPrescriptionHistory, {
+    doctor: prescriptionDoctorQuery,
+    prescriptionDateFrom,
+    prescriptionDateTo,
+    medicine: prescriptionMedicineQuery,
+  });
+  const hasPrescriptionFilters = Boolean(prescriptionDoctorQuery || prescriptionDateFrom || prescriptionDateTo || prescriptionMedicineQuery);
   const latestPrescriptionByMedicine = new Map<string, string>();
   for (const entry of orderedPrescriptionHistory) {
     if (!latestPrescriptionByMedicine.has(entry.medicineId)) latestPrescriptionByMedicine.set(entry.medicineId, entry.id);
@@ -210,12 +223,13 @@ export default function MedicinesPage() {
                       {isUnknown && <span className="text-amber-700 dark:text-amber-300">Dose and inventory units are incompatible; stock was preserved.</span>}
                       {med.instructions && <span>· {med.instructions}</span>}
                     </div>
+                    <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">{formatMedicineAddedAt(med.createdAt)}</p>
                     {(prescribingDoctor || med.prescribingClinic || med.prescriptionDate) && (
                       <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">
                         {prescribingDoctor && <span>Prescribed by {prescribingDoctor}</span>}
                         {prescribingDoctor && med.prescribingClinic && <span> · </span>}
                         {med.prescribingClinic && <span>{med.prescribingClinic}</span>}
-                        {med.prescriptionDate && <span>{prescribingDoctor || med.prescribingClinic ? " · " : ""}Prescription date: {med.prescriptionDate}</span>}
+                        {med.prescriptionDate && <span>{prescribingDoctor || med.prescribingClinic ? " · " : ""}Original prescription date: {med.prescriptionDate}</span>}
                       </p>
                     )}
                   </div>
@@ -254,11 +268,36 @@ export default function MedicinesPage() {
             <h2 className="text-base font-bold text-slate-900 dark:text-white">Prescription History</h2>
             <span className="text-xs text-slate-500 dark:text-slate-400">{orderedPrescriptionHistory.length} entr{orderedPrescriptionHistory.length === 1 ? "y" : "ies"}</span>
           </summary>
+          {orderedPrescriptionHistory.length > 0 && (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <label htmlFor="prescriptionDoctorSearch" className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Prescribing doctor</label>
+                <input id="prescriptionDoctorSearch" type="search" value={prescriptionDoctorQuery} onChange={(event) => setPrescriptionDoctorQuery(event.target.value)} placeholder="Search doctor" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-slate-700 dark:bg-slate-950 dark:text-white" />
+              </div>
+              <div>
+                <label htmlFor="prescriptionMedicineSearch" className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Medicine</label>
+                <input id="prescriptionMedicineSearch" type="search" value={prescriptionMedicineQuery} onChange={(event) => setPrescriptionMedicineQuery(event.target.value)} placeholder="Search medicine" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-slate-700 dark:bg-slate-950 dark:text-white" />
+              </div>
+              <div>
+                <label htmlFor="prescriptionDateFrom" className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Prescription date from</label>
+                <input id="prescriptionDateFrom" type="date" value={prescriptionDateFrom} onChange={(event) => setPrescriptionDateFrom(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-slate-700 dark:bg-slate-950 dark:text-white" />
+              </div>
+              <div>
+                <label htmlFor="prescriptionDateTo" className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Prescription date to</label>
+                <input id="prescriptionDateTo" type="date" value={prescriptionDateTo} onChange={(event) => setPrescriptionDateTo(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-slate-700 dark:bg-slate-950 dark:text-white" />
+              </div>
+            </div>
+          )}
           {orderedPrescriptionHistory.length === 0 ? (
             <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">New prescription details will appear here when a medicine is added or its prescribed details change. Existing medicines without history remain unchanged.</p>
+          ) : filteredPrescriptionHistory.length === 0 ? (
+            <div className="mt-4 rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center dark:border-slate-700">
+              <p className="text-sm text-slate-500 dark:text-slate-400">No prescription history matches these filters.</p>
+              {hasPrescriptionFilters && <button type="button" onClick={() => { setPrescriptionDoctorQuery(""); setPrescriptionMedicineQuery(""); setPrescriptionDateFrom(""); setPrescriptionDateTo(""); }} className="mt-2 text-sm font-semibold text-teal-700 hover:underline dark:text-teal-300">Clear filters</button>}
+            </div>
           ) : (
             <ol className="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
-              {orderedPrescriptionHistory.map((entry) => {
+              {filteredPrescriptionHistory.map((entry) => {
                 const isCurrent = latestPrescriptionByMedicine.get(entry.medicineId) === entry.id;
                 const isTracked = medicines.some((medicine) => medicine.id === entry.medicineId);
                 const recordedAt = new Date(entry.recordedAt);

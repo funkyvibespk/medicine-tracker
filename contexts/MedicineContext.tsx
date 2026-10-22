@@ -13,6 +13,7 @@ import { applySkippedDose, applyTakenDose, validateInventoryThreshold } from "@/
 import { findBlockingMedicineIdentityMatch } from "@/lib/medicineIdentity";
 import { reconcileHistoricalMissedOccurrences } from "@/lib/missedDoses";
 import { addScheduleBaseline, localDateString } from "@/lib/schedule";
+import { applyMedicineUpdatePreservingCreationDate } from "@/lib/medicineList";
 import {
   appendPrescriptionChange,
   createPrescriptionHistoryEntry,
@@ -334,7 +335,7 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
     }
     medicinesRef.current = medicinesRef.current.map((medicine) => {
       if (medicine.id !== id) return medicine;
-      const updated = { ...medicine, ...updates };
+      const updated = applyMedicineUpdatePreservingCreationDate(medicine, updates);
       if (!existing || !scheduleChanged(existing, updates)) return updated;
       return {
         ...updated,

@@ -5,7 +5,8 @@ import { registerHooks } from "node:module";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { sortDoseHistoryRecords } from "../lib/doseHistory.ts";
-import { appendPrescriptionChange, createPrescriptionHistoryEntry, normalizeDoctorName, sortPrescriptionHistory } from "../lib/prescriptionHistory.ts";
+import { appendPrescriptionChange, createPrescriptionHistoryEntry, filterPrescriptionHistory, normalizeDoctorName, sortPrescriptionHistory } from "../lib/prescriptionHistory.ts";
+import { applyMedicineUpdatePreservingCreationDate, formatMedicineAddedAt, sortMedicinesNewestFirst } from "../lib/medicineList.ts";
 import { addScheduleBaseline, getMedicineOccurrencesForDate, getScheduledTimesForDate } from "../lib/schedule.ts";
 import { ACTIVE_DEMO_EMAIL_KEY, ACTIVE_DEMO_SESSION_KEY, demoProfileStorageKey, loadDemoProfile, saveDemoProfileForActiveSession, serializeDemoProfile } from "../lib/demoProfiles.ts";
 import { findBlockingMedicineIdentityMatch, findMedicineIdentityMatches, findPotentialMedicineIdentityPairs } from "../lib/medicineIdentity.ts";
@@ -1183,5 +1184,61 @@ test("doctor prefix case or presence alone does not create a prescription-histor
 
   const unprefixed = { ...previous, prescribingDoctor: "Ahmed Khan" };
   assert.equal(appendPrescriptionChange([], unprefixed, previous, "2026-10-22T12:00:00.000Z", () => "unused").length, 0);
+});
+
+test("medicines sort newest first with deterministic ties and undated entries, without mutating source", () => {
+  const medicines = [
+    { id: "older", createdAt: "2026-10-01T09:00:00.000Z" },
+    { id: "tie-b", createdAt: "2026-10-10T09:00:00.000Z" },
+    { id: "invalid", createdAt: "not-a-date" },
+    { id: "tie-a", createdAt: "2026-10-10T09:00:00.000Z" },
+    { id: "undated" },
+    { id: "newest", createdAt: "2026-10-20T09:00:00.000Z" },
+  ];
+  const original = medicines.slice();
+  assert.deepEqual(sortMedicinesNewestFirst(medicines).map((medicine) => medicine.id), ["newest", "tie-a", "tie-b", "older", "invalid", "undated"]);
+  assert.deepEqual(medicines, original);
+});
+
+test("medicine edits preserve the original creation timestamp and added label uses that timestamp", () => {
+  const medicine = { id: "created-med", createdAt: "2026-10-23T15:35:00.000Z", name: "Old name" };
+  assert.deepEqual(applyMedicineUpdatePreservingCreationDate(medicine, { name: "Edited name", createdAt: "2026-10-24T00:00:00.000Z" }), {
+    id: "created-med", createdAt: "2026-10-23T15:35:00.000Z", name: "Edited name",
+  });
+  assert.equal(applyMedicineUpdatePreservingCreationDate({ id: "legacy" }, { name: "Legacy edited", createdAt: "2026-10-24T00:00:00.000Z" }).createdAt, undefined);
+
+  const instant = new Date("2026-10-23T15:35:00.000Z");
+  const dateLabel = instant.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  const timeLabel = instant.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  assert.equal(formatMedicineAddedAt(medicine.createdAt), `Added ${dateLabel} · ${timeLabel}`);
+  assert.equal(formatMedicineAddedAt(undefined), "Added date unavailable");
+  assert.equal(formatMedicineAddedAt("invalid"), "Added date unavailable");
+});
+
+test("prescription date changes retain previous issued date separately from recorded date", () => {
+  const previous = prescriptionMedicine({ prescribingDoctor: "Ahmed Khan", prescriptionDate: "2026-08-01" });
+  const previousEntry = createPrescriptionHistoryEntry(previous, "2026-08-03T10:00:00.000Z", "rx-old");
+  const updated = { ...previous, prescriptionDate: "2026-09-10", prescribingDoctor: "Sara Noor" };
+  const history = appendPrescriptionChange([previousEntry], previous, updated, "2026-09-12T11:00:00.000Z", () => "rx-new");
+  assert.deepEqual(history.map((entry) => [entry.prescriptionDate, entry.recordedAt]), [
+    ["2026-08-01", "2026-08-03T10:00:00.000Z"],
+    ["2026-09-10", "2026-09-12T11:00:00.000Z"],
+  ]);
+});
+
+test("prescription history filters use historical doctor, issued date, and medicine snapshots together", () => {
+  const medicineAOld = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Medicine Alpha", strength: "10 mg", prescribingDoctor: "Ahmed Khan", prescriptionDate: "2026-08-01" }), "2026-08-03T10:00:00.000Z", "alpha-old");
+  const medicineANew = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Medicine Alpha", strength: "20 mg", prescribingDoctor: "Sara Noor", prescriptionDate: "2026-09-10" }), "2026-09-12T10:00:00.000Z", "alpha-new");
+  const medicineBOld = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-b", name: "Medicine Beta", prescribingDoctor: "Dr. Ahmed Khan", prescriptionDate: "2026-08-15" }), "2026-08-16T10:00:00.000Z", "beta-old");
+  const missing = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-c", name: "Medicine Gamma", prescribingDoctor: undefined, prescriptionDate: undefined }), "2026-09-20T10:00:00.000Z", "gamma-current");
+  const entries = [medicineAOld, medicineANew, medicineBOld, missing];
+  const original = entries.slice();
+
+  assert.deepEqual(filterPrescriptionHistory(entries, { doctor: " dr. AHMED ", prescriptionDateFrom: "2026-08-01", prescriptionDateTo: "2026-08-31", medicine: "alpha" }).map((entry) => entry.id), ["alpha-old"]);
+  assert.deepEqual(filterPrescriptionHistory(entries, { doctor: "Ahmed Khan" }).map((entry) => entry.id), ["alpha-old", "beta-old"]);
+  assert.deepEqual(filterPrescriptionHistory(entries, { prescriptionDateFrom: "2026-09-01", prescriptionDateTo: "2026-09-30", medicine: "alpha" }).map((entry) => entry.id), ["alpha-new"]);
+  assert.deepEqual(filterPrescriptionHistory(entries, { doctor: "Sara", prescriptionDateFrom: "2026-09-01" }).map((entry) => entry.id), ["alpha-new"]);
+  assert.deepEqual(filterPrescriptionHistory(entries, { doctor: "Missing" }), []);
+  assert.deepEqual(entries, original);
 });
 

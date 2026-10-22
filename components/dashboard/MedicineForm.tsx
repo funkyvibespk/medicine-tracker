@@ -657,7 +657,7 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
             <input id="prescribingClinic" name="prescribingClinic" type="text" value={formData.prescribingClinic || ""} onChange={handleChange} className={inputCls} />
           </div>
           <div>
-            <label htmlFor="prescriptionDate" className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Prescription Date (optional)</label>
+            <label htmlFor="prescriptionDate" className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Original Prescription Date (optional)</label>
             <input id="prescriptionDate" name="prescriptionDate" type="date" value={formData.prescriptionDate || ""} onChange={handleChange} className={inputCls} />
             <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Date written on or issued for the prescription, not the date entered here.</p>
           </div>

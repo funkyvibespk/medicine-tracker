@@ -55,6 +55,34 @@ function doctorIdentity(value: string | undefined): string {
   return normalizeDoctorName(value).replace(/^Dr\.\s*/i, "").toLowerCase();
 }
 
+/** Search key that treats the optional Dr. prefix, casing, and extra spaces uniformly. */
+export function normalizeDoctorNameForSearch(value: string | undefined): string {
+  return doctorIdentity(value).replace(/\s+/g, " ").trim();
+}
+
+export interface PrescriptionHistoryFilters {
+  doctor?: string;
+  prescriptionDateFrom?: string;
+  prescriptionDateTo?: string;
+  medicine?: string;
+}
+
+/** Filters historical snapshots, never current medicine metadata or dose events. */
+export function filterPrescriptionHistory(
+  entries: readonly PrescriptionHistoryEntry[],
+  filters: PrescriptionHistoryFilters,
+): PrescriptionHistoryEntry[] {
+  const doctorQuery = normalizeDoctorNameForSearch(filters.doctor);
+  const medicineQuery = normalizedText(filters.medicine).toLowerCase();
+  return entries.filter((entry) => {
+    if (doctorQuery && !normalizeDoctorNameForSearch(entry.prescribingDoctor).includes(doctorQuery)) return false;
+    if (medicineQuery && !entry.medicineName.toLowerCase().includes(medicineQuery)) return false;
+    if (filters.prescriptionDateFrom && (!entry.prescriptionDate || entry.prescriptionDate < filters.prescriptionDateFrom)) return false;
+    if (filters.prescriptionDateTo && (!entry.prescriptionDate || entry.prescriptionDate > filters.prescriptionDateTo)) return false;
+    return true;
+  });
+}
+
 function scheduleTimesKey(times: string[] | undefined): string {
   return JSON.stringify([...(times ?? [])].sort());
 }
