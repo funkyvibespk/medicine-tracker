@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useMedicine, Medicine, DoseRecord, DoseStatus } from "@/contexts/MedicineContext";
 import MedicineForm from "@/components/dashboard/MedicineForm";
+import MedicineFormIcon from "@/components/dashboard/MedicineFormIcon";
 import BottomNav from "@/components/dashboard/BottomNav";
 import WorkspaceNav from "@/components/dashboard/WorkspaceNav";
 import WorkspaceHeader from "@/components/dashboard/WorkspaceHeader";
@@ -555,7 +556,7 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
                 const [year, month, date] = record.scheduledDate.split("-").map(Number);
                 const scheduledDate = new Date(year, month - 1, date);
                 return <li key={record.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2 text-sm">
-                  <span className="font-medium text-slate-800 dark:text-slate-100">{record.medicineName ?? medicine?.name ?? "Deleted medicine"}</span>
+                  <span className="flex items-center gap-2 font-medium text-slate-800 dark:text-slate-100"><MedicineFormIcon type={medicine?.type ?? record.medicineType} size="sm" />{record.medicineName ?? medicine?.name ?? "Deleted medicine"}</span>
                   <span className="text-xs text-slate-600 dark:text-slate-300">{scheduledDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })} · {formatMissedTime(record)}</span>
                   <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-800 dark:bg-rose-950/60 dark:text-rose-300">Missed</span>
                 </li>;
@@ -600,7 +601,8 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
               {recentActivity.map((record) => {
                 const medicineName = record.medicineName ?? medicines.find((medicine) => medicine.id === record.medicineId)?.name ?? "Deleted medicine";
                 const takenAt = record.actualTakenTime ? new Date(record.actualTakenTime) : null;
-                return <li key={record.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"><div className="flex min-w-0 items-center gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" aria-hidden="true">✓</span><div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{medicineName} taken</p><p className="text-xs text-slate-500 dark:text-slate-400">{record.isPrn ? "As needed" : `Scheduled ${format12Hour(record.scheduledTime)}`}</p></div></div><span className="shrink-0 text-[11px] text-slate-500 dark:text-slate-400">{takenAt && !Number.isNaN(takenAt.getTime()) ? takenAt.toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" }) : "Recorded"}</span></li>;
+                const medicine = medicines.find((item) => item.id === record.medicineId);
+                return <li key={record.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"><div className="flex min-w-0 items-center gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" aria-hidden="true">✓</span><div className="flex min-w-0 items-center gap-2"><MedicineFormIcon type={medicine?.type ?? record.medicineType} size="sm" /><div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{medicineName} taken</p><p className="text-xs text-slate-500 dark:text-slate-400">{record.isPrn ? "As needed" : `Scheduled ${format12Hour(record.scheduledTime)}`}</p></div></div></div><span className="shrink-0 text-[11px] text-slate-500 dark:text-slate-400">{takenAt && !Number.isNaN(takenAt.getTime()) ? takenAt.toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" }) : "Recorded"}</span></li>;
               })}
             </ul>}
           </div>
@@ -608,7 +610,7 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
 
         {view === "overview" && <section className="order-4 mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-bold text-slate-900 dark:text-white">Upcoming doses</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">The next scheduled doses today</p></div><Link href="/doses" className="text-xs font-semibold text-teal-700 hover:text-teal-600 dark:text-teal-300">Open today&apos;s schedule →</Link></div>
-          {upcomingDoses.length === 0 ? <p className="mt-4 rounded-xl bg-slate-50 px-4 py-4 text-sm text-slate-500 dark:bg-slate-950/50 dark:text-slate-400">No upcoming scheduled doses today.</p> : <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{upcomingDoses.map((dose) => <div key={dose.id} className="flex min-w-0 items-center gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-950/50"><span className="shrink-0 rounded-lg bg-white px-2 py-1 text-xs font-bold text-teal-700 shadow-sm dark:bg-slate-800 dark:text-teal-300">{formatDoseTime(dose)}</span><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900 dark:text-white">{dose.med.name}</span><span className="block text-xs text-slate-500 dark:text-slate-400">{dose.med.doseAmount} {dose.med.doseUnit ?? doseUnitFor(dose.med)}</span></span></div>)}</div>}
+          {upcomingDoses.length === 0 ? <p className="mt-4 rounded-xl bg-slate-50 px-4 py-4 text-sm text-slate-500 dark:bg-slate-950/50 dark:text-slate-400">No upcoming scheduled doses today.</p> : <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{upcomingDoses.map((dose) => <div key={dose.id} className="flex min-w-0 items-center gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-950/50"><span className="shrink-0 rounded-lg bg-white px-2 py-1 text-xs font-bold text-teal-700 shadow-sm dark:bg-slate-800 dark:text-teal-300">{formatDoseTime(dose)}</span><MedicineFormIcon type={dose.med.type} size="sm" /><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900 dark:text-white">{dose.med.name}</span><span className="block text-xs text-slate-500 dark:text-slate-400">{dose.med.doseAmount} {dose.med.doseUnit ?? doseUnitFor(dose.med)}</span></span></div>)}</div>}
         </section>}
 
         {view === "doses" && <section id="todays-schedule" className="order-2 mb-4 flex scroll-mt-24 flex-wrap items-end justify-between gap-3">
@@ -729,7 +731,7 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
 
                   <div className="mt-2.5">
                     <h3 className={`text-base font-bold tracking-tight ${dose.status.startsWith("taken") ? "text-slate-700 dark:text-slate-300" : "text-slate-900 dark:text-white"}`}>
-                      {dose.med.name}
+                      <span className="flex min-w-0 items-center gap-2"><MedicineFormIcon type={dose.med.type} size="sm" /><span className="truncate">{dose.med.name}</span></span>
                     </h3>
                     <p className="mt-1 text-sm font-semibold text-slate-700 dark:text-slate-200">Prescribed dose: {dose.med.doseAmount} {dose.med.doseUnit ?? doseUnitFor(dose.med)}</p>
                     <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{dose.med.type}{dose.med.strength ? ` · ${dose.med.strength}` : ""}{dose.med.frequency ? ` · ${dose.med.frequency}${dose.med.frequency === "Every X hours" ? ` (every ${dose.med.intervalHours || 8}h)` : ""}` : ""}</p>
@@ -846,7 +848,7 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
                 const prnTakenToday = doseRecords.some((record) => record.isPrn && record.medicineId === med.id && record.scheduledDate === todayStr && Boolean(record.actualTakenTime));
                 return <div key={med.id} className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
                   <div>
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">{med.name}</h3>
+                    <div className="flex min-w-0 items-center gap-2"><MedicineFormIcon type={med.type} size="sm" /><h3 className="truncate text-lg font-bold text-slate-900 dark:text-white">{med.name}</h3></div>
                     <p className="mt-1 text-sm font-medium text-teal-600 dark:text-teal-400">{med.type}{med.strength ? ` · ${med.strength}` : ""}</p>
                     <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">As needed · Dose: {med.doseAmount} {med.doseUnit ?? doseUnitFor(med)}</p>
                     {med.instructions && <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{med.instructions}</p>}
@@ -1022,7 +1024,7 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
             </div>
 
             <div className="mt-5 rounded-xl border border-slate-200 bg-white/70 p-4 dark:border-slate-700 dark:bg-slate-950/50">
-              <h3 className="font-semibold text-slate-900 dark:text-white">{stockCheckDose.med.name}</h3>
+              <div className="flex items-center gap-2"><MedicineFormIcon type={stockCheckDose.med.type} size="sm" /><h3 className="font-semibold text-slate-900 dark:text-white">{stockCheckDose.med.name}</h3></div>
               <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{stockCheckDose.med.type}{stockCheckDose.med.strength ? ` · ${stockCheckDose.med.strength}` : ""}</p>
               <p className="mt-2 text-sm text-slate-700 dark:text-slate-200">Scheduled dose: {stockCheckDose.med.doseAmount} {stockCheckDose.med.doseUnit ?? doseUnitFor(stockCheckDose.med)} at {formatDoseTime(stockCheckDose)}</p>
               <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-700">

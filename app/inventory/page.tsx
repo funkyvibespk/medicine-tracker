@@ -6,6 +6,7 @@ import BottomNav from "@/components/dashboard/BottomNav";
 import WorkspaceNav from "@/components/dashboard/WorkspaceNav";
 import WorkspaceHeader from "@/components/dashboard/WorkspaceHeader";
 import WorkspacePageHeading from "@/components/dashboard/WorkspacePageHeading";
+import MedicineFormIcon from "@/components/dashboard/MedicineFormIcon";
 import { estimatedDosesPerDay } from "@/lib/schedule";
 import { doseUnitFor, getStockStatus, inventoryUnitFor, inventoryUnitsCompatible } from "@/lib/medicineLogic";
 import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
@@ -116,9 +117,12 @@ export default function InventoryPage() {
                   {/* Top */}
                   <div>
                     <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <h3 className="font-bold text-slate-900 dark:text-white">{med.name}</h3>
-                        <p className="text-xs text-teal-600 dark:text-teal-400 font-medium">{med.type} {med.strength ? `· ${med.strength}` : ""}</p>
+                      <div className="flex min-w-0 items-center gap-3">
+                        <MedicineFormIcon type={med.type} size="sm" />
+                        <div className="min-w-0">
+                          <h3 className="truncate font-bold text-slate-900 dark:text-white">{med.name}</h3>
+                          <p className="text-xs text-teal-600 dark:text-teal-400 font-medium">{med.type} {med.strength ? `· ${med.strength}` : ""}</p>
+                        </div>
                       </div>
                       {isOut ? (
                         <span className="flex-shrink-0 inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-700 dark:bg-rose-900/40 dark:text-rose-300">

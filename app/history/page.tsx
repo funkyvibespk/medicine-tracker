@@ -6,6 +6,7 @@ import BottomNav from "@/components/dashboard/BottomNav";
 import WorkspaceNav from "@/components/dashboard/WorkspaceNav";
 import WorkspaceHeader from "@/components/dashboard/WorkspaceHeader";
 import WorkspacePageHeading from "@/components/dashboard/WorkspacePageHeading";
+import MedicineFormIcon from "@/components/dashboard/MedicineFormIcon";
 import { getMedicineOccurrencesForDate, localDateString } from "@/lib/schedule";
 import { canonicalizeOccurrenceRecords, inventoryUnitsCompatible, scheduledOccurrenceKey } from "@/lib/medicineLogic";
 import BrandedLoadingScreen from "@/components/BrandedLoadingScreen";
@@ -228,7 +229,7 @@ export default function HistoryPage() {
                             </svg>
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate font-semibold text-slate-900 dark:text-white text-sm">{medicineName}</p>
+                            <div className="flex min-w-0 items-center gap-2"><MedicineFormIcon type={med?.type ?? record.medicineType} size="sm" /><p className="truncate font-semibold text-slate-900 dark:text-white text-sm">{medicineName}</p></div>
                             <p className="text-xs text-slate-500 dark:text-slate-400">
                               {record.isPrn ? "As needed" : `Scheduled ${formatScheduledRecordTime(record, records)}`}
                               {record.actualTakenTime && (

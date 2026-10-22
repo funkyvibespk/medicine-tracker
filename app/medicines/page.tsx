@@ -3,6 +3,7 @@
 import { useReducer, useState } from "react";
 import { useMedicine, Medicine } from "@/contexts/MedicineContext";
 import MedicineForm from "@/components/dashboard/MedicineForm";
+import MedicineFormIcon from "@/components/dashboard/MedicineFormIcon";
 import BottomNav from "@/components/dashboard/BottomNav";
 import WorkspaceNav from "@/components/dashboard/WorkspaceNav";
 import WorkspaceHeader from "@/components/dashboard/WorkspaceHeader";
@@ -23,6 +24,7 @@ import {
   sortPrescriptionHistory,
 } from "@/lib/prescriptionHistory";
 import { formatMedicineAddedAt, sortMedicinesNewestFirst } from "@/lib/medicineList";
+import { getMedicineFormAppearance } from "@/lib/medicineFormIcon";
 
 export default function MedicinesPage() {
   const { medicines, doseRecords, prescriptionHistory, addMedicine, updateMedicine, deleteMedicine, addStock, isHydrated } = useMedicine();
@@ -81,7 +83,7 @@ export default function MedicinesPage() {
       <li key={entry.id} className="py-4 first:pt-0 last:pb-0">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="font-semibold text-slate-900 dark:text-white">{entry.medicineName} <span className="font-normal text-slate-500 dark:text-slate-400">· {entry.medicineType}{entry.strength ? ` · ${entry.strength}` : ""}</span></p>
+            <div className="flex min-w-0 items-center gap-2"><MedicineFormIcon type={entry.medicineType} size="sm" /><p className="min-w-0 font-semibold text-slate-900 dark:text-white">{entry.medicineName} <span className="font-normal text-slate-500 dark:text-slate-400">· {entry.medicineType}{entry.strength ? ` · ${entry.strength}` : ""}</span></p></div>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
               {!hasMedicineId ? "Medicine link unavailable" : isTracked ? (isCurrent ? "Current prescription" : "Previous prescription") : "Medicine no longer tracked"}
             </p>
@@ -98,17 +100,6 @@ export default function MedicinesPage() {
         </div>
       </li>
     );
-  };
-
-  const typeColor = (type: string) => {
-    switch (type) {
-      case "Tablet": return "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
-      case "Capsule": return "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300";
-      case "Syrup": return "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
-      case "Sachet": return "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300";
-      case "Injection": return "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300";
-      default: return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
-    }
   };
 
   return (
@@ -244,7 +235,7 @@ export default function MedicinesPage() {
                 <div key={`${first.id}:${second.id}`} className="grid gap-3 rounded-xl border border-amber-200/80 bg-white p-3 sm:grid-cols-2 dark:border-amber-900/50 dark:bg-slate-900">
                   {[first, second].map((medicine) => (
                     <div key={medicine.id} className="min-w-0 rounded-lg bg-slate-50 p-3 dark:bg-slate-800/70">
-                      <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{medicine.name} <span className="text-xs font-medium text-amber-700 dark:text-amber-300">{kind === "exact" ? "Exact formatting match" : "Possible spelling match"}</span></p>
+                      <div className="flex min-w-0 items-center gap-2"><MedicineFormIcon type={medicine.type} size="sm" /><p className="min-w-0 truncate text-sm font-semibold text-slate-900 dark:text-white">{medicine.name} <span className="text-xs font-medium text-amber-700 dark:text-amber-300">{kind === "exact" ? "Exact formatting match" : "Possible spelling match"}</span></p></div>
                       <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-slate-600 dark:text-slate-300">
                         <dt>Strength / form</dt><dd>{medicine.strength || "—"} · {medicine.type}</dd>
                         <dt>Route</dt><dd>Not stored by this version</dd>
@@ -307,6 +298,7 @@ export default function MedicinesPage() {
         ) : (
           <div className="space-y-3">
             {filtered.map((med) => {
+              const formAppearance = getMedicineFormAppearance(med.type);
               const stockStatus = getStockStatus(med);
               const isLow = stockStatus === "low";
               const isOut = stockStatus === "out";
@@ -331,19 +323,13 @@ export default function MedicinesPage() {
                   key={med.id}
                   className="group flex items-start gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs transition-all hover:shadow-md hover:-translate-y-0.5 dark:border-slate-800 dark:bg-slate-900"
                 >
-                  {/* Icon */}
-                  <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500/20 to-emerald-500/10 text-teal-600 dark:text-teal-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-                      <path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z" />
-                      <path d="m8.5 8.5 7 7" />
-                    </svg>
-                  </div>
+                  <MedicineFormIcon type={med.type} />
 
                   {/* Info */}
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-base font-bold text-slate-900 dark:text-white">{med.name}</h3>
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${typeColor(med.type)}`}>
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${formAppearance.backgroundClass} ${formAppearance.iconClass}`}>
                         {med.type}
                       </span>
                       {isOut && (

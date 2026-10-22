@@ -7,6 +7,7 @@ import { pathToFileURL } from "node:url";
 import { sortDoseHistoryRecords } from "../lib/doseHistory.ts";
 import { appendPrescriptionChange, buildPrescriptionHistoryFilterOptions, createEmptyPrescriptionHistoryFilters, createInitialPrescriptionHistoryViewState, createPrescriptionHistoryEntry, filterPrescriptionHistory, getPrescriptionHistoryResults, groupPrescriptionHistoryByMedicine, hasActivePrescriptionHistoryFilters, normalizeDoctorName, prescriptionHistoryViewReducer, sortPrescriptionHistory, validatePrescriptionHistoryFilters } from "../lib/prescriptionHistory.ts";
 import { applyMedicineUpdatePreservingCreationDate, formatMedicineAddedAt, sortMedicinesNewestFirst } from "../lib/medicineList.ts";
+import { getMedicineFormAppearance } from "../lib/medicineFormIcon.ts";
 import { addScheduleBaseline, getMedicineOccurrencesForDate, getScheduledTimesForDate } from "../lib/schedule.ts";
 import { ACTIVE_DEMO_EMAIL_KEY, ACTIVE_DEMO_SESSION_KEY, demoProfileStorageKey, loadDemoProfile, saveDemoProfileForActiveSession, serializeDemoProfile } from "../lib/demoProfiles.ts";
 import { findBlockingMedicineIdentityMatch, findMedicineIdentityMatches, findPotentialMedicineIdentityPairs } from "../lib/medicineIdentity.ts";
@@ -1389,5 +1390,27 @@ test("prescription filter validation rejects an empty filter and reversed date r
   assert.match(validatePrescriptionHistoryFilters({ prescriptionDateFrom: "2026-09-02", prescriptionDateTo: "2026-09-01" }), /on or before/);
   assert.match(validatePrescriptionHistoryFilters({ prescriptionDateFrom: "2026-02-30" }), /valid start date/);
   assert.equal(validatePrescriptionHistoryFilters({ prescriptionDateFrom: "2026-08-01", prescriptionDateTo: "2026-08-01" }), null);
+});
+
+test("medicine form presentation maps every supported form to a distinct icon and color", () => {
+  const forms = ["Tablet", "Capsule", "Syrup", "Sachet", "Injection"];
+  const appearances = forms.map((form) => getMedicineFormAppearance(form));
+
+  assert.deepEqual(appearances.map((appearance) => appearance.icon), ["tablet", "capsule", "syrup", "sachet", "injection"]);
+  assert.equal(new Set(appearances.map((appearance) => appearance.icon)).size, forms.length);
+  assert.equal(new Set(appearances.map((appearance) => appearance.backgroundClass)).size, forms.length);
+  assert.equal(new Set(appearances.map((appearance) => appearance.iconClass)).size, forms.length);
+});
+
+test("medicine form presentation is case- and whitespace-tolerant without transforming values", () => {
+  assert.deepEqual(getMedicineFormAppearance("  cApSuLe  "), getMedicineFormAppearance("Capsule"));
+  assert.deepEqual(getMedicineFormAppearance("Syrup"), getMedicineFormAppearance("syrup"));
+});
+
+test("unknown or missing medicine forms use a neutral fallback", () => {
+  const fallback = getMedicineFormAppearance(undefined);
+  assert.equal(fallback.icon, "unknown");
+  assert.equal(getMedicineFormAppearance(null).icon, "unknown");
+  assert.deepEqual(getMedicineFormAppearance("unrecognized form"), fallback);
 });
 
