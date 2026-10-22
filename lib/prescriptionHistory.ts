@@ -62,9 +62,28 @@ export function normalizeDoctorNameForSearch(value: string | undefined): string 
 
 export interface PrescriptionHistoryFilters {
   doctor?: string;
+  doctorIdentity?: string;
   prescriptionDateFrom?: string;
   prescriptionDateTo?: string;
   medicine?: string;
+  medicineId?: string;
+  medicineEntryId?: string;
+  medicineEntryIndex?: number;
+}
+
+export interface PrescriptionHistoryFilterOption {
+  value: string;
+  label: string;
+  doctor?: string;
+  doctorIdentity?: string;
+  medicineId?: string;
+  medicineEntryId?: string;
+  medicineEntryIndex?: number;
+}
+
+export interface PrescriptionHistoryFilterOptions {
+  doctors: PrescriptionHistoryFilterOption[];
+  medicines: PrescriptionHistoryFilterOption[];
 }
 
 export interface PrescriptionHistoryGroup {
@@ -75,11 +94,143 @@ export interface PrescriptionHistoryGroup {
 }
 
 export function createEmptyPrescriptionHistoryFilters(): PrescriptionHistoryFilters {
-  return { doctor: "", prescriptionDateFrom: "", prescriptionDateTo: "", medicine: "" };
+  return { doctor: "", doctorIdentity: undefined, prescriptionDateFrom: "", prescriptionDateTo: "", medicine: "", medicineId: undefined, medicineEntryId: undefined, medicineEntryIndex: undefined };
 }
 
 export function hasActivePrescriptionHistoryFilters(filters: PrescriptionHistoryFilters): boolean {
-  return Boolean(filters.doctor?.trim() || filters.prescriptionDateFrom || filters.prescriptionDateTo || filters.medicine?.trim());
+  return Boolean(filters.doctor?.trim() || filters.doctorIdentity || filters.prescriptionDateFrom || filters.prescriptionDateTo || filters.medicine?.trim() || filters.medicineId || filters.medicineEntryId || filters.medicineEntryIndex !== undefined);
+}
+
+export function validatePrescriptionHistoryFilters(filters: PrescriptionHistoryFilters): string | null {
+  if (!hasActivePrescriptionHistoryFilters(filters)) {
+    return "Choose a doctor, medicine, or prescription date before applying filters.";
+  }
+  const isValidDate = (value: string) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+  };
+  if (filters.prescriptionDateFrom && !isValidDate(filters.prescriptionDateFrom)) return "Enter a valid start date.";
+  if (filters.prescriptionDateTo && !isValidDate(filters.prescriptionDateTo)) return "Enter a valid end date.";
+  if (filters.prescriptionDateFrom && filters.prescriptionDateTo && filters.prescriptionDateFrom > filters.prescriptionDateTo) {
+    return "The start date must be on or before the end date.";
+  }
+  return null;
+}
+
+/** Builds account-local filter options from the full saved snapshot collection. */
+export function buildPrescriptionHistoryFilterOptions(
+  entries: readonly PrescriptionHistoryEntry[],
+): PrescriptionHistoryFilterOptions {
+  const orderedEntries = sortPrescriptionHistory(entries);
+  const doctors = new Map<string, PrescriptionHistoryFilterOption>();
+  const medicines = new Map<string, PrescriptionHistoryFilterOption>();
+
+  orderedEntries.forEach((entry, index) => {
+    const doctor = normalizeDoctorNameForSearch(entry.prescribingDoctor);
+    if (doctor && !doctors.has(doctor)) {
+      doctors.set(doctor, { value: doctor, label: normalizeDoctorName(entry.prescribingDoctor), doctor, doctorIdentity: doctor });
+    }
+
+    const medicineId = typeof entry.medicineId === "string" && entry.medicineId.trim()
+      ? entry.medicineId
+      : undefined;
+    const value = medicineId ? `medicine:${medicineId}` : `snapshot:${index}:${entry.id}`;
+    if (!medicines.has(value)) {
+      const details = `${entry.medicineName} · ${entry.medicineType}${entry.strength ? ` · ${entry.strength}` : ""}`;
+      medicines.set(value, medicineId
+        ? { value, label: details, medicineId }
+        : { value, label: `${details} · unlinked snapshot ${index + 1}`, medicineEntryId: entry.id, medicineEntryIndex: index });
+    }
+  });
+
+  const medicineOptions = [...medicines.values()];
+  const labelCounts = new Map<string, number>();
+  for (const option of medicineOptions) labelCounts.set(option.label, (labelCounts.get(option.label) ?? 0) + 1);
+  const duplicateLabelIndices = new Map<string, number>();
+  for (const option of medicineOptions) {
+    if ((labelCounts.get(option.label) ?? 0) > 1) {
+      const index = (duplicateLabelIndices.get(option.label) ?? 0) + 1;
+      duplicateLabelIndices.set(option.label, index);
+      option.label = `${option.label} · record ${index}`;
+    }
+  }
+
+  return {
+    doctors: [...doctors.values()].sort((a, b) => a.label.localeCompare(b.label)),
+    medicines: medicineOptions,
+  };
+}
+
+export interface PrescriptionHistoryViewState {
+  draftFilters: PrescriptionHistoryFilters;
+  appliedFilters: PrescriptionHistoryFilters | null;
+  showAll: boolean;
+  validationMessage: string | null;
+}
+
+export type PrescriptionHistoryViewAction =
+  | { type: "edit-filters"; updates: Partial<PrescriptionHistoryFilters> }
+  | { type: "apply-filters" }
+  | { type: "show-all" }
+  | { type: "clear" };
+
+export function createInitialPrescriptionHistoryViewState(): PrescriptionHistoryViewState {
+  return { draftFilters: createEmptyPrescriptionHistoryFilters(), appliedFilters: null, showAll: false, validationMessage: null };
+}
+
+/** Pure UI-state transitions keep unapplied edits from presenting stale results. */
+export function prescriptionHistoryViewReducer(
+  state: PrescriptionHistoryViewState,
+  action: PrescriptionHistoryViewAction,
+): PrescriptionHistoryViewState {
+  if (action.type === "edit-filters") {
+    return {
+      ...state,
+      draftFilters: { ...state.draftFilters, ...action.updates },
+      appliedFilters: null,
+      showAll: false,
+      validationMessage: null,
+    };
+  }
+  if (action.type === "apply-filters") {
+    const validationMessage = validatePrescriptionHistoryFilters(state.draftFilters);
+    return validationMessage
+      ? { ...state, appliedFilters: null, showAll: false, validationMessage }
+      : { ...state, appliedFilters: { ...state.draftFilters }, showAll: false, validationMessage: null };
+  }
+  if (action.type === "show-all") {
+    return { draftFilters: createEmptyPrescriptionHistoryFilters(), appliedFilters: null, showAll: true, validationMessage: null };
+  }
+  return createInitialPrescriptionHistoryViewState();
+}
+
+export type PrescriptionHistoryResultsMode = "hidden" | "filtered" | "all";
+
+export interface PrescriptionHistoryResults {
+  mode: PrescriptionHistoryResultsMode;
+  entries: PrescriptionHistoryEntry[];
+  totalCount: number;
+  resultCount: number;
+  countLabel: string;
+}
+
+export function getPrescriptionHistoryResults(
+  entries: readonly PrescriptionHistoryEntry[],
+  state: PrescriptionHistoryViewState,
+): PrescriptionHistoryResults {
+  const mode: PrescriptionHistoryResultsMode = state.showAll ? "all" : state.appliedFilters ? "filtered" : "hidden";
+  const results = mode === "all"
+    ? [...entries]
+    : mode === "filtered"
+      ? filterPrescriptionHistory(entries, state.appliedFilters!)
+      : [];
+  const countLabel = mode === "all"
+    ? `Showing all ${entries.length} snapshot${entries.length === 1 ? "" : "s"}`
+    : mode === "filtered"
+      ? `${results.length} matching snapshot${results.length === 1 ? "" : "s"} of ${entries.length} total`
+      : "Results hidden";
+  return { mode, entries: results, totalCount: entries.length, resultCount: results.length, countLabel };
 }
 
 /** Groups snapshots only by their stored medicine ID; unlinked entries stay separate. */
@@ -109,9 +260,13 @@ export function filterPrescriptionHistory(
 ): PrescriptionHistoryEntry[] {
   const doctorQuery = normalizeDoctorNameForSearch(filters.doctor);
   const medicineQuery = normalizedText(filters.medicine).toLowerCase();
-  return entries.filter((entry) => {
+  return entries.filter((entry, index) => {
+    if (filters.doctorIdentity && normalizeDoctorNameForSearch(entry.prescribingDoctor) !== filters.doctorIdentity) return false;
     if (doctorQuery && !normalizeDoctorNameForSearch(entry.prescribingDoctor).includes(doctorQuery)) return false;
     if (medicineQuery && !entry.medicineName.toLowerCase().includes(medicineQuery)) return false;
+    if (filters.medicineId && entry.medicineId !== filters.medicineId) return false;
+    if (filters.medicineEntryId && entry.id !== filters.medicineEntryId) return false;
+    if (filters.medicineEntryIndex !== undefined && index !== filters.medicineEntryIndex) return false;
     if (filters.prescriptionDateFrom && (!entry.prescriptionDate || entry.prescriptionDate < filters.prescriptionDateFrom)) return false;
     if (filters.prescriptionDateTo && (!entry.prescriptionDate || entry.prescriptionDate > filters.prescriptionDateTo)) return false;
     return true;

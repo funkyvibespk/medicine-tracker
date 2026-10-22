@@ -5,7 +5,7 @@ import { registerHooks } from "node:module";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { sortDoseHistoryRecords } from "../lib/doseHistory.ts";
-import { appendPrescriptionChange, createEmptyPrescriptionHistoryFilters, createPrescriptionHistoryEntry, filterPrescriptionHistory, groupPrescriptionHistoryByMedicine, hasActivePrescriptionHistoryFilters, normalizeDoctorName, sortPrescriptionHistory } from "../lib/prescriptionHistory.ts";
+import { appendPrescriptionChange, buildPrescriptionHistoryFilterOptions, createEmptyPrescriptionHistoryFilters, createInitialPrescriptionHistoryViewState, createPrescriptionHistoryEntry, filterPrescriptionHistory, getPrescriptionHistoryResults, groupPrescriptionHistoryByMedicine, hasActivePrescriptionHistoryFilters, normalizeDoctorName, prescriptionHistoryViewReducer, sortPrescriptionHistory, validatePrescriptionHistoryFilters } from "../lib/prescriptionHistory.ts";
 import { applyMedicineUpdatePreservingCreationDate, formatMedicineAddedAt, sortMedicinesNewestFirst } from "../lib/medicineList.ts";
 import { addScheduleBaseline, getMedicineOccurrencesForDate, getScheduledTimesForDate } from "../lib/schedule.ts";
 import { ACTIVE_DEMO_EMAIL_KEY, ACTIVE_DEMO_SESSION_KEY, demoProfileStorageKey, loadDemoProfile, saveDemoProfileForActiveSession, serializeDemoProfile } from "../lib/demoProfiles.ts";
@@ -1283,5 +1283,111 @@ test("history filters match older snapshots before grouping and clearing filters
   assert.equal(hasActivePrescriptionHistoryFilters(clearedFilters), false);
   assert.deepEqual(filterPrescriptionHistory(entries, clearedFilters).map((entry) => entry.id), entries.map((entry) => entry.id));
   assert.equal(hasActivePrescriptionHistoryFilters({ doctor: "   ", medicine: "  " }), false);
+});
+
+test("prescription filter options normalize doctor names and derive medicine choices from snapshots", () => {
+  const entries = [
+    createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Rigix", type: "Tablet", strength: "10 mg", prescribingDoctor: "Sadia" }), "2026-10-20T10:00:00.000Z", "rigix-new"),
+    createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Rigix", type: "Tablet", strength: "5 mg", prescribingDoctor: "Dr.Sadia" }), "2026-10-10T10:00:00.000Z", "rigix-old"),
+    createPrescriptionHistoryEntry(prescriptionMedicine({ id: "deleted-id", name: "Archived medicine", type: "Capsule", strength: "20 mg", prescribingDoctor: "DR. SADIA" }), "2026-10-09T10:00:00.000Z", "archived"),
+    createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-b", name: "Other medicine", prescribingDoctor: "  " }), "2026-10-08T10:00:00.000Z", "other"),
+  ];
+  const options = buildPrescriptionHistoryFilterOptions(entries);
+  assert.equal(options.doctors.filter((option) => option.doctorIdentity === "sadia").length, 1);
+  assert.equal(options.doctors.find((option) => option.doctorIdentity === "sadia")?.label, "Dr. Sadia");
+  assert.equal(options.doctors.some((option) => option.label === "Dr."), false);
+  assert.equal(options.medicines.length, 3);
+  assert.equal(options.medicines.find((option) => option.medicineId === "med-a")?.label, "Rigix · Tablet · 10 mg");
+  assert.equal(options.medicines.some((option) => option.medicineId === "deleted-id"), true);
+});
+
+test("medicine filter options distinguish same-label IDs and unlinked snapshots without merging", () => {
+  const first = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "id-one", name: "Same", type: "Tablet", strength: "10 mg" }), "2026-10-10T10:00:00.000Z", "first");
+  const second = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "id-two", name: "Same", type: "Tablet", strength: "10 mg" }), "2026-10-09T10:00:00.000Z", "second");
+  const missingA = { ...createPrescriptionHistoryEntry(prescriptionMedicine({ id: "id-three", name: "Legacy" }), "2026-10-08T10:00:00.000Z", "missing-a"), medicineId: "" };
+  const missingB = { ...createPrescriptionHistoryEntry(prescriptionMedicine({ id: "id-four", name: "Legacy" }), "2026-10-07T10:00:00.000Z", "missing-b"), medicineId: undefined };
+  const orderedEntries = sortPrescriptionHistory([first, second, missingA, missingB]);
+  const options = buildPrescriptionHistoryFilterOptions(orderedEntries);
+  assert.equal(options.medicines.length, 4);
+  assert.notEqual(options.medicines[0].value, options.medicines[1].value);
+  assert.notEqual(options.medicines[0].label, options.medicines[1].label);
+  assert.equal(new Set(options.medicines.map((option) => option.value)).size, 4);
+
+  const unlinkedOption = options.medicines.find((option) => option.medicineEntryId === "missing-b");
+  assert.ok(unlinkedOption);
+  const matches = filterPrescriptionHistory(orderedEntries, {
+    medicineEntryId: unlinkedOption.medicineEntryId,
+    medicineEntryIndex: unlinkedOption.medicineEntryIndex,
+  });
+  assert.deepEqual(matches.map((entry) => entry.id), ["missing-b"]);
+});
+
+test("prescription filter options select all snapshots for the normalized doctor and tracked medicine", () => {
+  const older = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Rigix", type: "Tablet", strength: "5 mg", prescribingDoctor: "Dr. Sadia", prescriptionDate: "2026-08-01" }), "2026-08-03T10:00:00.000Z", "rigix-old-match");
+  const latest = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Rigix", type: "Tablet", strength: "10 mg", prescribingDoctor: "SADIA", prescriptionDate: "2026-10-20" }), "2026-10-21T10:00:00.000Z", "rigix-new-match");
+  const unrelated = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-b", name: "Another", prescribingDoctor: "Other Doctor", prescriptionDate: "2026-08-01" }), "2026-08-02T10:00:00.000Z", "unrelated");
+  const ordered = sortPrescriptionHistory([older, latest, unrelated]);
+  const options = buildPrescriptionHistoryFilterOptions(ordered);
+  const doctor = options.doctors.find((option) => option.doctorIdentity === "sadia");
+  const medicine = options.medicines.find((option) => option.medicineId === "med-a");
+  assert.ok(doctor && medicine);
+  assert.deepEqual(filterPrescriptionHistory(ordered, { doctorIdentity: doctor.doctorIdentity }).map((entry) => entry.id), ["rigix-new-match", "rigix-old-match"]);
+  assert.deepEqual(filterPrescriptionHistory(ordered, { medicineId: medicine.medicineId }).map((entry) => entry.id), ["rigix-new-match", "rigix-old-match"]);
+  assert.deepEqual(filterPrescriptionHistory(ordered, { prescriptionDateFrom: "2026-08-01", prescriptionDateTo: "2026-08-01" }).map((entry) => entry.id), ["rigix-old-match", "unrelated"]);
+  assert.deepEqual(filterPrescriptionHistory(ordered, { prescriptionDateFrom: "2026-08-02", prescriptionDateTo: "2026-10-20" }).map((entry) => entry.id), ["rigix-new-match"]);
+  assert.deepEqual(filterPrescriptionHistory(ordered, { prescriptionDateFrom: "2026-08-02" }).map((entry) => entry.id), ["rigix-new-match"]);
+});
+
+test("prescription history results start hidden, apply explicitly, hide stale results, show all, and clear to hidden", () => {
+  const entries = [
+    createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Alpha", prescribingDoctor: "Doctor A", prescriptionDate: "2026-08-01" }), "2026-08-02T10:00:00.000Z", "alpha"),
+    createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-b", name: "Beta", prescribingDoctor: "Doctor B", prescriptionDate: "2026-09-01" }), "2026-09-02T10:00:00.000Z", "beta"),
+  ];
+  let state = createInitialPrescriptionHistoryViewState();
+  let results = getPrescriptionHistoryResults(entries, state);
+  assert.equal(results.mode, "hidden");
+  assert.deepEqual(results.entries, []);
+  assert.equal(results.totalCount, 2);
+  assert.equal(validatePrescriptionHistoryFilters(state.draftFilters), "Choose a doctor, medicine, or prescription date before applying filters.");
+
+  state = prescriptionHistoryViewReducer(state, { type: "apply-filters" });
+  assert.equal(state.validationMessage, "Choose a doctor, medicine, or prescription date before applying filters.");
+  assert.equal(getPrescriptionHistoryResults(entries, state).mode, "hidden");
+
+  state = prescriptionHistoryViewReducer(state, { type: "edit-filters", updates: { doctorIdentity: "doctor a" } });
+  state = prescriptionHistoryViewReducer(state, { type: "apply-filters" });
+  results = getPrescriptionHistoryResults(entries, state);
+  assert.equal(results.mode, "filtered");
+  assert.equal(results.resultCount, 1);
+  assert.equal(results.countLabel, "1 matching snapshot of 2 total");
+  assert.deepEqual(results.entries.map((entry) => entry.id), ["alpha"]);
+
+  state = prescriptionHistoryViewReducer(state, { type: "edit-filters", updates: { doctorIdentity: "nobody" } });
+  results = getPrescriptionHistoryResults(entries, state);
+  assert.equal(results.mode, "hidden");
+  assert.deepEqual(results.entries, []);
+  state = prescriptionHistoryViewReducer(state, { type: "apply-filters" });
+  results = getPrescriptionHistoryResults(entries, state);
+  assert.equal(results.countLabel, "0 matching snapshots of 2 total");
+  assert.deepEqual(results.entries, []);
+
+  state = prescriptionHistoryViewReducer(state, { type: "show-all" });
+  results = getPrescriptionHistoryResults(entries, state);
+  assert.equal(results.mode, "all");
+  assert.equal(results.countLabel, "Showing all 2 snapshots");
+  assert.equal(results.resultCount, 2);
+
+  state = prescriptionHistoryViewReducer(state, { type: "clear" });
+  results = getPrescriptionHistoryResults(entries, state);
+  assert.equal(results.mode, "hidden");
+  assert.equal(results.countLabel, "Results hidden");
+  assert.equal(hasActivePrescriptionHistoryFilters(state.draftFilters), false);
+});
+
+test("prescription filter validation rejects an empty filter and reversed date range", () => {
+  assert.match(validatePrescriptionHistoryFilters({}), /Choose a doctor, medicine, or prescription date/);
+  assert.match(validatePrescriptionHistoryFilters({ prescriptionDateFrom: "2026-09-02", prescriptionDateTo: "2026-09-01" }), /on or before/);
+  assert.match(validatePrescriptionHistoryFilters({ prescriptionDateFrom: "2026-02-30" }), /valid start date/);
+  assert.equal(validatePrescriptionHistoryFilters({ prescriptionDateFrom: "2026-08-01", prescriptionDateTo: "2026-08-01" }), null);
 });
 
