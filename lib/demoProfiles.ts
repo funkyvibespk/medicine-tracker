@@ -33,11 +33,86 @@ export function demoProfileStorageKey(email: string): string {
   return `chilldose_demo_profile_v1_${encodeURIComponent(normalizeDemoEmail(email))}`;
 }
 
-function parseArray(raw: string | null, key: string): unknown[] {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isCalendarDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const timestamp = Date.parse(`${value}T00:00:00.000Z`);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === value;
+}
+
+function isClockTime(value: unknown): value is string {
+  return typeof value === "string" && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function hasOptionalString(record: Record<string, unknown>, key: string): boolean {
+  return record[key] === undefined || typeof record[key] === "string";
+}
+
+function hasOptionalNonNegativeNumber(record: Record<string, unknown>, key: string): boolean {
+  return record[key] === undefined || (isFiniteNumber(record[key]) && record[key] >= 0);
+}
+
+function isProfileScheduleRevision(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  return typeof value.effectiveAt === "string" && Number.isFinite(Date.parse(value.effectiveAt)) &&
+    isNonEmptyString(value.frequency) && isCalendarDate(value.startDate) &&
+    (value.endDate === undefined || isCalendarDate(value.endDate)) &&
+    (value.intervalHours === undefined || isFiniteNumber(value.intervalHours)) &&
+    (value.hydrationBaseline === undefined || value.hydrationBaseline === true) &&
+    Array.isArray(value.scheduleTimes) && value.scheduleTimes.every(isClockTime);
+}
+
+/** Validate the fields downstream schedule, inventory, and history code reads directly. */
+function isProfileMedicineEntry(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  return isNonEmptyString(value.id) && isNonEmptyString(value.name) &&
+    isNonEmptyString(value.type) && typeof value.strength === "string" &&
+    isFiniteNumber(value.doseAmount) && isNonEmptyString(value.frequency) &&
+    isCalendarDate(value.startDate) && isFiniteNumber(value.inventoryAmount) && value.inventoryAmount >= 0 &&
+    Array.isArray(value.scheduleTimes) && value.scheduleTimes.every(isClockTime) &&
+    (value.intervalHours === undefined || isFiniteNumber(value.intervalHours)) &&
+    (value.endDate === undefined || isCalendarDate(value.endDate)) &&
+    (value.createdAt === undefined || typeof value.createdAt === "string") &&
+    (value.scheduleRevisions === undefined ||
+      (Array.isArray(value.scheduleRevisions) && value.scheduleRevisions.every(isProfileScheduleRevision))) &&
+    hasOptionalString(value, "prescribingDoctor") && hasOptionalString(value, "prescribingClinic") &&
+    hasOptionalString(value, "prescriptionDate") && hasOptionalString(value, "prescriptionNotes") &&
+    hasOptionalString(value, "instructions") && hasOptionalString(value, "notes") &&
+    hasOptionalString(value, "doseUnit") && hasOptionalString(value, "inventoryUnit") &&
+    hasOptionalString(value, "lowStockThresholdUnit") &&
+    hasOptionalNonNegativeNumber(value, "inventoryCapacity") &&
+    hasOptionalNonNegativeNumber(value, "inventoryContainerCapacity") &&
+    hasOptionalNonNegativeNumber(value, "lowStockThreshold");
+}
+
+function isProfileDoseRecord(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  return isNonEmptyString(value.id) && isNonEmptyString(value.medicineId) &&
+    isCalendarDate(value.scheduledDate) && isClockTime(value.scheduledTime) &&
+    isNonEmptyString(value.status) &&
+    (value.scheduledInstant === undefined || typeof value.scheduledInstant === "string") &&
+    (value.actualTakenTime === undefined || typeof value.actualTakenTime === "string") &&
+    (value.isPrn === undefined || typeof value.isPrn === "boolean") &&
+    hasOptionalString(value, "medicineName") && hasOptionalString(value, "medicineType") &&
+    hasOptionalString(value, "medicineStrength");
+}
+
+function parseArray(raw: string | null, key: string, isValidEntry: (value: unknown) => boolean): unknown[] {
   if (raw === null) return [];
   const parsed: unknown = JSON.parse(raw);
-  if (!Array.isArray(parsed)) {
-    throw new Error(`Saved tracker data in ${key} is not a list. It was preserved without changes.`);
+  if (!Array.isArray(parsed) || !parsed.every(isValidEntry)) {
+    throw new Error(`Saved tracker data in ${key} contains records that could not be read safely. It was preserved without changes.`);
   }
   return parsed;
 }
@@ -49,7 +124,9 @@ function parseProfile(raw: string, email: string): DemoProfileData {
     (parsed as Partial<StoredProfile>).version !== 1 ||
     normalizeDemoEmail(String((parsed as Partial<StoredProfile>).email ?? "")) !== email ||
     !Array.isArray((parsed as Partial<StoredProfile>).medicines) ||
+    !(parsed as Partial<StoredProfile>).medicines!.every(isProfileMedicineEntry) ||
     !Array.isArray((parsed as Partial<StoredProfile>).doseRecords) ||
+    !(parsed as Partial<StoredProfile>).doseRecords!.every(isProfileDoseRecord) ||
     ((parsed as Partial<StoredProfile>).prescriptionHistory !== undefined &&
       (!Array.isArray((parsed as Partial<StoredProfile>).prescriptionHistory) ||
         !(parsed as Partial<StoredProfile>).prescriptionHistory!.every(isProfilePrescriptionEntry)))
@@ -108,8 +185,8 @@ export function loadDemoProfile(
   }
 
   // Validate both legacy values before making any storage changes.
-  const medicines = parseArray(storage.getItem(MEDICINES_STORAGE_KEY), MEDICINES_STORAGE_KEY);
-  const doseRecords = parseArray(storage.getItem(DOSES_STORAGE_KEY), DOSES_STORAGE_KEY);
+  const medicines = parseArray(storage.getItem(MEDICINES_STORAGE_KEY), MEDICINES_STORAGE_KEY, isProfileMedicineEntry);
+  const doseRecords = parseArray(storage.getItem(DOSES_STORAGE_KEY), DOSES_STORAGE_KEY, isProfileDoseRecord);
 
   // Claim before copying so an interrupted copy cannot expose legacy data to a different profile.
   if (assignment === null) {

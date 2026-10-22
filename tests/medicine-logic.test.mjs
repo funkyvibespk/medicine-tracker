@@ -9,7 +9,7 @@ import { appendPrescriptionChange, buildPrescriptionHistoryFilterOptions, create
 import { applyMedicineUpdatePreservingCreationDate, formatMedicineAddedAt, sortMedicinesNewestFirst } from "../lib/medicineList.ts";
 import { getMedicineFormAppearance } from "../lib/medicineFormIcon.ts";
 import { addScheduleBaseline, getMedicineOccurrencesForDate, getScheduledTimesForDate } from "../lib/schedule.ts";
-import { ACTIVE_DEMO_EMAIL_KEY, ACTIVE_DEMO_SESSION_KEY, demoProfileStorageKey, loadDemoProfile, saveDemoProfileForActiveSession, serializeDemoProfile } from "../lib/demoProfiles.ts";
+import { ACTIVE_DEMO_EMAIL_KEY, ACTIVE_DEMO_SESSION_KEY, DOSES_STORAGE_KEY, MEDICINES_STORAGE_KEY, PROFILE_MIGRATION_STORAGE_KEY, demoProfileStorageKey, loadDemoProfile, saveDemoProfileForActiveSession, serializeDemoProfile } from "../lib/demoProfiles.ts";
 import { findBlockingMedicineIdentityMatch, findMedicineIdentityMatches, findPotentialMedicineIdentityPairs } from "../lib/medicineIdentity.ts";
 import {
   availableVolumeFromContainers,
@@ -483,8 +483,8 @@ test("profile persistence rejects a stale owner after the active session changes
     getItem: (key) => storage.get(key) ?? null,
     setItem: (key, value) => storage.set(key, value),
   };
-  const profileA = { email: "account-a@example.invalid", medicines: [{ id: "A" }], doseRecords: [] };
-  const profileB = { email: "account-b@example.invalid", medicines: [{ id: "B" }], doseRecords: [] };
+  const profileA = { email: "account-a@example.invalid", medicines: [syrup({ id: "A" })], doseRecords: [] };
+  const profileB = { email: "account-b@example.invalid", medicines: [syrup({ id: "B" })], doseRecords: [] };
 
   storage.set(ACTIVE_DEMO_SESSION_KEY, "active");
   storage.set(ACTIVE_DEMO_EMAIL_KEY, "account-a@example.invalid");
@@ -496,7 +496,7 @@ test("profile persistence rejects a stale owner after the active session changes
   assert.equal(saveDemoProfileForActiveSession(syntheticStorage, { ...profileA, medicines: [{ id: "stale" }] }), false);
   assert.equal(storage.get(demoProfileStorageKey(profileA.email)), savedA);
   assert.equal(saveDemoProfileForActiveSession(syntheticStorage, profileB), true);
-  assert.deepEqual(loadDemoProfile(syntheticStorage, profileB.email).medicines, [{ id: "B" }]);
+  assert.deepEqual(loadDemoProfile(syntheticStorage, profileB.email).medicines.map((medicine) => medicine.id), ["B"]);
 });
 
 test("malformed profile data is rejected without replacing the stored value", () => {
@@ -508,6 +508,79 @@ test("malformed profile data is rejected without replacing the stored value", ()
 
   assert.throws(() => loadDemoProfile({ getItem: (storageKey) => storage.get(storageKey) ?? null }, email));
   assert.equal(storage.get(key), malformed);
+});
+
+test("profile validation rejects malformed medicine and dose entries without writing or replacing saved data", () => {
+  const email = "invalid-records@example.invalid";
+  const cases = [
+    { label: "null medicine", medicines: [null], doseRecords: [] },
+    { label: "primitive medicine", medicines: ["not a medicine"], doseRecords: [] },
+    { label: "medicine missing a required field", medicines: [{ ...syrup(), id: undefined }], doseRecords: [] },
+    { label: "invalid medicine schedule time", medicines: [syrup({ scheduleTimes: ["25:90"] })], doseRecords: [] },
+    { label: "null dose record", medicines: [], doseRecords: [null] },
+    { label: "primitive dose record", medicines: [], doseRecords: [42] },
+    { label: "dose missing required fields", medicines: [], doseRecords: [{ id: "dose-only" }] },
+    { label: "invalid dose date", medicines: [], doseRecords: [{ ...takenRecord("2026-10-16", "10:00", localIso("2026-10-16", "10:10")), scheduledDate: "2026-02-30" }] },
+  ];
+
+  for (const { label, medicines, doseRecords } of cases) {
+    const key = demoProfileStorageKey(email);
+    const original = JSON.stringify({ version: 1, email, medicines, doseRecords });
+    const storage = new Map([[key, original]]);
+    let writes = 0;
+    const syntheticStorage = {
+      getItem: (storageKey) => storage.get(storageKey) ?? null,
+      setItem: (storageKey, value) => { writes += 1; storage.set(storageKey, value); },
+    };
+
+    assert.throws(() => loadDemoProfile(syntheticStorage, email), undefined, label);
+    assert.equal(storage.get(key), original, `${label} should remain byte-for-byte unchanged`);
+    assert.equal(writes, 0, `${label} should not trigger a storage write`);
+    assert.equal(storage.size, 1, `${label} should not create an empty profile`);
+  }
+});
+
+test("malformed legacy records do not claim migration ownership or modify legacy storage", () => {
+  const email = "legacy-invalid@example.invalid";
+  const originalMedicines = JSON.stringify([null]);
+  const originalDoses = JSON.stringify([]);
+  const storage = new Map([
+    [MEDICINES_STORAGE_KEY, originalMedicines],
+    [DOSES_STORAGE_KEY, originalDoses],
+  ]);
+  let writes = 0;
+  const syntheticStorage = {
+    getItem: (key) => storage.get(key) ?? null,
+    setItem: (key, value) => { writes += 1; storage.set(key, value); },
+  };
+
+  assert.throws(() => loadDemoProfile(syntheticStorage, email, { migrateLegacy: true }));
+  assert.equal(storage.get(MEDICINES_STORAGE_KEY), originalMedicines);
+  assert.equal(storage.get(DOSES_STORAGE_KEY), originalDoses);
+  assert.equal(storage.has(PROFILE_MIGRATION_STORAGE_KEY), false);
+  assert.equal(storage.has(demoProfileStorageKey(email)), false);
+  assert.equal(writes, 0);
+});
+
+test("valid legacy profile data migrates with optional history fields still absent", () => {
+  const email = "legacy-valid@example.invalid";
+  const legacyMedicine = syrup({ id: "legacy-med" });
+  const legacyDose = takenRecord("2026-10-16", "10:00", localIso("2026-10-16", "10:10"), "legacy-dose");
+  const storage = new Map([
+    [MEDICINES_STORAGE_KEY, JSON.stringify([legacyMedicine])],
+    [DOSES_STORAGE_KEY, JSON.stringify([legacyDose])],
+  ]);
+  const syntheticStorage = {
+    getItem: (key) => storage.get(key) ?? null,
+    setItem: (key, value) => storage.set(key, value),
+  };
+
+  const loaded = loadDemoProfile(syntheticStorage, email, { migrateLegacy: true });
+  assert.deepEqual(loaded.medicines, [legacyMedicine]);
+  assert.deepEqual(loaded.doseRecords, [legacyDose]);
+  assert.deepEqual(loaded.prescriptionHistory, []);
+  assert.equal(JSON.parse(storage.get(PROFILE_MIGRATION_STORAGE_KEY)).ownerEmail, email);
+  assert.deepEqual(loadDemoProfile(syntheticStorage, email).medicines, [legacyMedicine]);
 });
 
 test("a legitimate empty profile remains loadable and writable for its active session", () => {
@@ -1124,8 +1197,9 @@ test("legacy profile serialization remains compatible and prescription history s
   const storage = new Map();
   const legacyEmail = "legacy-prescriptions@example.test";
   const legacyKey = demoProfileStorageKey(legacyEmail);
-  const legacyMedicine = { id: "legacy-med", name: "Legacy", inventoryAmount: 9, scheduleRevisions: [{ effectiveAt: "2026-10-01T00:00:00.000Z" }] };
-  storage.set(legacyKey, JSON.stringify({ version: 1, email: legacyEmail, medicines: [legacyMedicine], doseRecords: [{ id: "dose-old", medicineId: "legacy-med" }] }));
+  const legacyMedicine = syrup({ id: "legacy-med", name: "Legacy", inventoryAmount: 9 });
+  const legacyDose = { ...takenRecord("2026-10-16", "10:00", localIso("2026-10-16", "10:10"), "dose-old"), medicineId: "legacy-med" };
+  storage.set(legacyKey, JSON.stringify({ version: 1, email: legacyEmail, medicines: [legacyMedicine], doseRecords: [legacyDose] }));
   const legacy = loadDemoProfile({ getItem: (key) => storage.get(key) ?? null }, legacyEmail);
   assert.deepEqual(legacy.prescriptionHistory, []);
   assert.deepEqual(legacy.medicines, [legacyMedicine]);
@@ -1133,8 +1207,8 @@ test("legacy profile serialization remains compatible and prescription history s
 
   const entryA = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a" }), "2026-10-22T12:00:00.000Z", "entry-a");
   const entryB = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-b" }), "2026-10-22T12:00:00.000Z", "entry-b");
-  const profileA = { email: "a@example.test", medicines: [{ id: "med-a" }], doseRecords: [{ id: "dose-a", medicineId: "med-a" }], prescriptionHistory: [entryA] };
-  const profileB = { email: "b@example.test", medicines: [{ id: "med-b" }], doseRecords: [{ id: "dose-b", medicineId: "med-b" }], prescriptionHistory: [entryB] };
+  const profileA = { email: "a@example.test", medicines: [syrup({ id: "med-a" })], doseRecords: [takenRecord("2026-10-16", "10:00", localIso("2026-10-16", "10:10"), "dose-a")], prescriptionHistory: [entryA] };
+  const profileB = { email: "b@example.test", medicines: [syrup({ id: "med-b" })], doseRecords: [takenRecord("2026-10-16", "10:00", localIso("2026-10-16", "10:10"), "dose-b")], prescriptionHistory: [entryB] };
   storage.set(demoProfileStorageKey(profileA.email), serializeDemoProfile(profileA));
   storage.set(demoProfileStorageKey(profileB.email), serializeDemoProfile(profileB));
   const reloadedA = loadDemoProfile({ getItem: (key) => storage.get(key) ?? null }, profileA.email);
