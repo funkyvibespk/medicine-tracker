@@ -4,6 +4,7 @@ import "./globals.css";
 import { MedicineProvider } from "@/contexts/MedicineContext";
 import BackToTop from "@/components/BackToTop";
 import DemoSessionBoundary from "@/components/DemoSessionBoundary";
+import InitialAppHydrationGate from "@/components/InitialAppHydrationGate";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,8 +34,10 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <MedicineProvider>
-          <DemoSessionBoundary>{children}</DemoSessionBoundary>
-          <BackToTop />
+          <InitialAppHydrationGate>
+            <DemoSessionBoundary>{children}</DemoSessionBoundary>
+            <BackToTop />
+          </InitialAppHydrationGate>
         </MedicineProvider>
       </body>
     </html>

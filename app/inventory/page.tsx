@@ -9,6 +9,7 @@ import WorkspacePageHeading from "@/components/dashboard/WorkspacePageHeading";
 import { estimatedDosesPerDay } from "@/lib/schedule";
 import { doseUnitFor, getStockStatus, inventoryUnitFor, inventoryUnitsCompatible } from "@/lib/medicineLogic";
 import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
+import BrandedLoadingScreen from "@/components/BrandedLoadingScreen";
 
 export default function InventoryPage() {
   const { medicines, addStock, isHydrated } = useMedicine();
@@ -16,7 +17,7 @@ export default function InventoryPage() {
   const [stockToAdd, setStockToAdd] = useState<number>(0);
   useDialogFocusRestore(Boolean(addingStockMedId));
 
-  if (!isHydrated) return <div className="workspace-app min-h-screen bg-slate-50 dark:bg-slate-950" />;
+  if (!isHydrated) return <BrandedLoadingScreen />;
 
   const addingMed = medicines.find((m) => m.id === addingStockMedId) ?? null;
 

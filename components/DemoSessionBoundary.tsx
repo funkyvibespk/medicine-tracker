@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { readDemoSession } from "@/lib/demoSession";
 import { clearDemoSession } from "@/lib/demoSession";
 import { useMedicine } from "@/contexts/MedicineContext";
+import BrandedLoadingScreen from "@/components/BrandedLoadingScreen";
 
 const PROTECTED_PATHS = new Set(["/setup", "/dashboard", "/doses", "/medicines", "/inventory", "/history"]);
 
@@ -55,11 +56,7 @@ export default function DemoSessionBoundary({ children }: { children: ReactNode 
   }
 
   if (requiresSession && (authorizedSession?.path !== pathname || authorizedSession.email !== activeProfileEmail || profileStatus !== "ready")) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 text-sm font-medium text-slate-500 dark:bg-slate-950 dark:text-slate-400" aria-busy="true" role="status">
-        Checking your local session…
-      </main>
-    );
+    return <BrandedLoadingScreen />;
   }
 
   return children;

@@ -10,6 +10,7 @@ import WorkspaceHeader from "@/components/dashboard/WorkspaceHeader";
 import WorkspacePageHeading from "@/components/dashboard/WorkspacePageHeading";
 import { formatDuration, getMedicineOccurrencesForDate, isPrnMedicine, localDateString } from "@/lib/schedule";
 import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
+import BrandedLoadingScreen from "@/components/BrandedLoadingScreen";
 import { canonicalizeOccurrenceRecords, comparePhysicalStock, doseUnitFor, filterDoseRecords, findCloseDoseConflict, getOccurrenceTimeStatus, getOutstandingMissedOccurrences, getStockStatus, getUnscheduledSameDayMissedOccurrences, inventoryUnitFor, inventoryUnitsCompatible, minutesFromScheduledOccurrence, parseNonNegativeQuantity, PhysicalStockComparison, scheduledOccurrenceId, scheduledOccurrenceKey } from "@/lib/medicineLogic";
 
 // Helper to pad numbers
@@ -506,7 +507,7 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
     ));
   };
 
-  if (!isHydrated || now.getTime() === 0) return <div className="workspace-app min-h-screen bg-slate-50 dark:bg-slate-950" />;
+  if (!isHydrated || now.getTime() === 0) return <BrandedLoadingScreen />;
 
   return (
       <div className="workspace-app min-h-screen bg-slate-50 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-100 pb-20">

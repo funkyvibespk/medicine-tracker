@@ -11,6 +11,7 @@ import { estimatedDosesPerDay } from "@/lib/schedule";
 import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
 import { doseUnitFor, getStockStatus, inventoryUnitFor, inventoryUnitsCompatible } from "@/lib/medicineLogic";
 import { findPotentialMedicineIdentityPairs } from "@/lib/medicineIdentity";
+import BrandedLoadingScreen from "@/components/BrandedLoadingScreen";
 
 export default function MedicinesPage() {
   const { medicines, doseRecords, addMedicine, updateMedicine, deleteMedicine, addStock, isHydrated } = useMedicine();
@@ -23,7 +24,7 @@ export default function MedicinesPage() {
   useDialogFocusRestore(Boolean(isAddModalOpen || editingMedicine || deletingMedicine || addingStockMed));
   const [searchQuery, setSearchQuery] = useState("");
 
-  if (!isHydrated) return <div className="workspace-app min-h-screen bg-slate-50 dark:bg-slate-950" />;
+  if (!isHydrated) return <BrandedLoadingScreen />;
 
   const filtered = medicines.filter((m) =>
     m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||

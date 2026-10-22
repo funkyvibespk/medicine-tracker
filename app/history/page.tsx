@@ -8,6 +8,7 @@ import WorkspaceHeader from "@/components/dashboard/WorkspaceHeader";
 import WorkspacePageHeading from "@/components/dashboard/WorkspacePageHeading";
 import { getMedicineOccurrencesForDate, localDateString } from "@/lib/schedule";
 import { canonicalizeOccurrenceRecords, inventoryUnitsCompatible, scheduledOccurrenceKey } from "@/lib/medicineLogic";
+import BrandedLoadingScreen from "@/components/BrandedLoadingScreen";
 
 const pad = (n: number) => n.toString().padStart(2, "0");
 type ScheduledRecordLabel = { medicineId: string; scheduledDate: string; scheduledTime: string; scheduledInstant?: string };
@@ -124,7 +125,7 @@ export default function HistoryPage() {
     return { totalScheduled, totalTaken, pct: totalScheduled > 0 ? Math.round((totalTaken / totalScheduled) * 100) : null };
   }, [medicines, canonicalDoseRecords, todayStr, now]);
 
-  if (!isHydrated || !now) return <div className="workspace-app min-h-screen bg-slate-50 dark:bg-slate-950" />;
+  if (!isHydrated || !now) return <BrandedLoadingScreen />;
 
   const getMed = (id: string) => medicines.find((m) => m.id === id);
 

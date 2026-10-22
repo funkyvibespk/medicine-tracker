@@ -1,16 +1,13 @@
 import { Suspense } from "react";
 import AuthExperience from "./AuthExperience";
+import BrandedLoadingScreen from "@/components/BrandedLoadingScreen";
 
 type AuthPageProps = {
   searchParams: Promise<{ mode?: string | string[] }>;
 };
 
 function AuthLoading() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-white px-6 text-sm font-medium text-slate-500 dark:bg-slate-950 dark:text-slate-400" aria-busy="true">
-      Loading ChillDose…
-    </div>
-  );
+  return <BrandedLoadingScreen />;
 }
 
 async function AuthModeContent({ searchParams }: AuthPageProps) {
