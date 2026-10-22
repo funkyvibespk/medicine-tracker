@@ -26,6 +26,17 @@ import {
 import { formatMedicineAddedAt, sortMedicinesNewestFirst } from "@/lib/medicineList";
 import { getMedicineFormAppearance } from "@/lib/medicineFormIcon";
 
+function formatMedicineExpiryDate(value: string): string {
+  const date = new Date(`${value}T12:00:00.000Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) return value;
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 export default function MedicinesPage() {
   const { medicines, doseRecords, prescriptionHistory, addMedicine, updateMedicine, deleteMedicine, addStock, isHydrated } = useMedicine();
 
@@ -369,6 +380,20 @@ export default function MedicinesPage() {
                         {med.prescribingClinic && <span>{med.prescribingClinic}</span>}
                         {med.prescriptionDate && <span>{prescribingDoctor || med.prescribingClinic ? " · " : ""}Original prescription date: {med.prescriptionDate}</span>}
                       </p>
+                    )}
+                    {(med.composition?.trim() || med.expiryDate?.trim()) && (
+                      <div className="mt-2 flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600 dark:text-slate-300">
+                        {med.composition?.trim() && (
+                          <p className="min-w-0 break-words">
+                            <span className="font-medium text-slate-700 dark:text-slate-200">Composition:</span> {med.composition.trim()}
+                          </p>
+                        )}
+                        {med.expiryDate?.trim() && (
+                          <p>
+                            <span className="font-medium text-slate-700 dark:text-slate-200">Expiry date:</span> {formatMedicineExpiryDate(med.expiryDate.trim())}
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
 
