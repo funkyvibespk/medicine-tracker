@@ -51,6 +51,8 @@ export interface Medicine {
   prescribingClinic?: string;
   prescriptionDate?: string;
   prescriptionNotes?: string;
+  expiryDate?: string;
+  composition?: string;
   instructions?: string;
   notes?: string;
   doseUnit?: string;

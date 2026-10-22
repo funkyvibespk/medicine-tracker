@@ -6,6 +6,7 @@ import { Medicine, MedicineType, type AddMedicineResult, type DoseRecord } from 
 import { localDateString } from "@/lib/schedule";
 import { availableVolumeFromContainers, inventoryUnitFor, inventoryUnitsCompatible, parseNonNegativeQuantity, validateInventoryThreshold } from "@/lib/medicineLogic";
 import { findMedicineIdentityMatches, type MedicineIdentityMatch } from "@/lib/medicineIdentity";
+import { normalizeOptionalMedicineDetails } from "@/lib/medicineList";
 import { normalizeDoctorName } from "@/lib/prescriptionHistory";
 
 // ─── Per-type strength configuration ──────────────────────────────────────────
@@ -135,6 +136,8 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
     scheduleTimes: normalizeFrequency(initialData?.frequency) === "As needed (PRN)" ? [] : initialData?.scheduleTimes ?? ["08:00"],
     startDate: initialData?.startDate ?? localDateString(),
     endDate: initialData?.endDate ?? "",
+    expiryDate: initialData?.expiryDate ?? "",
+    composition: initialData?.composition ?? "",
     instructions: initialData?.instructions ?? "",
     notes: initialData?.notes ?? "",
     prescribingDoctor: initialData?.prescribingDoctor ?? "",
@@ -314,6 +317,7 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
       startDate: formData.startDate || localDateString(),
       createdAt: initialData ? initialData.createdAt : new Date().toISOString(),
       endDate: formData.endDate || undefined,
+      ...normalizeOptionalMedicineDetails(formData),
       instructions: formData.instructions?.trim() || "",
       notes: formData.notes?.trim() || "",
       prescribingDoctor: normalizeDoctorName(formData.prescribingDoctor) || undefined,
@@ -510,6 +514,18 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
                 {strengthValue} {strengthUnit}
               </span>
             )}
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="composition" className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Composition (optional)</label>
+            <textarea id="composition" name="composition" rows={2} value={formData.composition || ""} onChange={handleChange} placeholder="Active ingredient(s), if known" className={inputCls} />
+          </div>
+          <div>
+            <label htmlFor="expiryDate" className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Medicine Expiry Date (optional)</label>
+            <input id="expiryDate" name="expiryDate" type="date" value={formData.expiryDate || ""} onChange={handleChange} className={inputCls} />
+            <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Expiry date printed on the medicine packaging.</p>
           </div>
         </div>
       </div>

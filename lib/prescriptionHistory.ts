@@ -15,6 +15,7 @@ export interface PrescribableMedicine {
   prescribingClinic?: string;
   prescriptionDate?: string;
   prescriptionNotes?: string;
+  composition?: string;
 }
 
 export interface PrescriptionHistoryEntry {
@@ -25,6 +26,7 @@ export interface PrescriptionHistoryEntry {
   prescribingDoctor?: string;
   prescribingClinic?: string;
   prescriptionNotes?: string;
+  composition?: string;
   medicineName: string;
   medicineType: string;
   strength: string;
@@ -294,7 +296,8 @@ export function samePrescriptionDetails(a: PrescribableMedicine, b: Prescribable
     doctorIdentity(a.prescribingDoctor) === doctorIdentity(b.prescribingDoctor) &&
     normalizedText(a.prescribingClinic) === normalizedText(b.prescribingClinic) &&
     normalizedText(a.prescriptionDate) === normalizedText(b.prescriptionDate) &&
-    normalizedText(a.prescriptionNotes) === normalizedText(b.prescriptionNotes);
+    normalizedText(a.prescriptionNotes) === normalizedText(b.prescriptionNotes) &&
+    normalizedText(a.composition) === normalizedText(b.composition);
 }
 
 export function createPrescriptionHistoryEntry(
@@ -310,6 +313,7 @@ export function createPrescriptionHistoryEntry(
     prescribingDoctor: normalizeDoctorName(medicine.prescribingDoctor) || undefined,
     prescribingClinic: normalizedText(medicine.prescribingClinic) || undefined,
     prescriptionNotes: normalizedText(medicine.prescriptionNotes) || undefined,
+    composition: normalizedText(medicine.composition) || undefined,
     medicineName: medicine.name,
     medicineType: medicine.type,
     strength: medicine.strength,

@@ -88,6 +88,8 @@ function isProfileMedicineEntry(value: unknown): boolean {
       (Array.isArray(value.scheduleRevisions) && value.scheduleRevisions.every(isProfileScheduleRevision))) &&
     hasOptionalString(value, "prescribingDoctor") && hasOptionalString(value, "prescribingClinic") &&
     hasOptionalString(value, "prescriptionDate") && hasOptionalString(value, "prescriptionNotes") &&
+    hasOptionalString(value, "composition") &&
+    (value.expiryDate === undefined || value.expiryDate === "" || isCalendarDate(value.expiryDate)) &&
     hasOptionalString(value, "instructions") && hasOptionalString(value, "notes") &&
     hasOptionalString(value, "doseUnit") && hasOptionalString(value, "inventoryUnit") &&
     hasOptionalString(value, "lowStockThresholdUnit") &&
@@ -142,7 +144,7 @@ function isProfilePrescriptionEntry(value: unknown): value is PrescriptionHistor
   if (typeof value !== "object" || value === null) return false;
   const entry = value as Partial<PrescriptionHistoryEntry>;
   const requiredStrings = [entry.id, entry.medicineId, entry.recordedAt, entry.medicineName, entry.medicineType, entry.strength, entry.frequency, entry.startDate];
-  const optionalStrings = [entry.prescriptionDate, entry.prescribingDoctor, entry.prescribingClinic, entry.prescriptionNotes, entry.doseUnit, entry.endDate, entry.instructions];
+  const optionalStrings = [entry.prescriptionDate, entry.prescribingDoctor, entry.prescribingClinic, entry.prescriptionNotes, entry.doseUnit, entry.endDate, entry.instructions, entry.composition];
   return requiredStrings.every((field) => typeof field === "string") &&
     optionalStrings.every((field) => field === undefined || typeof field === "string") &&
     typeof entry.doseAmount === "number" && Number.isFinite(entry.doseAmount) &&

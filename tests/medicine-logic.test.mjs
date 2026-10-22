@@ -6,7 +6,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { sortDoseHistoryRecords } from "../lib/doseHistory.ts";
 import { appendPrescriptionChange, buildPrescriptionHistoryFilterOptions, createEmptyPrescriptionHistoryFilters, createInitialPrescriptionHistoryViewState, createPrescriptionHistoryEntry, filterPrescriptionHistory, getPrescriptionHistoryResults, groupPrescriptionHistoryByMedicine, hasActivePrescriptionHistoryFilters, normalizeDoctorName, prescriptionHistoryViewReducer, sortPrescriptionHistory, validatePrescriptionHistoryFilters } from "../lib/prescriptionHistory.ts";
-import { applyMedicineUpdatePreservingCreationDate, formatMedicineAddedAt, sortMedicinesNewestFirst } from "../lib/medicineList.ts";
+import { applyMedicineUpdatePreservingCreationDate, formatMedicineAddedAt, normalizeOptionalMedicineDetails, sortMedicinesNewestFirst } from "../lib/medicineList.ts";
 import { getMedicineFormAppearance } from "../lib/medicineFormIcon.ts";
 import { addScheduleBaseline, getMedicineOccurrencesForDate, getScheduledTimesForDate } from "../lib/schedule.ts";
 import { ACTIVE_DEMO_EMAIL_KEY, ACTIVE_DEMO_SESSION_KEY, DOSES_STORAGE_KEY, MEDICINES_STORAGE_KEY, PROFILE_MIGRATION_STORAGE_KEY, demoProfileStorageKey, loadDemoProfile, saveDemoProfileForActiveSession, serializeDemoProfile } from "../lib/demoProfiles.ts";
@@ -517,6 +517,7 @@ test("profile validation rejects malformed medicine and dose entries without wri
     { label: "primitive medicine", medicines: ["not a medicine"], doseRecords: [] },
     { label: "medicine missing a required field", medicines: [{ ...syrup(), id: undefined }], doseRecords: [] },
     { label: "invalid medicine schedule time", medicines: [syrup({ scheduleTimes: ["25:90"] })], doseRecords: [] },
+    { label: "invalid medicine expiry date", medicines: [syrup({ expiryDate: "2026-02-30" })], doseRecords: [] },
     { label: "null dose record", medicines: [], doseRecords: [null] },
     { label: "primitive dose record", medicines: [], doseRecords: [42] },
     { label: "dose missing required fields", medicines: [], doseRecords: [{ id: "dose-only" }] },
@@ -1105,6 +1106,32 @@ const prescriptionMedicine = (overrides = {}) => ({
   ...overrides,
 });
 
+test("prescription snapshots retain composition changes but exclude medicine expiry metadata", () => {
+  const previous = prescriptionMedicine({ composition: "Ingredient A", expiryDate: "2027-05-31" });
+  const snapshot = createPrescriptionHistoryEntry(previous, "2026-10-23T10:00:00.000Z", "composition-initial");
+  assert.equal(snapshot.composition, "Ingredient A");
+  assert.equal("expiryDate" in snapshot, false);
+
+  const expiryOnlyEdit = appendPrescriptionChange(
+    [snapshot],
+    previous,
+    { ...previous, expiryDate: "2028-01-01" },
+    "2026-10-24T10:00:00.000Z",
+    () => "expiry-should-not-snapshot",
+  );
+  assert.equal(expiryOnlyEdit.length, 1);
+
+  const compositionEdit = appendPrescriptionChange(
+    [snapshot],
+    previous,
+    { ...previous, composition: "Ingredient B" },
+    "2026-10-25T10:00:00.000Z",
+    () => "composition-updated",
+  );
+  assert.equal(compositionEdit.length, 2);
+  assert.equal(compositionEdit[1].composition, "Ingredient B");
+});
+
 test("dose history sorts four same-day recorded doses newest first without mutating saved records", () => {
   const records = [
     { id: "dose-8am", scheduledDate: "2026-10-22", scheduledTime: "08:00", actualTakenTime: "2026-10-22T08:05:00.000Z" },
@@ -1288,6 +1315,82 @@ test("medicine edits preserve the original creation timestamp and added label us
   assert.equal(formatMedicineAddedAt(medicine.createdAt), `Added ${dateLabel} · ${timeLabel}`);
   assert.equal(formatMedicineAddedAt(undefined), "Added date unavailable");
   assert.equal(formatMedicineAddedAt("invalid"), "Added date unavailable");
+});
+
+test("optional medicine details normalize populated and blank values", () => {
+  assert.deepEqual(normalizeOptionalMedicineDetails({
+    expiryDate: " 2027-05-31 ",
+    composition: "  Acetaminophen 120 mg/5 mL  ",
+  }), {
+    expiryDate: "2027-05-31",
+    composition: "Acetaminophen 120 mg/5 mL",
+  });
+  assert.deepEqual(normalizeOptionalMedicineDetails({ expiryDate: "", composition: "   " }), {
+    expiryDate: undefined,
+    composition: undefined,
+  });
+  assert.deepEqual(normalizeOptionalMedicineDetails({ expiryDate: "2027-05-31", composition: "" }), {
+    expiryDate: "2027-05-31",
+    composition: undefined,
+  });
+  assert.deepEqual(normalizeOptionalMedicineDetails({ expiryDate: "", composition: "Paracetamol" }), {
+    expiryDate: undefined,
+    composition: "Paracetamol",
+  });
+});
+
+test("optional expiry and composition persist through profile reload, edits, and account switching", () => {
+  const storage = new Map();
+  const syntheticStorage = {
+    getItem: (key) => storage.get(key) ?? null,
+    setItem: (key, value) => storage.set(key, String(value)),
+  };
+  const emailA = "expiry-a@example.invalid";
+  const emailB = "expiry-b@example.invalid";
+  const detailsA = normalizeOptionalMedicineDetails({ expiryDate: "2027-05-31", composition: "Acetaminophen" });
+  const medicineA = syrup({ id: "medicine-a", ...detailsA });
+  const historyA = createPrescriptionHistoryEntry(medicineA, "2026-10-23T10:00:00.000Z", "prescription-a");
+  const profileA = { email: emailA, medicines: [medicineA], doseRecords: [], prescriptionHistory: [historyA] };
+
+  storage.set(ACTIVE_DEMO_SESSION_KEY, "active");
+  storage.set(ACTIVE_DEMO_EMAIL_KEY, emailA);
+  assert.equal(saveDemoProfileForActiveSession(syntheticStorage, profileA), true);
+  const loadedA = loadDemoProfile(syntheticStorage, emailA);
+  assert.equal(loadedA.medicines[0].expiryDate, "2027-05-31");
+  assert.equal(loadedA.medicines[0].composition, "Acetaminophen");
+  assert.equal(loadedA.prescriptionHistory[0].composition, "Acetaminophen");
+
+  const editedA = applyMedicineUpdatePreservingCreationDate(loadedA.medicines[0], { notes: "Updated notes" });
+  assert.equal(editedA.expiryDate, "2027-05-31");
+  assert.equal(editedA.composition, "Acetaminophen");
+  assert.equal(saveDemoProfileForActiveSession(syntheticStorage, { ...loadedA, medicines: [editedA] }), true);
+
+  storage.set(ACTIVE_DEMO_EMAIL_KEY, emailB);
+  const medicineB = syrup({ id: "medicine-b", ...normalizeOptionalMedicineDetails({ expiryDate: "2028-01-01", composition: "Different ingredient" }) });
+  const profileB = { email: emailB, medicines: [medicineB], doseRecords: [] };
+  assert.equal(saveDemoProfileForActiveSession(syntheticStorage, profileB), true);
+  assert.equal(loadDemoProfile(syntheticStorage, emailA).medicines[0].composition, "Acetaminophen");
+  assert.equal(loadDemoProfile(syntheticStorage, emailB).medicines[0].composition, "Different ingredient");
+  assert.equal(loadDemoProfile(syntheticStorage, emailB).medicines[0].expiryDate, "2028-01-01");
+
+  const legacyEmail = "expiry-legacy@example.invalid";
+  storage.set(demoProfileStorageKey(legacyEmail), JSON.stringify({
+    version: 1,
+    email: legacyEmail,
+    medicines: [syrup({ id: "legacy-no-optional-fields" })],
+    doseRecords: [],
+  }));
+  const legacy = loadDemoProfile(syntheticStorage, legacyEmail);
+  assert.equal(legacy.medicines[0].expiryDate, undefined);
+  assert.equal(legacy.medicines[0].composition, undefined);
+});
+
+test("medicine expiry metadata does not end or shift the medicine schedule", () => {
+  const medicine = syrup({ frequency: "Once daily", scheduleTimes: ["08:00"], startDate: "2026-10-22", expiryDate: "2020-01-01", endDate: undefined });
+  const expiredPackaging = getMedicineOccurrencesForDate(medicine, "2026-10-23");
+  const noExpiryRecorded = getMedicineOccurrencesForDate({ ...medicine, expiryDate: undefined }, "2026-10-23");
+  assert.deepEqual(expiredPackaging, noExpiryRecorded);
+  assert.equal(expiredPackaging.length, 1);
 });
 
 test("prescription date changes retain previous issued date separately from recorded date", () => {

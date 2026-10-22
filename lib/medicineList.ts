@@ -3,6 +3,18 @@ export interface MedicineWithCreationDate {
   createdAt?: string;
 }
 
+export interface OptionalMedicineDetails {
+  expiryDate?: string;
+  composition?: string;
+}
+
+export function normalizeOptionalMedicineDetails(details: OptionalMedicineDetails): OptionalMedicineDetails {
+  return {
+    expiryDate: details.expiryDate?.trim() || undefined,
+    composition: details.composition?.trim() || undefined,
+  };
+}
+
 export function applyMedicineUpdatePreservingCreationDate<T extends MedicineWithCreationDate>(
   medicine: T,
   updates: Partial<T>,

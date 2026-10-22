@@ -94,6 +94,7 @@ export default function MedicinesPage() {
           <p>Doctor: {normalizeDoctorName(entry.prescribingDoctor) || "Not recorded"}</p>
           {entry.prescribingClinic && <p>Clinic/Hospital: {entry.prescribingClinic}</p>}
           {entry.prescriptionDate && <p>Prescription issued: {entry.prescriptionDate}</p>}
+          {entry.composition && <p>Composition: {entry.composition}</p>}
           <p>Dose: {entry.doseAmount} {entry.doseUnit || "units"} · {schedule}</p>
           {entry.instructions && <p>Instructions: {entry.instructions}</p>}
           {entry.prescriptionNotes && <p>Prescription notes: {entry.prescriptionNotes}</p>}
