@@ -146,6 +146,16 @@ body {
   backdrop-filter: blur(22px);
 }
 
+.workspace-sidebar-fixed {
+  left: 0;
+}
+
+@media (min-width: 64rem) {
+  .workspace-sidebar-fixed {
+    left: max(0px, calc(50vw - 45rem));
+  }
+}
+
 .workspace-app [class*="rounded-2xl"][class*="border"][class*="bg-white"],
 .workspace-app [class*="rounded-xl"][class*="border"][class*="bg-white"],
 .workspace-app [role="dialog"] {

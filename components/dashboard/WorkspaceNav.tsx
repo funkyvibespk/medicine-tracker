@@ -27,28 +27,31 @@ export default function WorkspaceNav() {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden w-60 shrink-0 border-r border-slate-200 bg-white px-4 py-6 lg:sticky lg:top-[4.125rem] lg:block lg:max-h-[calc(100dvh-4.125rem)] lg:min-h-[calc(100dvh-4.125rem)] lg:self-start lg:overflow-y-auto dark:border-slate-800 dark:bg-slate-900/40">
-      <p className="px-3 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Workspace</p>
-      <nav className="mt-3 space-y-1" aria-label="Dashboard navigation">
-        {destinations.map(([href, label]) => {
-          const active = pathname === href;
-          return (
-            <Link
-              key={href}
-              href={href}
-              aria-current={active ? "page" : undefined}
-              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${active ? "bg-teal-50 text-teal-800 dark:bg-teal-950/50 dark:text-teal-200" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"}`}
-            >
-              <WorkspaceIcon destination={href} />
-              {label}
-            </Link>
-          );
-        })}
-      </nav>
-      <div className="mt-10 rounded-2xl border border-teal-100 bg-gradient-to-br from-teal-50 to-white p-4 dark:border-teal-900/50 dark:from-teal-950/40 dark:to-slate-900">
-        <p className="text-sm font-semibold text-slate-900 dark:text-white">Stay on track</p>
-        <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">Your medicines and dose history stay in this browser.</p>
-      </div>
-    </aside>
+    <>
+      <div aria-hidden="true" className="hidden w-60 shrink-0 lg:block" />
+      <aside className="workspace-sidebar-fixed fixed bottom-0 left-0 top-[4.125rem] z-10 hidden w-60 overflow-y-auto border-r border-slate-200 bg-white px-4 py-6 lg:block dark:border-slate-800 dark:bg-slate-900/40">
+        <p className="px-3 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Workspace</p>
+        <nav className="mt-3 space-y-1" aria-label="Dashboard navigation">
+          {destinations.map(([href, label]) => {
+            const active = pathname === href;
+            return (
+              <Link
+                key={href}
+                href={href}
+                aria-current={active ? "page" : undefined}
+                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${active ? "bg-teal-50 text-teal-800 dark:bg-teal-950/50 dark:text-teal-200" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"}`}
+              >
+                <WorkspaceIcon destination={href} />
+                {label}
+              </Link>
+            );
+          })}
+        </nav>
+        <div className="mt-10 rounded-2xl border border-teal-100 bg-gradient-to-br from-teal-50 to-white p-4 dark:border-teal-900/50 dark:from-teal-950/40 dark:to-slate-900">
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">Stay on track</p>
+          <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">Your medicines and dose history stay in this browser.</p>
+        </div>
+      </aside>
+    </>
   );
 }
