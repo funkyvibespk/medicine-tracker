@@ -522,13 +522,12 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
           className="rounded-2xl border border-slate-200/80 bg-white/90 p-4 shadow-sm shadow-slate-900/[0.03] sm:p-5 dark:border-slate-800 dark:bg-slate-900"
           title={view === "overview" ? "My Dashboard" : "My Doses"}
           description={view === "overview" ? `A clear overview of your medicine routine for ${now.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}.` : `Today’s scheduled doses for ${now.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}.`}
-          action={<>
-            <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300"><span className="h-1.5 w-1.5 rounded-full bg-amber-500"/>Local prototype</span>
+          action={
             <button aria-label="Add medicine" onClick={() => setIsAddModalOpen(true)} className="workspace-primary-button inline-flex min-h-10 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition-all active:scale-95">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="M5 12h14" /><path d="M12 5v14" /></svg>
               <span className="hidden sm:inline">Add Medicine</span>
             </button>
-          </>}
+          }
         />
         
         {/* Overdue Alert */}
