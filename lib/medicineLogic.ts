@@ -20,6 +20,38 @@ export interface OccurrenceRecord {
   isPrn?: boolean;
 }
 
+export interface DoseDetailsSnapshotRecord {
+  medicineName?: string;
+  medicineType?: string;
+  medicineStrength?: string;
+  medicineDoseAmount?: number;
+  medicineDoseUnit?: string;
+}
+
+export interface DoseDetailsSnapshotSource {
+  name: string;
+  type: string;
+  strength: string;
+  doseAmount: number;
+  doseUnit?: string;
+}
+
+/** Capture the medicine details attached to a newly recorded dose occurrence. */
+export function withDoseDetailsSnapshot<T extends DoseDetailsSnapshotRecord>(
+  record: T,
+  medicine: DoseDetailsSnapshotSource,
+  existingRecord?: DoseDetailsSnapshotRecord,
+): T {
+  return {
+    ...record,
+    medicineName: record.medicineName ?? existingRecord?.medicineName ?? (existingRecord ? undefined : medicine.name),
+    medicineType: record.medicineType ?? existingRecord?.medicineType ?? (existingRecord ? undefined : medicine.type),
+    medicineStrength: record.medicineStrength ?? existingRecord?.medicineStrength ?? (existingRecord ? undefined : medicine.strength),
+    medicineDoseAmount: record.medicineDoseAmount ?? existingRecord?.medicineDoseAmount ?? (existingRecord ? undefined : medicine.doseAmount),
+    medicineDoseUnit: record.medicineDoseUnit ?? existingRecord?.medicineDoseUnit ?? (existingRecord ? undefined : medicine.doseUnit),
+  };
+}
+
 export type StockStatus = "out" | "low" | "available" | "unknown";
 export type DoseListFilter = "all" | "pending" | "taken";
 export const OVERDUE_THRESHOLD_MS = 5 * 60_000;
@@ -107,6 +139,8 @@ export interface MissedOccurrenceCandidate extends OccurrenceRecord {
   medicineName?: string;
   medicineType?: string;
   medicineStrength?: string;
+  medicineDoseAmount?: number;
+  medicineDoseUnit?: string;
 }
 
 export interface PendingOccurrenceCandidate extends OccurrenceRecord {
@@ -114,6 +148,8 @@ export interface PendingOccurrenceCandidate extends OccurrenceRecord {
   medicineName?: string;
   medicineType?: string;
   medicineStrength?: string;
+  medicineDoseAmount?: number;
+  medicineDoseUnit?: string;
 }
 
 export function scheduledOccurrenceKey(medicineId: string, scheduledDate: string, scheduledTime: string, scheduledInstant?: string): string {
@@ -143,6 +179,8 @@ interface DoseOutcomeRecord extends OccurrenceRecord {
   medicineName?: string;
   medicineType?: string;
   medicineStrength?: string;
+  medicineDoseAmount?: number;
+  medicineDoseUnit?: string;
 }
 
 /** Collapse only records with the same explicit occurrence identity for display and summaries. */
@@ -177,6 +215,8 @@ export function canonicalizeOccurrenceRecords<R extends DoseOutcomeRecord>(recor
       medicineName: existing.medicineName ?? record.medicineName,
       medicineType: existing.medicineType ?? record.medicineType,
       medicineStrength: existing.medicineStrength ?? record.medicineStrength,
+      medicineDoseAmount: existing.medicineDoseAmount ?? record.medicineDoseAmount,
+      medicineDoseUnit: existing.medicineDoseUnit ?? record.medicineDoseUnit,
     } as R);
   }
   return [...canonical.values()];

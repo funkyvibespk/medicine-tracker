@@ -31,6 +31,7 @@ import {
   scheduledOccurrenceKey,
   upsertMissedOccurrenceRecords,
   validateInventoryThreshold,
+  withDoseDetailsSnapshot,
 } from "../lib/medicineLogic.ts";
 
 registerHooks({
@@ -97,6 +98,49 @@ function revision(effectiveAt, overrides = {}) {
     ...overrides,
   };
 }
+
+test("new dose outcome snapshots capture medicine strength, form, dose amount, and unit without replacing recorded values", () => {
+  const medicine = syrup();
+  const record = { id: "dose-snapshot", medicineId: medicine.id, scheduledDate: "2026-10-15", scheduledTime: "10:00", status: "taken_on_time" };
+  const snapshot = withDoseDetailsSnapshot(record, medicine);
+  assert.deepEqual([
+    snapshot.medicineName,
+    snapshot.medicineType,
+    snapshot.medicineStrength,
+    snapshot.medicineDoseAmount,
+    snapshot.medicineDoseUnit,
+  ], [medicine.name, medicine.type, medicine.strength, medicine.doseAmount, medicine.doseUnit]);
+
+  const existingSnapshot = withDoseDetailsSnapshot({
+    ...record,
+    medicineName: "Original name",
+    medicineType: "Tablet",
+    medicineStrength: "Original strength",
+    medicineDoseAmount: 2,
+    medicineDoseUnit: "tablets",
+  }, medicine);
+  assert.deepEqual([
+    existingSnapshot.medicineName,
+    existingSnapshot.medicineType,
+    existingSnapshot.medicineStrength,
+    existingSnapshot.medicineDoseAmount,
+    existingSnapshot.medicineDoseUnit,
+  ], ["Original name", "Tablet", "Original strength", 2, "tablets"]);
+
+  const legacyExistingSnapshot = withDoseDetailsSnapshot(record, medicine, { id: "older-record" });
+  assert.equal(legacyExistingSnapshot.medicineDoseAmount, undefined, "an existing legacy occurrence must not be backfilled from the current medicine");
+  assert.equal(legacyExistingSnapshot.medicineDoseUnit, undefined);
+
+  const takenSnapshot = withDoseDetailsSnapshot({ ...record, actualTakenTime: localIso("2026-10-15", "10:00") }, medicine);
+  const taken = applyTakenDose([medicine], [], takenSnapshot, medicine.doseAmount);
+  assert.equal(taken.doseRecords[0].medicineDoseAmount, medicine.doseAmount);
+  assert.equal(taken.doseRecords[0].medicineDoseUnit, medicine.doseUnit);
+
+  const skippedSnapshot = withDoseDetailsSnapshot({ ...record, status: "missed" }, medicine);
+  const skipped = applySkippedDose([], skippedSnapshot);
+  assert.equal(skipped.doseRecords[0].medicineDoseAmount, medicine.doseAmount);
+  assert.equal(skipped.doseRecords[0].medicineDoseUnit, medicine.doseUnit);
+});
 
 function identityMedicine(overrides = {}) {
   return {
@@ -371,9 +415,11 @@ test("an overdue occurrence stays unresolved until the next scheduled occurrence
   const daily = syrup({ frequency: "Once daily", scheduleTimes: ["08:00"], startDate: "2026-10-14", scheduleRevisions: [revision(localIso("2026-10-14"), { frequency: "Once daily", scheduleTimes: ["08:00"] })] });
   const beforeNextDose = reconcileHistoricalMissedOccurrences([daily], [], new Date(localIso("2026-10-15", "07:59")));
   assert.deepEqual(beforeNextDose.map((record) => [record.scheduledDate, record.scheduledTime, record.status]), [["2026-10-14", "08:00", "overdue"]]);
+  assert.deepEqual([beforeNextDose[0].medicineName, beforeNextDose[0].medicineType, beforeNextDose[0].medicineStrength, beforeNextDose[0].medicineDoseAmount, beforeNextDose[0].medicineDoseUnit], [daily.name, daily.type, daily.strength, daily.doseAmount, daily.doseUnit]);
 
   const atNextDose = reconcileHistoricalMissedOccurrences([daily], beforeNextDose, new Date(localIso("2026-10-15", "08:00")));
   assert.deepEqual(atNextDose.map((record) => [record.scheduledDate, record.scheduledTime, record.status]), [["2026-10-14", "08:00", "missed"]]);
+  assert.deepEqual([atNextDose[0].medicineDoseAmount, atNextDose[0].medicineDoseUnit], [daily.doseAmount, daily.doseUnit]);
 
   const afterNextDose = reconcileHistoricalMissedOccurrences([daily], atNextDose, new Date(localIso("2026-10-15", "08:06")));
   assert.deepEqual(afterNextDose.map((record) => [record.scheduledDate, record.scheduledTime, record.status]), [
@@ -477,6 +523,33 @@ test("legacy local profile shape remains readable and new optional schedule hist
   assert.equal(roundTrip.doseRecords[0].id, oldDose.id);
 });
 
+test("legacy dose records without optional dose snapshots load and round-trip unchanged", () => {
+  const email = "legacy-dose-snapshot@example.invalid";
+  const legacyRecord = {
+    id: "legacy-dose-record",
+    medicineId: "legacy-medicine",
+    scheduledDate: "2026-10-15",
+    scheduledTime: "08:00",
+    actualTakenTime: localIso("2026-10-15", "08:05"),
+    status: "taken_late",
+  };
+  const key = demoProfileStorageKey(email);
+  const profileStorage = new Map([[key, JSON.stringify({ version: 1, email, medicines: [], doseRecords: [legacyRecord] })]]);
+  const storage = {
+    getItem: (storageKey) => profileStorage.get(storageKey) ?? null,
+    setItem: (storageKey, value) => profileStorage.set(storageKey, value),
+  };
+
+  const loaded = loadDemoProfile(storage, email);
+  assert.deepEqual(loaded.doseRecords, [legacyRecord]);
+  profileStorage.set(key, serializeDemoProfile(loaded));
+  assert.deepEqual(loadDemoProfile(storage, email).doseRecords, [legacyRecord]);
+
+  const snapshottedRecord = { ...legacyRecord, medicineDoseAmount: 0.5, medicineDoseUnit: "ml" };
+  profileStorage.set(key, serializeDemoProfile({ email, medicines: [], doseRecords: [snapshottedRecord] }));
+  assert.deepEqual(loadDemoProfile(storage, email).doseRecords, [snapshottedRecord]);
+});
+
 test("profile persistence rejects a stale owner after the active session changes", () => {
   const storage = new Map();
   const syntheticStorage = {
@@ -521,6 +594,8 @@ test("profile validation rejects malformed medicine and dose entries without wri
     { label: "null dose record", medicines: [], doseRecords: [null] },
     { label: "primitive dose record", medicines: [], doseRecords: [42] },
     { label: "dose missing required fields", medicines: [], doseRecords: [{ id: "dose-only" }] },
+    { label: "dose amount snapshot is malformed", medicines: [], doseRecords: [{ ...takenRecord("2026-10-16", "10:00", localIso("2026-10-16", "10:10")), medicineDoseAmount: -1 }] },
+    { label: "dose unit snapshot is malformed", medicines: [], doseRecords: [{ ...takenRecord("2026-10-16", "10:00", localIso("2026-10-16", "10:10")), medicineDoseUnit: 2 }] },
     { label: "invalid dose date", medicines: [], doseRecords: [{ ...takenRecord("2026-10-16", "10:00", localIso("2026-10-16", "10:10")), scheduledDate: "2026-02-30" }] },
   ];
 
@@ -782,11 +857,13 @@ test("missed-dose notifications expire after their cutoff calendar day without c
 
 test("a pending saved occurrence transitions to missed without changing its identity", () => {
   const pending = { id: "existing-occurrence-id", medicineId: "synthetic-syrup", scheduledDate: "2026-10-10", scheduledTime: "08:00", status: "overdue" };
-  const candidate = { id: scheduledOccurrenceId(pending.medicineId, pending.scheduledDate, pending.scheduledTime), medicineId: pending.medicineId, scheduledDate: pending.scheduledDate, scheduledTime: pending.scheduledTime, status: "missed" };
+  const candidate = { id: scheduledOccurrenceId(pending.medicineId, pending.scheduledDate, pending.scheduledTime), medicineId: pending.medicineId, scheduledDate: pending.scheduledDate, scheduledTime: pending.scheduledTime, status: "missed", medicineDoseAmount: 1, medicineDoseUnit: "tablet" };
   const updated = upsertMissedOccurrenceRecords([pending], [candidate]);
   assert.equal(updated.length, 1);
   assert.equal(updated[0].id, pending.id);
   assert.equal(updated[0].status, "missed");
+  assert.equal(updated[0].medicineDoseAmount, undefined, "reconciliation must not backfill an existing legacy record from current medicine data");
+  assert.equal(updated[0].medicineDoseUnit, undefined);
 });
 
 test("taking today's dose does not rewrite previous missed occurrences", () => {
@@ -873,6 +950,7 @@ test("skipping persists after reload without changing inventory or becoming acti
     [skipped.doseRecords[0].scheduledDate, skipped.doseRecords[0].scheduledTime, skipped.doseRecords[0].actualTakenTime, skipped.doseRecords[0].status],
     [date, "08:00", undefined, "skipped"],
   );
+  assert.deepEqual([skipped.doseRecords[0].medicineDoseAmount, skipped.doseRecords[0].medicineDoseUnit], [medicine.doseAmount, medicine.doseUnit]);
   assert.equal(medicine.inventoryAmount, inventoryBeforeSkip);
 
   const storage = new Map();

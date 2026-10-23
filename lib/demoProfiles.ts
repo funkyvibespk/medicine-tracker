@@ -107,7 +107,9 @@ function isProfileDoseRecord(value: unknown): boolean {
     (value.actualTakenTime === undefined || typeof value.actualTakenTime === "string") &&
     (value.isPrn === undefined || typeof value.isPrn === "boolean") &&
     hasOptionalString(value, "medicineName") && hasOptionalString(value, "medicineType") &&
-    hasOptionalString(value, "medicineStrength");
+    hasOptionalString(value, "medicineStrength") &&
+    hasOptionalNonNegativeNumber(value, "medicineDoseAmount") &&
+    hasOptionalString(value, "medicineDoseUnit");
 }
 
 function parseArray(raw: string | null, key: string, isValidEntry: (value: unknown) => boolean): unknown[] {

@@ -9,7 +9,7 @@ import {
   saveDemoProfileForActiveSession,
 } from "@/lib/demoProfiles";
 import { DEMO_SESSION_CHANGE_EVENT, readDemoSession } from "@/lib/demoSession";
-import { applySkippedDose, applyTakenDose, validateInventoryThreshold } from "@/lib/medicineLogic";
+import { applySkippedDose, applyTakenDose, validateInventoryThreshold, withDoseDetailsSnapshot } from "@/lib/medicineLogic";
 import { findBlockingMedicineIdentityMatch } from "@/lib/medicineIdentity";
 import { reconcileHistoricalMissedOccurrences } from "@/lib/missedDoses";
 import { addScheduleBaseline, localDateString } from "@/lib/schedule";
@@ -81,6 +81,15 @@ export interface DoseRecord {
   medicineName?: string;
   medicineType?: MedicineType;
   medicineStrength?: string;
+  medicineDoseAmount?: number;
+  medicineDoseUnit?: string;
+}
+
+function sameDoseOccurrence(saved: DoseRecord, record: DoseRecord): boolean {
+  if (saved.medicineId !== record.medicineId || saved.scheduledDate !== record.scheduledDate || Boolean(saved.isPrn) !== Boolean(record.isPrn)) return false;
+  if (record.isPrn) return true;
+  return !saved.isPrn && saved.scheduledTime === record.scheduledTime &&
+    (record.scheduledInstant ? saved.scheduledInstant === record.scheduledInstant : !saved.scheduledInstant);
 }
 
 interface MedicineContextType {
@@ -379,11 +388,13 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
     if (!canMutateActiveProfile()) return false;
     const medicine = medicinesRef.current.find((item) => item.id === record.medicineId);
     if (!medicine) return false;
+    const existingRecord = doseRecordsRef.current.find((saved) => sameDoseOccurrence(saved, record));
+    const recordWithSnapshot = withDoseDetailsSnapshot(record, { ...medicine, doseAmount }, existingRecord);
     const enrichedRecord: DoseRecord = {
-      ...record,
-      medicineName: medicine.name ?? record.medicineName,
-      medicineType: medicine.type ?? record.medicineType,
-      medicineStrength: medicine.strength ?? record.medicineStrength,
+      ...recordWithSnapshot,
+      medicineName: record.medicineName ?? existingRecord?.medicineName ?? medicine.name,
+      medicineType: record.medicineType ?? existingRecord?.medicineType ?? medicine.type,
+      medicineStrength: record.medicineStrength ?? existingRecord?.medicineStrength ?? medicine.strength,
     };
     const result = applyTakenDose(medicinesRef.current, doseRecordsRef.current, enrichedRecord, doseAmount);
     if (!result.accepted) return false;
@@ -398,11 +409,13 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
     if (!canMutateActiveProfile()) return false;
     if (record.status !== "overdue" && record.status !== "missed") return false;
     const medicine = medicinesRef.current.find((item) => item.id === record.medicineId);
+    const existingRecord = doseRecordsRef.current.find((saved) => sameDoseOccurrence(saved, record));
+    const recordWithSnapshot = medicine ? withDoseDetailsSnapshot(record, medicine, existingRecord) : record;
     const enrichedRecord: DoseRecord = {
-      ...record,
-      medicineName: record.medicineName ?? medicine?.name,
-      medicineType: record.medicineType ?? medicine?.type,
-      medicineStrength: record.medicineStrength ?? medicine?.strength,
+      ...recordWithSnapshot,
+      medicineName: record.medicineName ?? existingRecord?.medicineName ?? medicine?.name,
+      medicineType: record.medicineType ?? existingRecord?.medicineType ?? medicine?.type,
+      medicineStrength: record.medicineStrength ?? existingRecord?.medicineStrength ?? medicine?.strength,
       status: "skipped",
     };
     const nextRecords = applySkippedDose(doseRecordsRef.current, enrichedRecord);

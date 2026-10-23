@@ -111,6 +111,8 @@ export function reconcileHistoricalMissedOccurrences(
         medicineName: medicine.name,
         medicineType: medicine.type,
         medicineStrength: medicine.strength,
+        medicineDoseAmount: medicine.doseAmount,
+        medicineDoseUnit: medicine.doseUnit,
       };
       const nextOccurrence = occurrences[index + 1];
 

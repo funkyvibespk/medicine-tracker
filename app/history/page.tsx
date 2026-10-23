@@ -229,7 +229,15 @@ export default function HistoryPage() {
                             </svg>
                           </div>
                           <div className="min-w-0 flex-1">
-                            <div className="flex min-w-0 items-center gap-2"><MedicineFormIcon type={med?.type ?? record.medicineType} size="sm" /><p className="truncate font-semibold text-slate-900 dark:text-white text-sm">{medicineName}</p></div>
+                            <div className="flex min-w-0 items-center gap-2"><MedicineFormIcon type={record.medicineType} size="sm" /><p className="truncate font-semibold text-slate-900 dark:text-white text-sm">{medicineName}</p></div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">{record.medicineType ?? "Form not recorded"}</p>
+                            {(record.medicineStrength || record.medicineDoseAmount !== undefined) && (
+                              <p className="text-xs text-slate-600 dark:text-slate-300">
+                                {record.medicineStrength && <span>{record.medicineStrength}</span>}
+                                {record.medicineStrength && record.medicineDoseAmount !== undefined && <span> · </span>}
+                                {record.medicineDoseAmount !== undefined && <span>Dose: {record.medicineDoseAmount}{record.medicineDoseUnit ? ` ${record.medicineDoseUnit}` : " (unit not recorded)"}</span>}
+                              </p>
+                            )}
                             <p className="text-xs text-slate-500 dark:text-slate-400">
                               {record.isPrn ? "As needed" : `Scheduled ${formatScheduledRecordTime(record, records)}`}
                               {record.actualTakenTime && (
