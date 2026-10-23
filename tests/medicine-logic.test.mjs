@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { sortDoseHistoryRecords } from "../lib/doseHistory.ts";
+import { sortDoseHistoryRecords, sortTakenDoseRecordsNewestFirst } from "../lib/doseHistory.ts";
 import { appendPrescriptionChange, buildPrescriptionHistoryFilterOptions, createEmptyPrescriptionHistoryFilters, createInitialPrescriptionHistoryViewState, createPrescriptionHistoryEntry, filterPrescriptionHistory, getPrescriptionHistoryResults, groupPrescriptionHistoryByMedicine, hasActivePrescriptionHistoryFilters, normalizeDoctorName, prescriptionHistoryViewReducer, sortPrescriptionHistory, validatePrescriptionHistoryFilters } from "../lib/prescriptionHistory.ts";
 import { applyMedicineUpdatePreservingCreationDate, formatMedicineAddedAt, normalizeOptionalMedicineDetails, sortMedicinesNewestFirst } from "../lib/medicineList.ts";
 import { getMedicineFormAppearance } from "../lib/medicineFormIcon.ts";
@@ -1283,6 +1283,22 @@ test("dose history sorts multiple days by event time and late doses by actual ta
   ];
   assert.deepEqual(sortDoseHistoryRecords(sameScheduledDay).map((record) => record.id), ["late-8am", "taken-8pm"]);
   assert.equal(sameScheduledDay[0].scheduledTime, "08:00");
+});
+
+test("Taken tab sorts by actual recorded time and keeps legacy rows afterward in stable order", () => {
+  const records = [
+    { id: "older-action", scheduledDate: "2026-10-22", scheduledTime: "08:00", actualTakenTime: "2026-10-22T08:05:00.000Z" },
+    { id: "legacy-first", scheduledDate: "2026-10-22", scheduledTime: "20:00" },
+    { id: "newer-action", scheduledDate: "2026-10-21", scheduledTime: "08:00", actualTakenTime: "2026-10-22T12:05:00.000Z" },
+    { id: "legacy-invalid", scheduledDate: "2026-10-23", scheduledTime: "07:00", actualTakenTime: "not-a-timestamp" },
+    { id: "legacy-second", scheduledDate: "2026-10-20", scheduledTime: "10:00" },
+  ];
+  const original = structuredClone(records);
+
+  assert.deepEqual(sortTakenDoseRecordsNewestFirst(records, (record) => record.actualTakenTime).map((record) => record.id), [
+    "newer-action", "older-action", "legacy-first", "legacy-invalid", "legacy-second",
+  ]);
+  assert.deepEqual(records, original, "sorting a tab view must not mutate saved dose records");
 });
 
 test("dose history has deterministic ties and safely retains legacy or missing timestamps", () => {

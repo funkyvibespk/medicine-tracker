@@ -46,3 +46,19 @@ export function sortDoseHistoryRecords<T extends DoseHistorySortRecord>(records:
     })
     .map(({ record }) => record);
 }
+
+/** Sort Taken-tab records by their recorded action time; keep legacy rows without one in saved order. */
+export function sortTakenDoseRecordsNewestFirst<T>(
+  records: readonly T[],
+  getActualTakenTime: (record: T) => string | undefined,
+): T[] {
+  return records
+    .map((record, index) => ({ record, index, timestamp: validTimestamp(getActualTakenTime(record)) }))
+    .sort((a, b) => {
+      if (a.timestamp !== null && b.timestamp !== null && a.timestamp !== b.timestamp) return b.timestamp - a.timestamp;
+      if (a.timestamp !== null && b.timestamp === null) return -1;
+      if (a.timestamp === null && b.timestamp !== null) return 1;
+      return a.index - b.index;
+    })
+    .map(({ record }) => record);
+}

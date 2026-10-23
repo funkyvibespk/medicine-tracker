@@ -12,7 +12,7 @@ import WorkspacePageHeading from "@/components/dashboard/WorkspacePageHeading";
 import { formatDuration, getMedicineOccurrencesForDate, isPrnMedicine, localDateString } from "@/lib/schedule";
 import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
 import BrandedLoadingScreen from "@/components/BrandedLoadingScreen";
-import { sortDoseHistoryRecords } from "@/lib/doseHistory";
+import { sortDoseHistoryRecords, sortTakenDoseRecordsNewestFirst } from "@/lib/doseHistory";
 import { getMissedDoseNotificationsForToday } from "@/lib/missedDoses";
 import { canonicalizeOccurrenceRecords, comparePhysicalStock, doseUnitFor, filterDoseRecords, findCloseDoseConflict, getOccurrenceTimeStatus, getOutstandingMissedOccurrences, getStockStatus, getUnscheduledSameDayMissedOccurrences, inventoryUnitFor, inventoryUnitsCompatible, minutesFromScheduledOccurrence, parseNonNegativeQuantity, PhysicalStockComparison, scheduledOccurrenceId, scheduledOccurrenceKey } from "@/lib/medicineLogic";
 
@@ -247,7 +247,7 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
   const doseLists = useMemo(() => ({
     all: filterDoseRecords(todaysDoses, "all"),
     pending: filterDoseRecords(todaysDoses, "pending"),
-    taken: filterDoseRecords(todaysDoses, "taken"),
+    taken: sortTakenDoseRecordsNewestFirst(filterDoseRecords(todaysDoses, "taken"), (dose) => dose.record?.actualTakenTime),
   }), [todaysDoses]);
   const overdueCount = todaysDoses.filter((d) => d.status === "overdue").length;
   const takenCount = doseLists.taken.length;
