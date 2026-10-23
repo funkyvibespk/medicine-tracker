@@ -57,14 +57,13 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
   const [editingMedicine, setEditingMedicine] = useState<Medicine | null>(null);
   const [deletingMedicine, setDeletingMedicine] = useState<Medicine | null>(null);
   const [changingDose, setChangingDose] = useState<ScheduledDose | null>(null);
-  const [takingEarly, setTakingEarly] = useState<(ScheduledDose & { earlyBy: number }) | null>(null);
   const [addingStockMed, setAddingStockMed] = useState<Medicine | null>(null);
   const [stockCheckDose, setStockCheckDose] = useState<ScheduledDose | null>(null);
   const [physicalStockQuantity, setPhysicalStockQuantity] = useState("");
   const [physicalStockResult, setPhysicalStockResult] = useState<PhysicalStockComparison | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [doseFilter, setDoseFilter] = useState<DoseFilter>("all");
-  useDialogFocusRestore(Boolean(isAddModalOpen || editingMedicine || deletingMedicine || changingDose || takingEarly || addingStockMed || stockCheckDose));
+  useDialogFocusRestore(Boolean(isAddModalOpen || editingMedicine || deletingMedicine || changingDose || addingStockMed || stockCheckDose));
   
   // Form states for dialogs
   const [newTime, setNewTime] = useState("");
@@ -89,7 +88,6 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
         setEditingMedicine(null);
         setDeletingMedicine(null);
         setChangingDose(null);
-        setTakingEarly(null);
         setAddingStockMed(null);
         setStockCheckDose(null);
         setPhysicalStockQuantity("");
@@ -324,15 +322,7 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
   // Handlers
 
   const handleTakeDose = (dose: ScheduledDose) => {
-    // If attempting to take >5 minutes early, show confirmation
-    const diffMs = now.getTime() - dose.scheduledDateObj.getTime();
-
-    if (diffMs < -5 * 60_000) {
-      setTakingEarly({ ...dose, earlyBy: Math.floor(Math.abs(diffMs) / 60_000) });
-      return;
-    }
-    
-    confirmTakeDose(dose, now);
+    confirmTakeDose(dose, new Date());
   };
 
   const handleSkipDose = (dose: ScheduledDose) => {
@@ -368,7 +358,6 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
       status
     }, dose.med.doseAmount);
     
-    setTakingEarly(null);
   };
 
   const recordPrnDose = (med: Medicine) => {
@@ -920,22 +909,6 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
             <div className="mt-6 flex justify-end gap-3">
               <button onClick={() => setDeletingMedicine(null)} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">Cancel</button>
               <button onClick={() => { deleteMedicine(deletingMedicine.id); setDeletingMedicine(null); }} className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white">Delete</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Take Early Confirmation */}
-      {takingEarly && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
-          <div role="dialog" aria-modal="true" aria-labelledby="early-dose-title" onKeyDown={keepDialogFocusInside} className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900">
-            <h3 id="early-dose-title" className="text-lg font-bold text-slate-900 dark:text-white">Take Dose Early?</h3>
-            <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-              This dose is scheduled for {formatDoseTime(takingEarly)}. You&apos;re recording it {formatDuration(takingEarly.earlyBy)} early.
-            </p>
-            <div className="mt-6 flex justify-end gap-3">
-              <button onClick={() => setTakingEarly(null)} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Cancel</button>
-              <button onClick={() => confirmTakeDose(takingEarly, now)} className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white">Take early</button>
             </div>
           </div>
         </div>
