@@ -515,18 +515,18 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
   if (!isHydrated || now.getTime() === 0) return <BrandedLoadingScreen />;
 
   return (
-      <div className="workspace-app min-h-screen bg-slate-50 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-100 pb-20">
+      <div className="workspace-app min-h-screen bg-slate-50 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-100 pb-24 lg:pb-20">
       
       <WorkspaceHeader />
 
       <div className="mx-auto flex w-full max-w-[1440px]">
         <WorkspaceNav />
 
-      <main className="flex min-w-0 flex-1 flex-col px-4 py-6 sm:px-6 lg:px-8">
+      <main className="flex min-w-0 flex-1 flex-col px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
         <WorkspacePageHeading
           className="rounded-2xl border border-slate-200/80 bg-white/90 p-4 shadow-sm shadow-slate-900/[0.03] sm:p-5 dark:border-slate-800 dark:bg-slate-900"
           title={view === "overview" ? "My Dashboard" : "My Doses"}
-          description={view === "overview" ? `A clear overview of your medicine routine for ${now.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}.` : `Today’s scheduled doses for ${now.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}.`}
+          description={view === "overview" ? <><span className="sm:hidden">Your medicine routine at a glance.</span><span className="hidden sm:inline">A clear overview of your medicine routine for {now.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}.</span></> : `Today’s scheduled doses for ${now.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}.`}
           action={
             <button aria-label="Add medicine" onClick={() => setIsAddModalOpen(true)} className="workspace-primary-button inline-flex min-h-10 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition-all active:scale-95">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="M5 12h14" /><path d="M12 5v14" /></svg>
@@ -570,22 +570,23 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
           </section>
         )}
 
-        {view === "overview" && <section aria-label="Medicine overview" className="order-3 mb-6 grid gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
+        {view === "overview" && <section aria-label="Medicine overview" className="order-3 mb-5 grid grid-cols-2 gap-3 sm:mb-6 sm:gap-4 xl:grid-cols-4">
           {[
             { label: "Today’s doses", value: `${takenCount} / ${todaysDoses.length}`, note: "Taken today / scheduled today", destination: "View schedule", href: "/doses", tone: "teal" },
             { label: "Active medicines", value: activeMedicines.length, note: "Active on today’s date", destination: "View medicines", href: "/medicines", tone: "blue" },
             { label: "Stock alerts", value: stockAlerts.length, note: stockNeedsReview ? "Low/out stock or unit mismatch" : stockAlerts.length ? "Low or out of stock" : "No low, empty, or unit issues", destination: "Review inventory", href: "/inventory", tone: "amber" },
             { label: "Adherence", value: weeklyPercent === null ? "—" : `${weeklyPercent}%`, note: weeklyExpected ? `${weeklyTaken} of ${weeklyExpected} scheduled doses this week` : "No scheduled doses due this week", destination: "View history", href: "/history", tone: "violet" },
-          ].map((card) => <Link key={card.label} href={card.href} className="group rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm shadow-slate-900/[0.03] transition hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 sm:p-5 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-teal-800">
+          ].map((card) => <Link key={card.label} href={card.href} className="group flex min-h-[144px] flex-col rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm shadow-slate-900/[0.03] transition hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 sm:min-h-0 sm:p-5 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-teal-800">
             <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">{card.label}</p>
-            <p className="mt-2 text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">{card.value}</p>
-            <p className="mt-1 min-h-5 text-xs text-slate-500 dark:text-slate-400">{card.note}</p>
-            <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-teal-700 group-hover:text-teal-800 dark:text-teal-300 dark:group-hover:text-teal-200">{card.destination}<span aria-hidden="true">→</span></span>
+            <p className="mt-1.5 text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:mt-2">{card.value}</p>
+            <p className="mt-1 min-h-5 flex-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">{card.note}</p>
+            <span className={`mt-2 block h-1 w-9 rounded-full sm:hidden ${card.tone === "teal" ? "bg-teal-500" : card.tone === "blue" ? "bg-sky-500" : card.tone === "amber" ? "bg-amber-500" : "bg-violet-500"}`} aria-hidden="true" />
+            <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-teal-700 group-hover:text-teal-800 dark:text-teal-300 dark:group-hover:text-teal-200 sm:mt-3">{card.destination}<span aria-hidden="true">→</span></span>
           </Link>)}
         </section>}
 
-        {view === "overview" && <section className="order-5 mb-6 grid gap-4 xl:grid-cols-[1.35fr_1fr]">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        {view === "overview" && <section className="order-5 mb-5 grid gap-3 sm:mb-6 sm:gap-4 xl:grid-cols-[1.35fr_1fr]">
+          <div className="rounded-2xl border border-teal-100 bg-teal-50/60 p-4 shadow-sm dark:border-teal-900/50 dark:bg-teal-950/20 sm:border-slate-200 sm:bg-white sm:p-5 sm:dark:border-slate-800 sm:dark:bg-slate-900">
             <div className="flex items-start justify-between gap-3">
               <div><h2 className="font-bold text-slate-900 dark:text-white">Adherence this week</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Based on scheduled doses in your current medicine list.</p></div>
               {weeklyPercent !== null && <span className="rounded-lg bg-teal-50 px-2.5 py-1 text-sm font-bold text-teal-700 dark:bg-teal-950/50 dark:text-teal-300">{weeklyPercent}%</span>}
@@ -599,7 +600,7 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
             </div>}
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
             <div className="flex items-center justify-between gap-2"><div><h2 className="font-bold text-slate-900 dark:text-white">Recent activity</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Recorded dose events</p></div><Link href="/history" className="rounded text-xs font-semibold text-teal-700 hover:text-teal-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:text-teal-300">View history</Link></div>
             {recentActivity.length === 0 ? <p className="mt-5 rounded-xl bg-slate-50 px-4 py-5 text-center text-sm text-slate-500 dark:bg-slate-950/50 dark:text-slate-400">Taken doses will appear here.</p> : <ul className="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
               {recentActivity.map((record) => {
@@ -612,9 +613,15 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
           </div>
         </section>}
 
-        {view === "overview" && <section className="order-4 mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-bold text-slate-900 dark:text-white">Upcoming doses</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">The next scheduled doses today</p></div><Link href="/doses" className="text-xs font-semibold text-teal-700 hover:text-teal-600 dark:text-teal-300">Open today&apos;s schedule →</Link></div>
-          {upcomingDoses.length === 0 ? <p className="mt-4 rounded-xl bg-slate-50 px-4 py-4 text-sm text-slate-500 dark:bg-slate-950/50 dark:text-slate-400">No upcoming scheduled doses today.</p> : <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{upcomingDoses.map((dose) => <div key={dose.id} className="flex min-w-0 items-center gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-950/50"><span className="shrink-0 rounded-lg bg-white px-2 py-1 text-xs font-bold text-teal-700 shadow-sm dark:bg-slate-800 dark:text-teal-300">{formatDoseTime(dose)}</span><MedicineFormIcon type={dose.med.type} size="sm" /><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900 dark:text-white">{dose.med.name}</span><span className="block text-xs text-slate-500 dark:text-slate-400">{dose.med.doseAmount} {dose.med.doseUnit ?? doseUnitFor(dose.med)}</span></span></div>)}</div>}
+        {view === "overview" && <section className="order-4 mb-5 rounded-2xl border border-teal-100 bg-white p-4 shadow-sm shadow-teal-900/[0.03] sm:mb-6 sm:p-5 dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <div><h2 className="font-bold text-slate-900 dark:text-white">Upcoming doses</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Your schedule for today</p></div>
+              <span className="shrink-0 rounded-full bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-800 dark:bg-teal-950/50 dark:text-teal-200">{todaysDoses.length} scheduled</span>
+            </div>
+            <Link href="/doses" className="text-xs font-semibold text-teal-700 hover:text-teal-600 dark:text-teal-300">Open today&apos;s schedule →</Link>
+          </div>
+          {upcomingDoses.length === 0 ? <p className="mt-4 rounded-xl bg-slate-50 px-4 py-4 text-sm text-slate-500 dark:bg-slate-950/50 dark:text-slate-400">No upcoming scheduled doses today.</p> : <div className="mt-4 grid gap-2.5 sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">{upcomingDoses.map((dose) => <div key={dose.id} className="flex min-w-0 items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/80 p-3.5 dark:border-slate-800 dark:bg-slate-950/50 sm:border-transparent sm:p-3"><span className="shrink-0 rounded-lg bg-white px-2.5 py-1.5 text-xs font-bold text-teal-700 shadow-sm dark:bg-slate-800 dark:text-teal-300 sm:px-2 sm:py-1">{formatDoseTime(dose)}</span><MedicineFormIcon type={dose.med.type} size="sm" /><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900 dark:text-white">{dose.med.name}</span><span className="block text-xs text-slate-500 dark:text-slate-400">{dose.med.doseAmount} {dose.med.doseUnit ?? doseUnitFor(dose.med)}</span></span></div>)}</div>}
         </section>}
 
         {view === "doses" && <section id="todays-schedule" className="order-2 mb-4 flex scroll-mt-24 flex-wrap items-end justify-between gap-3">
