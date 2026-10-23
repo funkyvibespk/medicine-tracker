@@ -13,6 +13,7 @@ import { formatDuration, getMedicineOccurrencesForDate, isPrnMedicine, localDate
 import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
 import BrandedLoadingScreen from "@/components/BrandedLoadingScreen";
 import { sortDoseHistoryRecords } from "@/lib/doseHistory";
+import { getMissedDoseNotificationsForToday } from "@/lib/missedDoses";
 import { canonicalizeOccurrenceRecords, comparePhysicalStock, doseUnitFor, filterDoseRecords, findCloseDoseConflict, getOccurrenceTimeStatus, getOutstandingMissedOccurrences, getStockStatus, getUnscheduledSameDayMissedOccurrences, inventoryUnitFor, inventoryUnitsCompatible, minutesFromScheduledOccurrence, parseNonNegativeQuantity, PhysicalStockComparison, scheduledOccurrenceId, scheduledOccurrenceKey } from "@/lib/medicineLogic";
 
 // Helper to pad numbers
@@ -253,6 +254,10 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
   const overdueCount = todaysDoses.filter((d) => d.status === "overdue").length;
   const takenCount = doseLists.taken.length;
   const outstandingMisses = getOutstandingMissedOccurrences(doseRecords, todayStr);
+  const missedDoseNotifications = useMemo(
+    () => getMissedDoseNotificationsForToday(medicines, doseRecords, todayStr),
+    [medicines, doseRecords, todayStr],
+  );
   const prnMedicines = medicines.filter((med) => isPrnMedicine(med) && med.startDate <= todayStr && (!med.endDate || med.endDate >= todayStr));
 
   const activeMedicines = medicines.filter((medicine) => medicine.startDate <= todayStr && (!medicine.endDate || medicine.endDate >= todayStr));
@@ -540,17 +545,17 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
           </div>
         )}
 
-        {outstandingMisses.length > 0 && (
+        {missedDoseNotifications.length > 0 && (
           <section aria-labelledby="missed-doses-title" className="order-1 mb-6 rounded-2xl border border-rose-200 bg-rose-50/60 p-4 shadow-sm dark:border-rose-900/50 dark:bg-rose-950/20">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h2 id="missed-doses-title" className="font-semibold text-rose-900 dark:text-rose-200">Missed doses from previous days</h2>
-                <p className="mt-1 text-xs text-rose-800/80 dark:text-rose-300/80">{outstandingMisses.length} scheduled occurrence{outstandingMisses.length !== 1 ? "s" : ""} recorded as missed</p>
+                <h2 id="missed-doses-title" className="font-semibold text-rose-900 dark:text-rose-200">Missed doses</h2>
+                <p className="mt-1 text-xs text-rose-800/80 dark:text-rose-300/80">{missedDoseNotifications.length} scheduled occurrence{missedDoseNotifications.length !== 1 ? "s" : ""} became missed today</p>
               </div>
               <Link href="/history" className="text-sm font-semibold text-rose-800 underline-offset-4 hover:underline dark:text-rose-200">View history</Link>
             </div>
             <ul className="mt-3 divide-y divide-rose-200/70 dark:divide-rose-900/50">
-              {outstandingMisses.slice(0, 3).map((record) => {
+              {missedDoseNotifications.slice(0, 3).map((record) => {
                 const medicine = medicines.find((item) => item.id === record.medicineId);
                 const [year, month, date] = record.scheduledDate.split("-").map(Number);
                 const scheduledDate = new Date(year, month - 1, date);
@@ -561,7 +566,7 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
                 </li>;
               })}
             </ul>
-            {outstandingMisses.length > 3 && <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">And {outstandingMisses.length - 3} more in History.</p>}
+            {missedDoseNotifications.length > 3 && <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">And {missedDoseNotifications.length - 3} more in History.</p>}
           </section>
         )}
 

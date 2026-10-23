@@ -1,7 +1,7 @@
 import type { DoseRecord, Medicine } from "@/contexts/MedicineContext";
 import type { MissedOccurrenceCandidate, PendingOccurrenceCandidate } from "@/lib/medicineLogic";
 import { getMedicineOccurrencesForDate, localDateString } from "@/lib/schedule";
-import { isOccurrenceOverdue, scheduledOccurrenceId, upsertMissedOccurrenceRecords, upsertPendingOccurrenceRecords } from "@/lib/medicineLogic";
+import { getOutstandingMissedOccurrences, isOccurrenceOverdue, scheduledOccurrenceId, upsertMissedOccurrenceRecords, upsertPendingOccurrenceRecords } from "@/lib/medicineLogic";
 
 function dateFromLocalString(dateString: string) {
   const [year, month, day] = dateString.split("-").map(Number);
@@ -27,6 +27,40 @@ function previousOccurrenceBefore(medicine: Medicine, beforeDate: string, earlie
     day.setDate(day.getDate() - 1);
   }
   return null;
+}
+
+/** Return unresolved misses whose next scheduled occurrence (their missed cutoff) falls today. */
+export function getMissedDoseNotificationsForToday(medicines: Medicine[], doseRecords: DoseRecord[], today: string): DoseRecord[] {
+  const medicinesById = new Map(medicines.map((medicine) => [medicine.id, medicine]));
+  const outstandingMisses = getOutstandingMissedOccurrences(doseRecords, today);
+
+  return outstandingMisses.filter((record) => {
+    const medicine = medicinesById.get(record.medicineId);
+    if (!medicine) return false;
+
+    const occurrencesOnScheduledDate = getMedicineOccurrencesForDate(medicine, record.scheduledDate);
+    let occurrenceIndex = -1;
+    if (record.scheduledInstant) {
+      occurrenceIndex = occurrencesOnScheduledDate.findIndex((occurrence) => occurrence.scheduledInstant === record.scheduledInstant);
+    } else {
+      const matchingWallTimes = occurrencesOnScheduledDate
+        .map((occurrence, index) => ({ occurrence, index }))
+        .filter(({ occurrence }) => occurrence.scheduledTime === record.scheduledTime);
+      if (matchingWallTimes.length === 1) occurrenceIndex = matchingWallTimes[0].index;
+    }
+    if (occurrenceIndex < 0) return false;
+
+    let nextOccurrence = occurrencesOnScheduledDate[occurrenceIndex + 1];
+    const date = dateFromLocalString(record.scheduledDate);
+    while (!nextOccurrence) {
+      date.setDate(date.getDate() + 1);
+      const nextDate = localDateString(date);
+      if (nextDate > today) return false;
+      nextOccurrence = getMedicineOccurrencesForDate(medicine, nextDate)[0];
+    }
+
+    return localDateString(nextOccurrence.scheduledAt) === today;
+  });
 }
 
 /**

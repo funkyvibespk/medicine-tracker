@@ -43,7 +43,7 @@ registerHooks({
   },
 });
 
-const { reconcileHistoricalMissedOccurrences } = await import("../lib/missedDoses.ts");
+const { getMissedDoseNotificationsForToday, reconcileHistoricalMissedOccurrences } = await import("../lib/missedDoses.ts");
 const { clearDemoSession, DEMO_SESSION_CHANGE_EVENT, readDemoSession, writeDemoSession } = await import("../lib/demoSession.ts");
 const { registerDemoAccount, verifyDemoAccount, DemoAccountAlreadyExistsError, DemoPasswordMismatchError } = await import("../lib/demoAuth.ts");
 
@@ -744,6 +744,40 @@ test("historical missed occurrences persist as distinct records and reconciliati
   assert.deepEqual(getOutstandingMissedOccurrences(firstPass, "2026-10-10").map((record) => record.scheduledDate), ["2026-10-09"]);
   assert.deepEqual(getOutstandingMissedOccurrences(firstPass, "2026-10-11").map((record) => record.scheduledDate), ["2026-10-10", "2026-10-09"]);
   assert.equal(upsertMissedOccurrenceRecords(firstPass, [candidate("2026-10-09"), candidate("2026-10-10")]), firstPass);
+});
+
+test("missed-dose notifications expire after their cutoff calendar day without changing records", () => {
+  const today = "2026-10-22";
+  const twiceDaily = syrup({
+    frequency: "Twice daily",
+    scheduleTimes: ["08:00", "20:00"],
+    startDate: "2026-10-20",
+    scheduleRevisions: [revision(localIso("2026-10-20"), { frequency: "Twice daily", scheduleTimes: ["08:00", "20:00"] })],
+  });
+  const priorMorningMiss = {
+    id: scheduledOccurrenceId(twiceDaily.id, "2026-10-21", "08:00"),
+    medicineId: twiceDaily.id,
+    scheduledDate: "2026-10-21",
+    scheduledTime: "08:00",
+    status: "missed",
+  };
+  const cutoffTodayMiss = {
+    id: scheduledOccurrenceId(twiceDaily.id, "2026-10-21", "20:00"),
+    medicineId: twiceDaily.id,
+    scheduledDate: "2026-10-21",
+    scheduledTime: "20:00",
+    status: "missed",
+  };
+  const records = [priorMorningMiss, cutoffTodayMiss];
+
+  assert.deepEqual(
+    getMissedDoseNotificationsForToday([twiceDaily], records, today).map((record) => record.id),
+    [cutoffTodayMiss.id],
+  );
+  assert.deepEqual(getMissedDoseNotificationsForToday([twiceDaily], records, "2026-10-23"), []);
+  assert.deepEqual(getOutstandingMissedOccurrences(records, today).map((record) => record.id), [cutoffTodayMiss.id, priorMorningMiss.id]);
+  assert.equal(getMedicineOccurrencesForDate(twiceDaily, today).length, 2);
+  assert.deepEqual(records.map((record) => [record.id, record.status]), [[priorMorningMiss.id, "missed"], [cutoffTodayMiss.id, "missed"]]);
 });
 
 test("a pending saved occurrence transitions to missed without changing its identity", () => {
