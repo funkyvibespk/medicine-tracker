@@ -238,6 +238,9 @@ export default function HistoryPage() {
                                 {record.medicineDoseAmount !== undefined && <span>Dose: {record.medicineDoseAmount}{record.medicineDoseUnit ? ` ${record.medicineDoseUnit}` : " (unit not recorded)"}</span>}
                               </p>
                             )}
+                            {record.medicinePrescribingDoctor && (
+                              <p className="text-xs text-slate-600 dark:text-slate-300">Prescribed by {record.medicinePrescribingDoctor}</p>
+                            )}
                             <p className="text-xs text-slate-500 dark:text-slate-400">
                               {record.isPrn ? "As needed" : `Scheduled ${formatScheduledRecordTime(record, records)}`}
                               {record.actualTakenTime && (

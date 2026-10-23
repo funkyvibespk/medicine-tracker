@@ -83,6 +83,7 @@ export interface DoseRecord {
   medicineStrength?: string;
   medicineDoseAmount?: number;
   medicineDoseUnit?: string;
+  medicinePrescribingDoctor?: string;
 }
 
 function sameDoseOccurrence(saved: DoseRecord, record: DoseRecord): boolean {

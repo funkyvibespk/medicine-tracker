@@ -99,8 +99,8 @@ function revision(effectiveAt, overrides = {}) {
   };
 }
 
-test("new dose outcome snapshots capture medicine strength, form, dose amount, and unit without replacing recorded values", () => {
-  const medicine = syrup();
+test("new dose outcome snapshots capture medicine strength, form, dose amount, unit, and doctor without replacing recorded values", () => {
+  const medicine = syrup({ prescribingDoctor: "Dr. Example Physician" });
   const record = { id: "dose-snapshot", medicineId: medicine.id, scheduledDate: "2026-10-15", scheduledTime: "10:00", status: "taken_on_time" };
   const snapshot = withDoseDetailsSnapshot(record, medicine);
   assert.deepEqual([
@@ -109,7 +109,8 @@ test("new dose outcome snapshots capture medicine strength, form, dose amount, a
     snapshot.medicineStrength,
     snapshot.medicineDoseAmount,
     snapshot.medicineDoseUnit,
-  ], [medicine.name, medicine.type, medicine.strength, medicine.doseAmount, medicine.doseUnit]);
+    snapshot.medicinePrescribingDoctor,
+  ], [medicine.name, medicine.type, medicine.strength, medicine.doseAmount, medicine.doseUnit, medicine.prescribingDoctor]);
 
   const existingSnapshot = withDoseDetailsSnapshot({
     ...record,
@@ -118,6 +119,7 @@ test("new dose outcome snapshots capture medicine strength, form, dose amount, a
     medicineStrength: "Original strength",
     medicineDoseAmount: 2,
     medicineDoseUnit: "tablets",
+    medicinePrescribingDoctor: "Original physician",
   }, medicine);
   assert.deepEqual([
     existingSnapshot.medicineName,
@@ -125,21 +127,25 @@ test("new dose outcome snapshots capture medicine strength, form, dose amount, a
     existingSnapshot.medicineStrength,
     existingSnapshot.medicineDoseAmount,
     existingSnapshot.medicineDoseUnit,
-  ], ["Original name", "Tablet", "Original strength", 2, "tablets"]);
+    existingSnapshot.medicinePrescribingDoctor,
+  ], ["Original name", "Tablet", "Original strength", 2, "tablets", "Original physician"]);
 
   const legacyExistingSnapshot = withDoseDetailsSnapshot(record, medicine, { id: "older-record" });
   assert.equal(legacyExistingSnapshot.medicineDoseAmount, undefined, "an existing legacy occurrence must not be backfilled from the current medicine");
   assert.equal(legacyExistingSnapshot.medicineDoseUnit, undefined);
+  assert.equal(legacyExistingSnapshot.medicinePrescribingDoctor, undefined, "a legacy occurrence must not be assigned the current doctor retroactively");
 
   const takenSnapshot = withDoseDetailsSnapshot({ ...record, actualTakenTime: localIso("2026-10-15", "10:00") }, medicine);
   const taken = applyTakenDose([medicine], [], takenSnapshot, medicine.doseAmount);
   assert.equal(taken.doseRecords[0].medicineDoseAmount, medicine.doseAmount);
   assert.equal(taken.doseRecords[0].medicineDoseUnit, medicine.doseUnit);
+  assert.equal(taken.doseRecords[0].medicinePrescribingDoctor, medicine.prescribingDoctor);
 
   const skippedSnapshot = withDoseDetailsSnapshot({ ...record, status: "missed" }, medicine);
   const skipped = applySkippedDose([], skippedSnapshot);
   assert.equal(skipped.doseRecords[0].medicineDoseAmount, medicine.doseAmount);
   assert.equal(skipped.doseRecords[0].medicineDoseUnit, medicine.doseUnit);
+  assert.equal(skipped.doseRecords[0].medicinePrescribingDoctor, medicine.prescribingDoctor);
 });
 
 function identityMedicine(overrides = {}) {
@@ -412,14 +418,16 @@ test("schedule revisions prevent invented historical times and apply known frequ
 });
 
 test("an overdue occurrence stays unresolved until the next scheduled occurrence is due", () => {
-  const daily = syrup({ frequency: "Once daily", scheduleTimes: ["08:00"], startDate: "2026-10-14", scheduleRevisions: [revision(localIso("2026-10-14"), { frequency: "Once daily", scheduleTimes: ["08:00"] })] });
+  const daily = syrup({ prescribingDoctor: "Dr. Schedule Physician", frequency: "Once daily", scheduleTimes: ["08:00"], startDate: "2026-10-14", scheduleRevisions: [revision(localIso("2026-10-14"), { frequency: "Once daily", scheduleTimes: ["08:00"] })] });
   const beforeNextDose = reconcileHistoricalMissedOccurrences([daily], [], new Date(localIso("2026-10-15", "07:59")));
   assert.deepEqual(beforeNextDose.map((record) => [record.scheduledDate, record.scheduledTime, record.status]), [["2026-10-14", "08:00", "overdue"]]);
   assert.deepEqual([beforeNextDose[0].medicineName, beforeNextDose[0].medicineType, beforeNextDose[0].medicineStrength, beforeNextDose[0].medicineDoseAmount, beforeNextDose[0].medicineDoseUnit], [daily.name, daily.type, daily.strength, daily.doseAmount, daily.doseUnit]);
+  assert.equal(beforeNextDose[0].medicinePrescribingDoctor, undefined, "reconciliation must not infer a historic doctor from the medicine's current metadata");
 
   const atNextDose = reconcileHistoricalMissedOccurrences([daily], beforeNextDose, new Date(localIso("2026-10-15", "08:00")));
   assert.deepEqual(atNextDose.map((record) => [record.scheduledDate, record.scheduledTime, record.status]), [["2026-10-14", "08:00", "missed"]]);
   assert.deepEqual([atNextDose[0].medicineDoseAmount, atNextDose[0].medicineDoseUnit], [daily.doseAmount, daily.doseUnit]);
+  assert.equal(atNextDose[0].medicinePrescribingDoctor, undefined);
 
   const afterNextDose = reconcileHistoricalMissedOccurrences([daily], atNextDose, new Date(localIso("2026-10-15", "08:06")));
   assert.deepEqual(afterNextDose.map((record) => [record.scheduledDate, record.scheduledTime, record.status]), [
@@ -545,6 +553,10 @@ test("legacy dose records without optional dose snapshots load and round-trip un
   profileStorage.set(key, serializeDemoProfile(loaded));
   assert.deepEqual(loadDemoProfile(storage, email).doseRecords, [legacyRecord]);
 
+  const withDoctorSnapshot = { ...legacyRecord, medicinePrescribingDoctor: "Dr. Snapshot Physician" };
+  profileStorage.set(key, serializeDemoProfile({ email, medicines: [], doseRecords: [withDoctorSnapshot] }));
+  assert.deepEqual(loadDemoProfile(storage, email).doseRecords, [withDoctorSnapshot]);
+
   const snapshottedRecord = { ...legacyRecord, medicineDoseAmount: 0.5, medicineDoseUnit: "ml" };
   profileStorage.set(key, serializeDemoProfile({ email, medicines: [], doseRecords: [snapshottedRecord] }));
   assert.deepEqual(loadDemoProfile(storage, email).doseRecords, [snapshottedRecord]);
@@ -596,6 +608,7 @@ test("profile validation rejects malformed medicine and dose entries without wri
     { label: "dose missing required fields", medicines: [], doseRecords: [{ id: "dose-only" }] },
     { label: "dose amount snapshot is malformed", medicines: [], doseRecords: [{ ...takenRecord("2026-10-16", "10:00", localIso("2026-10-16", "10:10")), medicineDoseAmount: -1 }] },
     { label: "dose unit snapshot is malformed", medicines: [], doseRecords: [{ ...takenRecord("2026-10-16", "10:00", localIso("2026-10-16", "10:10")), medicineDoseUnit: 2 }] },
+    { label: "dose doctor snapshot is malformed", medicines: [], doseRecords: [{ ...takenRecord("2026-10-16", "10:00", localIso("2026-10-16", "10:10")), medicinePrescribingDoctor: 2 }] },
     { label: "invalid dose date", medicines: [], doseRecords: [{ ...takenRecord("2026-10-16", "10:00", localIso("2026-10-16", "10:10")), scheduledDate: "2026-02-30" }] },
   ];
 
@@ -1336,17 +1349,19 @@ test("legacy profile serialization remains compatible and prescription history s
   const storage = new Map();
   const legacyEmail = "legacy-prescriptions@example.test";
   const legacyKey = demoProfileStorageKey(legacyEmail);
-  const legacyMedicine = syrup({ id: "legacy-med", name: "Legacy", inventoryAmount: 9 });
-  const legacyDose = { ...takenRecord("2026-10-16", "10:00", localIso("2026-10-16", "10:10"), "dose-old"), medicineId: "legacy-med" };
+  const legacyMedicine = syrup({ id: "legacy-med", name: "Legacy", inventoryAmount: 9, prescribingDoctor: "Dr. Existing Physician" });
+  const legacyDose = { ...takenRecord("2026-10-16", "10:00", localIso("2026-10-16", "10:10"), "dose-old"), medicineId: "legacy-med", medicinePrescribingDoctor: "Dr. Historical Physician" };
   storage.set(legacyKey, JSON.stringify({ version: 1, email: legacyEmail, medicines: [legacyMedicine], doseRecords: [legacyDose] }));
   const legacy = loadDemoProfile({ getItem: (key) => storage.get(key) ?? null }, legacyEmail);
   assert.deepEqual(legacy.prescriptionHistory, []);
   assert.deepEqual(legacy.medicines, [legacyMedicine]);
+  assert.equal(legacy.medicines[0].prescribingDoctor, "Dr. Existing Physician");
   assert.equal(legacy.doseRecords[0].medicineId, "legacy-med");
+  assert.equal(legacy.doseRecords[0].medicinePrescribingDoctor, "Dr. Historical Physician");
 
   const entryA = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a" }), "2026-10-22T12:00:00.000Z", "entry-a");
   const entryB = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-b" }), "2026-10-22T12:00:00.000Z", "entry-b");
-  const profileA = { email: "a@example.test", medicines: [syrup({ id: "med-a" })], doseRecords: [takenRecord("2026-10-16", "10:00", localIso("2026-10-16", "10:10"), "dose-a")], prescriptionHistory: [entryA] };
+  const profileA = { email: "a@example.test", medicines: [syrup({ id: "med-a", prescribingDoctor: "Dr. Account A" })], doseRecords: [{ ...takenRecord("2026-10-16", "10:00", localIso("2026-10-16", "10:10"), "dose-a"), medicinePrescribingDoctor: "Dr. Account A" }], prescriptionHistory: [entryA] };
   const profileB = { email: "b@example.test", medicines: [syrup({ id: "med-b" })], doseRecords: [takenRecord("2026-10-16", "10:00", localIso("2026-10-16", "10:10"), "dose-b")], prescriptionHistory: [entryB] };
   storage.set(demoProfileStorageKey(profileA.email), serializeDemoProfile(profileA));
   storage.set(demoProfileStorageKey(profileB.email), serializeDemoProfile(profileB));
@@ -1354,6 +1369,9 @@ test("legacy profile serialization remains compatible and prescription history s
   const reloadedB = loadDemoProfile({ getItem: (key) => storage.get(key) ?? null }, profileB.email);
   assert.deepEqual(reloadedA.prescriptionHistory.map((entry) => entry.id), ["entry-a"]);
   assert.deepEqual(reloadedB.prescriptionHistory.map((entry) => entry.id), ["entry-b"]);
+  assert.equal(reloadedA.medicines[0].prescribingDoctor, "Dr. Account A");
+  assert.equal(reloadedA.doseRecords[0].medicinePrescribingDoctor, "Dr. Account A");
+  assert.equal(reloadedB.doseRecords[0].medicinePrescribingDoctor, undefined);
 
   const deletedMedicineProfile = { ...reloadedA, medicines: [] };
   storage.set(demoProfileStorageKey(profileA.email), serializeDemoProfile(deletedMedicineProfile));

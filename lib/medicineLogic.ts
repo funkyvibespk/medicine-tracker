@@ -26,6 +26,7 @@ export interface DoseDetailsSnapshotRecord {
   medicineStrength?: string;
   medicineDoseAmount?: number;
   medicineDoseUnit?: string;
+  medicinePrescribingDoctor?: string;
 }
 
 export interface DoseDetailsSnapshotSource {
@@ -34,6 +35,7 @@ export interface DoseDetailsSnapshotSource {
   strength: string;
   doseAmount: number;
   doseUnit?: string;
+  prescribingDoctor?: string;
 }
 
 /** Capture the medicine details attached to a newly recorded dose occurrence. */
@@ -49,6 +51,7 @@ export function withDoseDetailsSnapshot<T extends DoseDetailsSnapshotRecord>(
     medicineStrength: record.medicineStrength ?? existingRecord?.medicineStrength ?? (existingRecord ? undefined : medicine.strength),
     medicineDoseAmount: record.medicineDoseAmount ?? existingRecord?.medicineDoseAmount ?? (existingRecord ? undefined : medicine.doseAmount),
     medicineDoseUnit: record.medicineDoseUnit ?? existingRecord?.medicineDoseUnit ?? (existingRecord ? undefined : medicine.doseUnit),
+    medicinePrescribingDoctor: record.medicinePrescribingDoctor ?? existingRecord?.medicinePrescribingDoctor ?? (existingRecord ? undefined : medicine.prescribingDoctor),
   };
 }
 
@@ -141,6 +144,7 @@ export interface MissedOccurrenceCandidate extends OccurrenceRecord {
   medicineStrength?: string;
   medicineDoseAmount?: number;
   medicineDoseUnit?: string;
+  medicinePrescribingDoctor?: string;
 }
 
 export interface PendingOccurrenceCandidate extends OccurrenceRecord {
@@ -150,6 +154,7 @@ export interface PendingOccurrenceCandidate extends OccurrenceRecord {
   medicineStrength?: string;
   medicineDoseAmount?: number;
   medicineDoseUnit?: string;
+  medicinePrescribingDoctor?: string;
 }
 
 export function scheduledOccurrenceKey(medicineId: string, scheduledDate: string, scheduledTime: string, scheduledInstant?: string): string {
@@ -181,6 +186,7 @@ interface DoseOutcomeRecord extends OccurrenceRecord {
   medicineStrength?: string;
   medicineDoseAmount?: number;
   medicineDoseUnit?: string;
+  medicinePrescribingDoctor?: string;
 }
 
 /** Collapse only records with the same explicit occurrence identity for display and summaries. */
@@ -217,6 +223,7 @@ export function canonicalizeOccurrenceRecords<R extends DoseOutcomeRecord>(recor
       medicineStrength: existing.medicineStrength ?? record.medicineStrength,
       medicineDoseAmount: existing.medicineDoseAmount ?? record.medicineDoseAmount,
       medicineDoseUnit: existing.medicineDoseUnit ?? record.medicineDoseUnit,
+      medicinePrescribingDoctor: existing.medicinePrescribingDoctor ?? record.medicinePrescribingDoctor,
     } as R);
   }
   return [...canonical.values()];
