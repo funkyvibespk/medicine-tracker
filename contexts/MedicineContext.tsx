@@ -392,7 +392,7 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
     const medicine = medicinesRef.current.find((item) => item.id === record.medicineId);
     if (!medicine) return false;
     const existingRecord = doseRecordsRef.current.find((saved) => sameDoseOccurrence(saved, record));
-    const recordWithSnapshot = withDoseDetailsSnapshot(record, { ...medicine, doseAmount }, existingRecord);
+    const recordWithSnapshot = withDoseDetailsSnapshot(record, { ...medicine, doseAmount }, existingRecord, { snapshotCurrentDoctor: true });
     const enrichedRecord: DoseRecord = {
       ...recordWithSnapshot,
       medicineName: record.medicineName ?? existingRecord?.medicineName ?? medicine.name,

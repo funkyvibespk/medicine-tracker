@@ -48,6 +48,7 @@ export function withDoseDetailsSnapshot<T extends DoseDetailsSnapshotRecord>(
   record: T,
   medicine: DoseDetailsSnapshotSource,
   existingRecord?: DoseDetailsSnapshotRecord,
+  options?: { snapshotCurrentDoctor?: boolean },
 ): T {
   return {
     ...record,
@@ -56,7 +57,8 @@ export function withDoseDetailsSnapshot<T extends DoseDetailsSnapshotRecord>(
     medicineStrength: record.medicineStrength ?? existingRecord?.medicineStrength ?? (existingRecord ? undefined : medicine.strength),
     medicineDoseAmount: record.medicineDoseAmount ?? existingRecord?.medicineDoseAmount ?? (existingRecord ? undefined : medicine.doseAmount),
     medicineDoseUnit: record.medicineDoseUnit ?? existingRecord?.medicineDoseUnit ?? (existingRecord ? undefined : medicine.doseUnit),
-    medicinePrescribingDoctor: record.medicinePrescribingDoctor ?? existingRecord?.medicinePrescribingDoctor ?? (existingRecord ? undefined : medicine.prescribingDoctor),
+    medicinePrescribingDoctor: record.medicinePrescribingDoctor ?? existingRecord?.medicinePrescribingDoctor ??
+      (existingRecord && !options?.snapshotCurrentDoctor ? undefined : medicine.prescribingDoctor),
   };
 }
 

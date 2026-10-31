@@ -150,6 +150,35 @@ test("new dose outcome snapshots capture medicine strength, form, dose amount, u
   assert.equal(skipped.doseRecords[0].inventoryRemainingUnit, undefined);
 });
 
+test("successful scheduled and PRN takes snapshot the current doctor and preserve it after profile reload", () => {
+  const medicine = syrup({ prescribingDoctor: "Dr. Current Prescriber" });
+  const occurrences = [
+    {
+      id: "scheduled-doctor-dose", medicineId: medicine.id, scheduledDate: "2026-10-15", scheduledTime: "10:00",
+      actualTakenTime: localIso("2026-10-15", "10:02"), status: "taken_on_time",
+    },
+    {
+      id: "prn-doctor-dose", medicineId: medicine.id, scheduledDate: "2026-10-15", scheduledTime: "11:00",
+      actualTakenTime: localIso("2026-10-15", "11:02"), status: "taken_on_time", isPrn: true,
+    },
+  ];
+  const savedRecords = occurrences.map((record) => {
+    const existingRecord = { ...record, actualTakenTime: undefined, status: "overdue" };
+    const withSnapshot = withDoseDetailsSnapshot(record, medicine, existingRecord, { snapshotCurrentDoctor: true });
+    const taken = applyTakenDose([medicine], [existingRecord], withSnapshot, medicine.doseAmount);
+    assert.equal(taken.accepted, true);
+    assert.equal(taken.doseRecords[0].medicinePrescribingDoctor, "Dr. Current Prescriber");
+    return taken.doseRecords[0];
+  });
+
+  const email = "doctor-dose-snapshot@example.invalid";
+  const storage = new Map([[demoProfileStorageKey(email), serializeDemoProfile({ email, medicines: [medicine], doseRecords: savedRecords })]]);
+  const reloaded = loadDemoProfile({ getItem: (key) => storage.get(key) ?? null }, email);
+  assert.deepEqual(reloaded.doseRecords.map((record) => record.medicinePrescribingDoctor), [
+    "Dr. Current Prescriber", "Dr. Current Prescriber",
+  ]);
+});
+
 function identityMedicine(overrides = {}) {
   return {
     id: "synthetic-identity-a",
