@@ -19,7 +19,7 @@ export function applyMedicineUpdatePreservingCreationDate<T extends MedicineWith
   medicine: T,
   updates: Partial<T>,
 ): T {
-  return { ...medicine, ...updates, createdAt: medicine.createdAt };
+  return { ...medicine, ...updates, id: medicine.id, createdAt: medicine.createdAt };
 }
 
 function timestamp(value: string | undefined): number | null {

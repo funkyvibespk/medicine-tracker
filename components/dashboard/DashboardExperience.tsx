@@ -909,7 +909,7 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
               doseRecords={doseRecords}
               onSave={(med, options) => {
                 if (editingMedicine) {
-                  const result = updateMedicine(med.id, med);
+                  const result = updateMedicine(editingMedicine.id, med);
                   if (!result.saved) return { added: false, validationError: result.validationError };
                 } else {
                   const result = addMedicine(med, options);

@@ -242,8 +242,6 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
       newErrors.scheduleTimes = "Choose a different time for each dose";
     if (formData.frequency === "Every X hours" && (!formData.intervalHours || formData.intervalHours < 1 || formData.intervalHours > 24))
       newErrors.intervalHours = "Enter an interval from 1 to 24 hours";
-    if (initialData && currentType !== initialData.type && Number(formData.inventoryAmount) > 0)
-      newErrors.type = "Set current stock to zero before changing medicine type so its saved inventory is not reinterpreted.";
     if (currentType === "Syrup" && syrupStockEntryUnit === "bottles" && Number(formData.inventoryAmount) > 0 && !(Number(formData.inventoryContainerCapacity) > 0))
       newErrors.inventoryContainerCapacity = "Enter the bottle capacity to calculate liquid stock";
 
@@ -344,9 +342,13 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
     if (result && !result.added) {
       if (result.validationError) {
         setSaveError(result.validationError);
+      } else if (!result.duplicateMatch) {
+        setSaveError(initialData
+          ? "This medicine could not be updated. No changes were saved; reload and try again."
+          : "This medicine could not be added safely.");
       } else {
-        setReviewingDuplicate({ candidate: med, matches: result.duplicateMatch ? [result.duplicateMatch] : [] });
-        setSaveError(result.duplicateMatch ? "A matching medicine was added while this form was open. Review it before continuing." : "This medicine could not be added safely.");
+        setReviewingDuplicate({ candidate: med, matches: [result.duplicateMatch] });
+        setSaveError("A matching medicine was added while this form was open. Review it before continuing.");
       }
       submittingRef.current = false;
       return;
@@ -457,6 +459,11 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
             <option value="Sachet">Sachet</option>
             <option value="Injection">Injection</option>
           </select>
+          {initialData && currentType !== initialData.type && (
+            <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+              Changing the form can change the inventory unit. Review Current Stock and Low Stock Alert At using {getDoseUnit()} before saving; the existing quantity is not converted.
+            </p>
+          )}
           {errors.type && <p className="mt-1 text-xs text-rose-500">{errors.type}</p>}
         </div>
 
@@ -828,16 +835,16 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
                   ["Low-stock threshold", `${medicine.lowStockThreshold} ${medicine.lowStockThresholdUnit ?? inventoryUnitFor(medicine)}`, `${reviewingDuplicate.candidate.lowStockThreshold} ${reviewingDuplicate.candidate.lowStockThresholdUnit ?? inventoryUnitFor(reviewingDuplicate.candidate)}`],
                   ["Dose history", String(historyCount(medicine.id)), String(historyCount(reviewingDuplicate.candidate.id))],
                 ];
-                const canAddStock = kind === "exact" && reviewingDuplicate.matches.length === 1 && onAddStock && reviewingDuplicate.candidate.inventoryAmount > 0 && inventoryUnitsCompatible(medicine) && inventoryUnitFor(medicine).trim().toLowerCase() === inventoryUnitFor(reviewingDuplicate.candidate).trim().toLowerCase();
+                const canAddStock = !initialData && kind === "exact" && reviewingDuplicate.matches.length === 1 && onAddStock && reviewingDuplicate.candidate.inventoryAmount > 0 && inventoryUnitsCompatible(medicine) && inventoryUnitFor(medicine).trim().toLowerCase() === inventoryUnitFor(reviewingDuplicate.candidate).trim().toLowerCase();
                 return (
                   <section key={medicine.id} className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
                     <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-3 py-2.5 dark:bg-slate-800/70">
                       <p className="text-sm font-semibold text-slate-900 dark:text-white">{medicine.name} <span className="font-normal text-slate-500">· {kind === "exact" ? "normalized exact match" : "likely name match"}</span></p>
-                      {onOpenExisting && <button type="button" onClick={() => openExistingMedicine(medicine)} className="min-h-9 rounded-lg border border-slate-300 px-3 text-xs font-semibold text-slate-700 hover:bg-white dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">Open existing medicine</button>}
+                      {onOpenExisting && !initialData && <button type="button" onClick={() => openExistingMedicine(medicine)} className="min-h-9 rounded-lg border border-slate-300 px-3 text-xs font-semibold text-slate-700 hover:bg-white dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">Open existing medicine</button>}
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full min-w-[520px] text-left text-xs">
-                        <thead><tr className="text-slate-500 dark:text-slate-400"><th className="px-3 py-2 font-semibold">Field</th><th className="px-3 py-2 font-semibold">Already tracked</th><th className="px-3 py-2 font-semibold">Being added</th></tr></thead>
+                        <thead><tr className="text-slate-500 dark:text-slate-400"><th className="px-3 py-2 font-semibold">Field</th><th className="px-3 py-2 font-semibold">Already tracked</th><th className="px-3 py-2 font-semibold">{initialData ? "Being edited" : "Being added"}</th></tr></thead>
                         <tbody>{values.map(([label, existingValue, newValue]) => <tr key={label} className="border-t border-slate-100 dark:border-slate-800"><th className="whitespace-nowrap px-3 py-2 font-medium text-slate-600 dark:text-slate-300">{label}</th><td className="px-3 py-2 text-slate-700 dark:text-slate-200">{existingValue}</td><td className="px-3 py-2 text-slate-700 dark:text-slate-200">{newValue}</td></tr>)}</tbody>
                       </table>
                     </div>

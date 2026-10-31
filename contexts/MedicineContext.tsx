@@ -338,14 +338,15 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
     if (!canMutateActiveProfile()) return { saved: false, validationError: "The active local profile is not ready. Reload it before making changes." };
     const existing = medicinesRef.current.find((medicine) => medicine.id === id);
     if (!existing) return { saved: false, validationError: "This medicine could not be found." };
+    const safeUpdates: Partial<Medicine> = { ...updates, id: existing.id, createdAt: existing.createdAt };
     const quantityValidation = validateInventoryThreshold(
-      updates.inventoryAmount ?? existing.inventoryAmount,
-      updates.lowStockThreshold ?? existing.lowStockThreshold,
+      safeUpdates.inventoryAmount ?? existing.inventoryAmount,
+      safeUpdates.lowStockThreshold ?? existing.lowStockThreshold,
     );
     if (!quantityValidation.valid) {
       return { saved: false, validationError: quantityValidation.inventoryAmountError ?? quantityValidation.lowStockThresholdError };
     }
-    const updatedPrescription = { ...existing, ...updates };
+    const updatedPrescription = { ...existing, ...safeUpdates };
     const updatedPrescriptionHistory = appendPrescriptionChange(
       prescriptionHistoryRef.current,
       existing,
@@ -358,7 +359,7 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
       setPrescriptionHistory(updatedPrescriptionHistory);
     }
     const now = new Date();
-    if (existing && scheduleChanged(existing, updates)) {
+    if (scheduleChanged(existing, safeUpdates)) {
       const reconciled = reconcileHistoricalMissedOccurrences(medicinesRef.current, doseRecordsRef.current, now);
       if (reconciled !== doseRecordsRef.current) {
         doseRecordsRef.current = reconciled;
@@ -367,8 +368,8 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
     }
     medicinesRef.current = medicinesRef.current.map((medicine) => {
       if (medicine.id !== id) return medicine;
-      const updated = applyMedicineUpdatePreservingCreationDate(medicine, updates);
-      if (!existing || !scheduleChanged(existing, updates)) return updated;
+      const updated = applyMedicineUpdatePreservingCreationDate(medicine, safeUpdates);
+      if (!scheduleChanged(existing, safeUpdates)) return updated;
       return {
         ...updated,
         scheduleRevisions: [...(existing.scheduleRevisions ?? []), {

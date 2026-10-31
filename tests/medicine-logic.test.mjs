@@ -1250,6 +1250,14 @@ test("medicine identity blocks normalized exact duplicates but ignores schedule 
     id: "synthetic-identity-d",
     type: "Capsule",
   }), [existing]), []);
+  assert.deepEqual(findMedicineIdentityMatches(existing, [existing]), [], "an edit never matches its own ID");
+  assert.equal(findBlockingMedicineIdentityMatch(identityMedicine({ id: "new-medicine", name: "Different medicine" }), [existing]), undefined, "a new medicine is allowed");
+
+  const sameNameDifferentStrength = identityMedicine({ id: "different-strength", name: existing.name, strength: "60 mg" });
+  const sameNameDifferentForm = identityMedicine({ id: "different-form", name: existing.name, type: "Capsule" });
+  assert.deepEqual(findMedicineIdentityMatches(sameNameDifferentStrength, [existing]), [], "strength is part of identity");
+  assert.deepEqual(findMedicineIdentityMatches(sameNameDifferentForm, [existing]), [], "form is part of identity");
+  assert.equal(findBlockingMedicineIdentityMatch(candidate, [existing])?.medicine.id, existing.id, "a genuine exact conflict is blocked");
 });
 
 test("medicine identity suggests a conservative spelling match without treating it as exact", () => {
@@ -1523,6 +1531,17 @@ test("medicine edits preserve the original creation timestamp and added label us
   assert.deepEqual(applyMedicineUpdatePreservingCreationDate(medicine, { name: "Edited name", createdAt: "2026-10-24T00:00:00.000Z" }), {
     id: "created-med", createdAt: "2026-10-23T15:35:00.000Z", name: "Edited name",
   });
+  assert.deepEqual(applyMedicineUpdatePreservingCreationDate(medicine, {
+    id: "replacement-id",
+    type: "Capsule",
+    inventoryAmount: 12,
+    lowStockThreshold: 4,
+  }), {
+    ...medicine,
+    type: "Capsule",
+    inventoryAmount: 12,
+    lowStockThreshold: 4,
+  }, "an edit keeps its original ID while applying validated form and stock changes");
   assert.equal(applyMedicineUpdatePreservingCreationDate({ id: "legacy" }, { name: "Legacy edited", createdAt: "2026-10-24T00:00:00.000Z" }).createdAt, undefined);
 
   const instant = new Date("2026-10-23T15:35:00.000Z");
