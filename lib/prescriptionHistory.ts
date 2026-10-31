@@ -123,6 +123,7 @@ export function validatePrescriptionHistoryFilters(filters: PrescriptionHistoryF
 /** Builds account-local filter options from the full saved snapshot collection. */
 export function buildPrescriptionHistoryFilterOptions(
   entries: readonly PrescriptionHistoryEntry[],
+  currentMedicines: readonly Pick<PrescribableMedicine, "id" | "name" | "type" | "strength" | "prescribingDoctor">[] = [],
 ): PrescriptionHistoryFilterOptions {
   const orderedEntries = sortPrescriptionHistory(entries);
   const doctors = new Map<string, PrescriptionHistoryFilterOption>();
@@ -144,6 +145,19 @@ export function buildPrescriptionHistoryFilterOptions(
         ? { value, label: details, medicineId }
         : { value, label: `${details} · unlinked snapshot ${index + 1}`, medicineEntryId: entry.id, medicineEntryIndex: index });
     }
+  });
+
+  currentMedicines.forEach((medicine) => {
+    const doctor = normalizeDoctorNameForSearch(medicine.prescribingDoctor);
+    if (doctor && !doctors.has(doctor)) {
+      doctors.set(doctor, { value: doctor, label: normalizeDoctorName(medicine.prescribingDoctor), doctor, doctorIdentity: doctor });
+    }
+
+    const value = `medicine:${medicine.id}`;
+    const existing = medicines.get(value);
+    const details = `${medicine.name} · ${medicine.type}${medicine.strength ? ` · ${medicine.strength}` : ""}`;
+    if (existing) existing.label = details;
+    else medicines.set(value, { value, label: details, medicineId: medicine.id });
   });
 
   const medicineOptions = [...medicines.values()];
@@ -178,7 +192,7 @@ export type PrescriptionHistoryViewAction =
   | { type: "clear" };
 
 export function createInitialPrescriptionHistoryViewState(): PrescriptionHistoryViewState {
-  return { draftFilters: createEmptyPrescriptionHistoryFilters(), appliedFilters: null, showAll: false, validationMessage: null };
+  return { draftFilters: createEmptyPrescriptionHistoryFilters(), appliedFilters: null, showAll: true, validationMessage: null };
 }
 
 /** Pure UI-state transitions keep unapplied edits from presenting stale results. */
@@ -187,12 +201,13 @@ export function prescriptionHistoryViewReducer(
   action: PrescriptionHistoryViewAction,
 ): PrescriptionHistoryViewState {
   if (action.type === "edit-filters") {
+    const draftFilters = { ...state.draftFilters, ...action.updates };
+    const validationMessage = hasActivePrescriptionHistoryFilters(draftFilters) ? validatePrescriptionHistoryFilters(draftFilters) : null;
     return {
-      ...state,
-      draftFilters: { ...state.draftFilters, ...action.updates },
-      appliedFilters: null,
-      showAll: false,
-      validationMessage: null,
+      draftFilters,
+      appliedFilters: validationMessage || !hasActivePrescriptionHistoryFilters(draftFilters) ? null : { ...draftFilters },
+      showAll: !validationMessage && !hasActivePrescriptionHistoryFilters(draftFilters),
+      validationMessage,
     };
   }
   if (action.type === "apply-filters") {
@@ -204,7 +219,7 @@ export function prescriptionHistoryViewReducer(
   if (action.type === "show-all") {
     return { draftFilters: createEmptyPrescriptionHistoryFilters(), appliedFilters: null, showAll: true, validationMessage: null };
   }
-  return createInitialPrescriptionHistoryViewState();
+  return { ...createInitialPrescriptionHistoryViewState(), showAll: true };
 }
 
 export type PrescriptionHistoryResultsMode = "hidden" | "filtered" | "all";
@@ -271,6 +286,25 @@ export function filterPrescriptionHistory(
     if (filters.medicineEntryIndex !== undefined && index !== filters.medicineEntryIndex) return false;
     if (filters.prescriptionDateFrom && (!entry.prescriptionDate || entry.prescriptionDate < filters.prescriptionDateFrom)) return false;
     if (filters.prescriptionDateTo && (!entry.prescriptionDate || entry.prescriptionDate > filters.prescriptionDateTo)) return false;
+    return true;
+  });
+}
+
+/** Filters current saved medicine data separately from historical snapshots. */
+export function filterCurrentPrescriptionMedicines<T extends Pick<PrescribableMedicine, "id" | "name" | "type" | "strength" | "prescribingDoctor" | "prescriptionDate">>(
+  medicines: readonly T[],
+  filters: PrescriptionHistoryFilters,
+): T[] {
+  const doctorQuery = normalizeDoctorNameForSearch(filters.doctor);
+  const medicineQuery = normalizedText(filters.medicine).toLowerCase();
+  return medicines.filter((medicine) => {
+    if (filters.doctorIdentity && normalizeDoctorNameForSearch(medicine.prescribingDoctor) !== filters.doctorIdentity) return false;
+    if (doctorQuery && !normalizeDoctorNameForSearch(medicine.prescribingDoctor).includes(doctorQuery)) return false;
+    if (filters.medicineId && medicine.id !== filters.medicineId) return false;
+    if (filters.medicineEntryId || filters.medicineEntryIndex !== undefined) return false;
+    if (medicineQuery && !`${medicine.name} ${medicine.type} ${medicine.strength}`.toLowerCase().includes(medicineQuery)) return false;
+    if (filters.prescriptionDateFrom && (!medicine.prescriptionDate || medicine.prescriptionDate < filters.prescriptionDateFrom)) return false;
+    if (filters.prescriptionDateTo && (!medicine.prescriptionDate || medicine.prescriptionDate > filters.prescriptionDateTo)) return false;
     return true;
   });
 }

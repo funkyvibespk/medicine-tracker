@@ -5,7 +5,7 @@ import { registerHooks } from "node:module";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { sortDoseHistoryRecords, sortTakenDoseRecordsNewestFirst } from "../lib/doseHistory.ts";
-import { appendPrescriptionChange, buildPrescriptionHistoryFilterOptions, createEmptyPrescriptionHistoryFilters, createInitialPrescriptionHistoryViewState, createPrescriptionHistoryEntry, filterPrescriptionHistory, getPrescriptionHistoryResults, groupPrescriptionHistoryByMedicine, hasActivePrescriptionHistoryFilters, normalizeDoctorName, prescriptionHistoryViewReducer, sortPrescriptionHistory, validatePrescriptionHistoryFilters } from "../lib/prescriptionHistory.ts";
+import { appendPrescriptionChange, buildPrescriptionHistoryFilterOptions, createEmptyPrescriptionHistoryFilters, createInitialPrescriptionHistoryViewState, createPrescriptionHistoryEntry, filterCurrentPrescriptionMedicines, filterPrescriptionHistory, getPrescriptionHistoryResults, groupPrescriptionHistoryByMedicine, hasActivePrescriptionHistoryFilters, normalizeDoctorName, prescriptionHistoryViewReducer, sortPrescriptionHistory, validatePrescriptionHistoryFilters } from "../lib/prescriptionHistory.ts";
 import { applyMedicineUpdatePreservingCreationDate, formatMedicineAddedAt, normalizeOptionalMedicineDetails, sortMedicinesNewestFirst } from "../lib/medicineList.ts";
 import { getMedicineFormAppearance } from "../lib/medicineFormIcon.ts";
 import { addScheduleBaseline, getMedicineOccurrencesForDate, getScheduledTimesForDate } from "../lib/schedule.ts";
@@ -1678,20 +1678,24 @@ test("history filters match older snapshots before grouping and clearing filters
   assert.equal(hasActivePrescriptionHistoryFilters({ doctor: "   ", medicine: "  " }), false);
 });
 
-test("prescription filter options normalize doctor names and derive medicine choices from snapshots", () => {
+test("prescription filter options include doctors and medicines from snapshots and current saved medicines", () => {
   const entries = [
     createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Rigix", type: "Tablet", strength: "10 mg", prescribingDoctor: "Sadia" }), "2026-10-20T10:00:00.000Z", "rigix-new"),
     createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Rigix", type: "Tablet", strength: "5 mg", prescribingDoctor: "Dr.Sadia" }), "2026-10-10T10:00:00.000Z", "rigix-old"),
     createPrescriptionHistoryEntry(prescriptionMedicine({ id: "deleted-id", name: "Archived medicine", type: "Capsule", strength: "20 mg", prescribingDoctor: "DR. SADIA" }), "2026-10-09T10:00:00.000Z", "archived"),
     createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-b", name: "Other medicine", prescribingDoctor: "  " }), "2026-10-08T10:00:00.000Z", "other"),
   ];
-  const options = buildPrescriptionHistoryFilterOptions(entries);
+  const options = buildPrescriptionHistoryFilterOptions(entries, [
+    { id: "legacy-med", name: "Legacy medicine", type: "Syrup", strength: "5 mg", prescribingDoctor: "Dr. Recent Physician" },
+  ]);
   assert.equal(options.doctors.filter((option) => option.doctorIdentity === "sadia").length, 1);
   assert.equal(options.doctors.find((option) => option.doctorIdentity === "sadia")?.label, "Dr. Sadia");
   assert.equal(options.doctors.some((option) => option.label === "Dr."), false);
-  assert.equal(options.medicines.length, 3);
+  assert.equal(options.medicines.length, 4);
   assert.equal(options.medicines.find((option) => option.medicineId === "med-a")?.label, "Rigix · Tablet · 10 mg");
   assert.equal(options.medicines.some((option) => option.medicineId === "deleted-id"), true);
+  assert.equal(options.doctors.some((option) => option.doctorIdentity === "recent physician"), true);
+  assert.equal(options.medicines.some((option) => option.medicineId === "legacy-med" && option.label === "Legacy medicine · Syrup · 5 mg"), true);
 });
 
 test("medicine filter options distinguish same-label IDs and unlinked snapshots without merging", () => {
@@ -1731,24 +1735,18 @@ test("prescription filter options select all snapshots for the normalized doctor
   assert.deepEqual(filterPrescriptionHistory(ordered, { prescriptionDateFrom: "2026-08-02" }).map((entry) => entry.id), ["rigix-new-match"]);
 });
 
-test("prescription history results start hidden, apply explicitly, hide stale results, show all, and clear to hidden", () => {
+test("prescription history defaults to all and filter edits and clearing update results immediately", () => {
   const entries = [
     createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Alpha", prescribingDoctor: "Doctor A", prescriptionDate: "2026-08-01" }), "2026-08-02T10:00:00.000Z", "alpha"),
     createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-b", name: "Beta", prescribingDoctor: "Doctor B", prescriptionDate: "2026-09-01" }), "2026-09-02T10:00:00.000Z", "beta"),
   ];
   let state = createInitialPrescriptionHistoryViewState();
   let results = getPrescriptionHistoryResults(entries, state);
-  assert.equal(results.mode, "hidden");
-  assert.deepEqual(results.entries, []);
+  assert.equal(results.mode, "all");
+  assert.deepEqual(results.entries.map((entry) => entry.id), ["alpha", "beta"]);
   assert.equal(results.totalCount, 2);
-  assert.equal(validatePrescriptionHistoryFilters(state.draftFilters), "Choose a doctor, medicine, or prescription date before applying filters.");
-
-  state = prescriptionHistoryViewReducer(state, { type: "apply-filters" });
-  assert.equal(state.validationMessage, "Choose a doctor, medicine, or prescription date before applying filters.");
-  assert.equal(getPrescriptionHistoryResults(entries, state).mode, "hidden");
 
   state = prescriptionHistoryViewReducer(state, { type: "edit-filters", updates: { doctorIdentity: "doctor a" } });
-  state = prescriptionHistoryViewReducer(state, { type: "apply-filters" });
   results = getPrescriptionHistoryResults(entries, state);
   assert.equal(results.mode, "filtered");
   assert.equal(results.resultCount, 1);
@@ -1757,10 +1755,7 @@ test("prescription history results start hidden, apply explicitly, hide stale re
 
   state = prescriptionHistoryViewReducer(state, { type: "edit-filters", updates: { doctorIdentity: "nobody" } });
   results = getPrescriptionHistoryResults(entries, state);
-  assert.equal(results.mode, "hidden");
-  assert.deepEqual(results.entries, []);
-  state = prescriptionHistoryViewReducer(state, { type: "apply-filters" });
-  results = getPrescriptionHistoryResults(entries, state);
+  assert.equal(results.mode, "filtered");
   assert.equal(results.countLabel, "0 matching snapshots of 2 total");
   assert.deepEqual(results.entries, []);
 
@@ -1772,9 +1767,20 @@ test("prescription history results start hidden, apply explicitly, hide stale re
 
   state = prescriptionHistoryViewReducer(state, { type: "clear" });
   results = getPrescriptionHistoryResults(entries, state);
-  assert.equal(results.mode, "hidden");
-  assert.equal(results.countLabel, "Results hidden");
+  assert.equal(results.mode, "all");
+  assert.equal(results.countLabel, "Showing all 2 snapshots");
   assert.equal(hasActivePrescriptionHistoryFilters(state.draftFilters), false);
+});
+
+test("current medicine details use saved current metadata without being mistaken for historical snapshots", () => {
+  const medicines = [
+    { id: "legacy-a", name: "Legacy Alpha", type: "Tablet", strength: "10 mg", prescribingDoctor: "Dr. Current Doctor", prescriptionDate: "2026-08-01" },
+    { id: "legacy-b", name: "Legacy Beta", type: "Syrup", strength: "5 mg", prescribingDoctor: "Other Doctor", prescriptionDate: "2026-09-01" },
+  ];
+  assert.deepEqual(filterCurrentPrescriptionMedicines(medicines, { doctorIdentity: "current doctor" }).map((medicine) => medicine.id), ["legacy-a"]);
+  assert.deepEqual(filterCurrentPrescriptionMedicines(medicines, { medicineId: "legacy-a" }).map((medicine) => medicine.id), ["legacy-a"]);
+  assert.deepEqual(filterCurrentPrescriptionMedicines(medicines, { prescriptionDateFrom: "2026-08-01", prescriptionDateTo: "2026-08-31" }).map((medicine) => medicine.id), ["legacy-a"]);
+  assert.deepEqual(filterCurrentPrescriptionMedicines(medicines, { doctorIdentity: "missing" }), []);
 });
 
 test("prescription filter validation rejects an empty filter and reversed date range", () => {
