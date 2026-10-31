@@ -24,8 +24,8 @@ function VitalSnapshotIcon({ type }: { type: VitalReadingType }) {
   const common = { className: "h-5 w-5", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true as const };
   if (type === "blood-pressure") return <svg {...common}><path d="M20.8 4.8a5.4 5.4 0 0 0-7.6 0L12 6l-1.2-1.2a5.4 5.4 0 0 0-7.6 7.6L12 21l8.8-8.6a5.4 5.4 0 0 0 0-7.6Z"/><path d="M4.8 12h3l1.4-2.7 2.2 5.3 1.7-3h3.4"/></svg>;
   if (type === "heart-rate") return <svg {...common}><rect x="3" y="4" width="18" height="16" rx="4"/><path d="M5.5 12h3l1.5-4 3.2 8 1.6-4h3.7"/></svg>;
-  if (type === "oxygen-saturation") return <svg {...common}><path d="M12 3v5"/><path d="M12 8c-1.8-2.2-4-3.2-5.8-2.6C4 6.2 3 8.6 3 12c0 4.7 2 8 5 8 2.7 0 4-2.4 4-6V8Z"/><path d="M12 8c1.8-2.2 4-3.2 5.8-2.6C20 6.2 21 8.6 21 12c0 4.7-2 8-5 8-2.7 0-4-2.4-4-6V8Z"/><path d="M9 13h2m2 0h2"/></svg>;
-  return <svg {...common}><path d="M12 22s-7-4.4-7-11a7 7 0 1 1 14 0c0 6.6-7 11-7 11Z"/><path d="M12 7.5v7m-2.5-2.5h5"/></svg>;
+  if (type === "oxygen-saturation") return <svg {...common}><path d="M3 7h11a2.5 2.5 0 1 0-2.4-3.2"/><path d="M2 12h16a2.5 2.5 0 1 1-2.4 3.2"/><path d="M4 17h8"/></svg>;
+  return <svg {...common}><path d="M12 22s-7-4.4-7-11a7 7 0 1 1 14 0c0 6.6-7 11-7 11Z"/></svg>;
 }
 
 type ScheduledDose = {
@@ -636,11 +636,11 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
             {(["blood-pressure", "heart-rate", "oxygen-saturation", "blood-sugar"] as VitalReadingType[]).map((type) => {
               const latest = latestVitalReadingOnDate(vitalReadings, type, todayStr);
               const accent = type === "blood-pressure"
-                ? "border-sky-100 bg-sky-50/70 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/50 dark:text-sky-300"
+                ? "border-red-100 bg-red-50/70 text-red-600 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300"
                 : type === "heart-rate"
-                  ? "border-teal-100 bg-teal-50/70 text-teal-700 dark:border-teal-900/60 dark:bg-teal-950/50 dark:text-teal-300"
+                  ? "border-orange-100 bg-orange-50/70 text-orange-600 dark:border-orange-900/60 dark:bg-orange-950/40 dark:text-orange-300"
                   : type === "oxygen-saturation"
-                    ? "border-cyan-100 bg-cyan-50/70 text-cyan-700 dark:border-cyan-900/60 dark:bg-cyan-950/50 dark:text-cyan-300"
+                    ? "border-sky-100 bg-sky-50/70 text-sky-600 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-300"
                     : "border-violet-100 bg-violet-50/70 text-violet-700 dark:border-violet-900/60 dark:bg-violet-950/50 dark:text-violet-300";
               return <article key={type} className="min-w-0 rounded-2xl border border-slate-200/80 bg-white/90 p-3.5 shadow-sm shadow-slate-900/[0.03] transition-shadow hover:shadow-md dark:border-slate-800 dark:bg-slate-900/80 sm:p-4">
                 <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
