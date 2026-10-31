@@ -7,7 +7,7 @@ import { clearDemoSession } from "@/lib/demoSession";
 import { useMedicine } from "@/contexts/MedicineContext";
 import BrandedLoadingScreen from "@/components/BrandedLoadingScreen";
 
-const PROTECTED_PATHS = new Set(["/setup", "/dashboard", "/doses", "/medicines", "/inventory", "/history"]);
+const PROTECTED_PATHS = new Set(["/setup", "/dashboard", "/doses", "/medicines", "/inventory", "/history", "/vitaltrack"]);
 
 export default function DemoSessionBoundary({ children }: { children: ReactNode }) {
   const pathname = usePathname();

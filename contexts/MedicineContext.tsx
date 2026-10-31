@@ -19,6 +19,7 @@ import {
   createPrescriptionHistoryEntry,
   type PrescriptionHistoryEntry,
 } from "@/lib/prescriptionHistory";
+import { deleteVitalReading as removeVitalReading, upsertVitalReading, validateVitalReading, type VitalReading } from "@/lib/vitalTrack";
 
 export type MedicineType = "Tablet" | "Capsule" | "Syrup" | "Sachet" | "Injection";
 
@@ -99,6 +100,8 @@ interface MedicineContextType {
   medicines: Medicine[];
   doseRecords: DoseRecord[];
   prescriptionHistory: PrescriptionHistoryEntry[];
+  vitalReadings: VitalReading[];
+  vitalTrackDashboardEnabled: boolean;
   addMedicine: (med: Medicine, options?: { allowLikelyDuplicate?: boolean }) => AddMedicineResult;
   updateMedicine: (id: string, med: Partial<Medicine>) => MedicineUpdateResult;
   deleteMedicine: (id: string) => void;
@@ -107,6 +110,9 @@ interface MedicineContextType {
   updateDoseRecord: (id: string, updates: Partial<DoseRecord>) => void;
   updateInventory: (medicineId: string, amount: number) => void;
   addStock: (medicineId: string, amount: number) => void;
+  saveVitalReading: (reading: VitalReading) => boolean;
+  deleteVitalReading: (id: string) => boolean;
+  setVitalTrackDashboardEnabled: (enabled: boolean) => boolean;
   isHydrated: boolean;
   profileStatus: "loading" | "ready" | "error";
   profileError: string | null;
@@ -134,6 +140,9 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [doseRecords, setDoseRecords] = useState<DoseRecord[]>([]);
   const [prescriptionHistory, setPrescriptionHistory] = useState<PrescriptionHistoryEntry[]>([]);
+  const [vitalReadings, setVitalReadings] = useState<VitalReading[]>([]);
+  const [vitalTrackDashboardEnabled, setVitalTrackDashboardEnabledState] = useState(false);
+  const vitalReadingsRef = useRef<VitalReading[]>([]);
   const medicinesRef = useRef<Medicine[]>([]);
   const doseRecordsRef = useRef<DoseRecord[]>([]);
   const prescriptionHistoryRef = useRef<PrescriptionHistoryEntry[]>([]);
@@ -154,10 +163,13 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
     medicinesRef.current = [];
     doseRecordsRef.current = [];
     prescriptionHistoryRef.current = [];
+    vitalReadingsRef.current = [];
     activeProfileEmailRef.current = null;
     setMedicines([]);
     setDoseRecords([]);
     setPrescriptionHistory([]);
+    setVitalReadings([]);
+    setVitalTrackDashboardEnabledState(false);
     setActiveProfileEmail(null);
     setProfileState(status);
   }, [setProfileState]);
@@ -178,10 +190,13 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
       medicinesRef.current = addScheduleBaseline(profile.medicines as Medicine[]);
       doseRecordsRef.current = profile.doseRecords as DoseRecord[];
       prescriptionHistoryRef.current = profile.prescriptionHistory ?? [];
+      vitalReadingsRef.current = profile.vitalReadings ?? [];
       activeProfileEmailRef.current = session.email;
       setMedicines(medicinesRef.current);
       setDoseRecords(doseRecordsRef.current);
       setPrescriptionHistory(prescriptionHistoryRef.current);
+      setVitalReadings(vitalReadingsRef.current);
+      setVitalTrackDashboardEnabledState(profile.vitalTrackDashboardEnabled ?? false);
       setActiveProfileEmail(session.email);
       setProfileState("ready");
     } catch (error) {
@@ -208,10 +223,13 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
       medicinesRef.current = addScheduleBaseline(profile.medicines as Medicine[]);
       doseRecordsRef.current = profile.doseRecords as DoseRecord[];
       prescriptionHistoryRef.current = profile.prescriptionHistory ?? [];
+      vitalReadingsRef.current = profile.vitalReadings ?? [];
       activeProfileEmailRef.current = email;
       setMedicines(medicinesRef.current);
       setDoseRecords(doseRecordsRef.current);
       setPrescriptionHistory(prescriptionHistoryRef.current);
+      setVitalReadings(vitalReadingsRef.current);
+      setVitalTrackDashboardEnabledState(profile.vitalTrackDashboardEnabled ?? false);
       setActiveProfileEmail(email);
       setProfileState("ready");
     } catch (error) {
@@ -248,13 +266,13 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (profileStatus !== "ready" || !activeProfileEmail) return;
     try {
-      saveDemoProfileForActiveSession(localStorage, { email: activeProfileEmail, medicines, doseRecords, prescriptionHistory });
+      saveDemoProfileForActiveSession(localStorage, { email: activeProfileEmail, medicines, doseRecords, prescriptionHistory, vitalReadings, vitalTrackDashboardEnabled });
     } catch (error) {
       // This state update reports a failed write to the external storage system.
       const message = error instanceof Error ? error.message : "Changes could not be saved to this local profile.";
       queueMicrotask(() => setProfileState("error", message));
     }
-  }, [medicines, doseRecords, prescriptionHistory, profileStatus, activeProfileEmail, setProfileState]);
+  }, [medicines, doseRecords, prescriptionHistory, vitalReadings, vitalTrackDashboardEnabled, profileStatus, activeProfileEmail, setProfileState]);
 
   useEffect(() => {
     if (profileStatus !== "ready" || !activeProfileEmail) return;
@@ -450,14 +468,37 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
     setMedicines(medicinesRef.current);
   };
 
+  const saveVitalReading = (reading: VitalReading) => {
+    if (!canMutateActiveProfile() || validateVitalReading(reading)) return false;
+    vitalReadingsRef.current = upsertVitalReading(vitalReadingsRef.current, reading);
+    setVitalReadings(vitalReadingsRef.current);
+    return true;
+  };
+
+  const deleteVitalReading = (id: string) => {
+    if (!canMutateActiveProfile() || !vitalReadingsRef.current.some((reading) => reading.id === id)) return false;
+    vitalReadingsRef.current = removeVitalReading(vitalReadingsRef.current, id);
+    setVitalReadings(vitalReadingsRef.current);
+    return true;
+  };
+
+  const setVitalTrackDashboardEnabled = (enabled: boolean) => {
+    if (!canMutateActiveProfile()) return false;
+    setVitalTrackDashboardEnabledState(enabled);
+    return true;
+  };
+
   const clearAll = () => {
     if (!canMutateActiveProfile()) return;
     medicinesRef.current = [];
     doseRecordsRef.current = [];
     prescriptionHistoryRef.current = [];
+    vitalReadingsRef.current = [];
     setMedicines([]);
     setDoseRecords([]);
     setPrescriptionHistory([]);
+    setVitalReadings(vitalReadingsRef.current);
+    setVitalTrackDashboardEnabledState(false);
   };
 
   return (
@@ -466,6 +507,8 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
         medicines,
         doseRecords,
         prescriptionHistory,
+        vitalReadings,
+        vitalTrackDashboardEnabled,
         addMedicine,
         updateMedicine,
         deleteMedicine,
@@ -474,6 +517,9 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
         updateDoseRecord,
         updateInventory,
         addStock,
+        saveVitalReading,
+        deleteVitalReading,
+        setVitalTrackDashboardEnabled,
         isHydrated: profileStatus === "ready",
         profileStatus,
         profileError,

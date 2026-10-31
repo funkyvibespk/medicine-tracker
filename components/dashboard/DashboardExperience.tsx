@@ -14,6 +14,7 @@ import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibilit
 import BrandedLoadingScreen from "@/components/BrandedLoadingScreen";
 import { sortDoseHistoryRecords, sortTakenDoseRecordsNewestFirst } from "@/lib/doseHistory";
 import { getMissedDoseNotificationsForToday } from "@/lib/missedDoses";
+import { latestVitalReadingOnDate, vitalReadingTypeLabel, vitalReadingLabel, type VitalReadingType } from "@/lib/vitalTrack";
 import { canonicalizeOccurrenceRecords, comparePhysicalStock, doseUnitFor, filterDoseRecords, findCloseDoseConflict, getOccurrenceTimeStatus, getOutstandingMissedOccurrences, getStockStatus, getUnscheduledSameDayMissedOccurrences, inventoryUnitFor, inventoryUnitsCompatible, minutesFromScheduledOccurrence, parseNonNegativeQuantity, PhysicalStockComparison, scheduledOccurrenceId, scheduledOccurrenceKey } from "@/lib/medicineLogic";
 
 // Helper to pad numbers
@@ -47,6 +48,8 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
     skipDoseOccurrence,
     deleteMedicine,
     addStock,
+    vitalReadings,
+    vitalTrackDashboardEnabled,
     isHydrated,
   } = useMedicine();
 
@@ -611,6 +614,23 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
             <Link href="/doses" className="text-xs font-semibold text-teal-700 hover:text-teal-600 dark:text-teal-300">Open today&apos;s schedule →</Link>
           </div>
           {upcomingDoses.length === 0 ? <p className="mt-4 rounded-xl bg-slate-50 px-4 py-4 text-sm text-slate-500 dark:bg-slate-950/50 dark:text-slate-400">No upcoming scheduled doses today.</p> : <div className="mt-4 grid gap-2.5 sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">{upcomingDoses.map((dose) => <div key={dose.id} className="flex min-w-0 items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/80 p-3.5 dark:border-slate-800 dark:bg-slate-950/50 sm:border-transparent sm:p-3"><span className="shrink-0 rounded-lg bg-white px-2.5 py-1.5 text-xs font-bold text-teal-700 shadow-sm dark:bg-slate-800 dark:text-teal-300 sm:px-2 sm:py-1">{formatDoseTime(dose)}</span><MedicineFormIcon type={dose.med.type} size="sm" /><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900 dark:text-white">{dose.med.name}</span><span className="block text-xs text-slate-500 dark:text-slate-400">{dose.med.doseAmount} {dose.med.doseUnit ?? doseUnitFor(dose.med)}</span></span></div>)}</div>}
+        </section>}
+
+        {view === "overview" && vitalTrackDashboardEnabled && <section aria-labelledby="today-health-snapshot-title" className="order-6 mb-5 rounded-2xl border border-sky-100 bg-white p-4 shadow-sm shadow-sky-900/[0.03] sm:mb-6 sm:p-5 dark:border-sky-900/50 dark:bg-slate-900">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div><h2 id="today-health-snapshot-title" className="font-bold text-slate-900 dark:text-white">Today&apos;s Health Snapshot</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Latest readings recorded today · separate from medicine adherence</p></div>
+            <div className="flex items-center gap-3"><Link href="/vitaltrack#add-reading" className="rounded-lg bg-teal-700 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">Add Reading</Link><Link href="/vitaltrack#vital-history" className="text-xs font-semibold text-teal-700 hover:underline dark:text-teal-300">View History</Link></div>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-2.5 xl:grid-cols-4 sm:gap-3">
+            {(["blood-pressure", "heart-rate", "oxygen-saturation", "blood-sugar"] as VitalReadingType[]).map((type) => {
+              const latest = latestVitalReadingOnDate(vitalReadings, type, todayStr);
+              return <div key={type} className="min-w-0 rounded-xl border border-slate-100 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-950/50 sm:p-3.5">
+                <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">{vitalReadingTypeLabel(type)}</p>
+                <p className="mt-1 break-words text-base font-bold text-slate-900 dark:text-white sm:text-lg">{latest ? vitalReadingLabel(latest) : "Not recorded today"}</p>
+                {latest && <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Measured at {format12Hour(latest.time)}</p>}
+              </div>;
+            })}
+          </div>
         </section>}
 
         {view === "doses" && <section id="todays-schedule" className="order-2 mb-4 flex scroll-mt-24 flex-wrap items-end justify-between gap-3">

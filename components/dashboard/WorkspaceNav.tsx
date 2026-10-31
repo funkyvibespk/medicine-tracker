@@ -9,6 +9,7 @@ const destinations = [
   ["/medicines", "Medicines"],
   ["/inventory", "Inventory"],
   ["/history", "History"],
+  ["/vitaltrack", "VitalTrack"],
 ] as const;
 
 type WorkspaceDestination = (typeof destinations)[number][0];
@@ -20,6 +21,7 @@ function WorkspaceIcon({ destination }: { destination: WorkspaceDestination }) {
   if (destination === "/doses") return <svg {...common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></svg>;
   if (destination === "/medicines") return <svg {...common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></svg>;
   if (destination === "/inventory") return <svg {...common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3 9 5v8l-9 5-9-5V8l9-5Z"/><path d="m3.5 7.5 8.5 5 8.5-5M12 21v-8.5"/></svg>;
+  if (destination === "/vitaltrack") return <svg {...common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12h4l2.2-6 4.1 12 2.2-6H21"/><path d="M12 22a10 10 0 1 0-10-10"/></svg>;
   return <svg {...common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>;
 }
 

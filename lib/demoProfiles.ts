@@ -8,12 +8,15 @@ export const GOOGLE_DEMO_EMAIL = "google-demo@chilldose.invalid";
 type StorageLike = Pick<Storage, "getItem" | "setItem">;
 
 import type { PrescriptionHistoryEntry } from "./prescriptionHistory";
+import type { VitalReading } from "./vitalTrack";
 
 export interface DemoProfileData {
   email: string;
   medicines: unknown[];
   doseRecords: unknown[];
   prescriptionHistory?: PrescriptionHistoryEntry[];
+  vitalReadings?: VitalReading[];
+  vitalTrackDashboardEnabled?: boolean;
 }
 
 interface StoredProfile extends DemoProfileData {
@@ -115,6 +118,20 @@ function isProfileDoseRecord(value: unknown): boolean {
     hasOptionalString(value, "inventoryRemainingUnit");
 }
 
+function isProfileVitalReading(value: unknown): value is VitalReading {
+  if (!isRecord(value) || !isNonEmptyString(value.id) || !isCalendarDate(value.date) || !isClockTime(value.time) || !hasOptionalString(value, "notes")) return false;
+  const positive = (candidate: unknown) => isFiniteNumber(candidate) && candidate > 0;
+  switch (value.type) {
+    case "blood-pressure": return positive(value.systolic) && positive(value.diastolic);
+    case "heart-rate": return positive(value.bpm);
+    case "oxygen-saturation": return isFiniteNumber(value.percent) && value.percent >= 0 && value.percent <= 100;
+    case "blood-sugar": return positive(value.value) &&
+      (value.unit === "mg/dL" || value.unit === "mmol/L") &&
+      (value.context === "Fasting" || value.context === "Before Meal" || value.context === "After Meal" || value.context === "Random");
+    default: return false;
+  }
+}
+
 function parseArray(raw: string | null, key: string, isValidEntry: (value: unknown) => boolean): unknown[] {
   if (raw === null) return [];
   const parsed: unknown = JSON.parse(raw);
@@ -136,13 +153,25 @@ function parseProfile(raw: string, email: string): DemoProfileData {
     !(parsed as Partial<StoredProfile>).doseRecords!.every(isProfileDoseRecord) ||
     ((parsed as Partial<StoredProfile>).prescriptionHistory !== undefined &&
       (!Array.isArray((parsed as Partial<StoredProfile>).prescriptionHistory) ||
-        !(parsed as Partial<StoredProfile>).prescriptionHistory!.every(isProfilePrescriptionEntry)))
+        !(parsed as Partial<StoredProfile>).prescriptionHistory!.every(isProfilePrescriptionEntry))) ||
+    ((parsed as Partial<StoredProfile>).vitalReadings !== undefined &&
+      (!Array.isArray((parsed as Partial<StoredProfile>).vitalReadings) ||
+        !(parsed as Partial<StoredProfile>).vitalReadings!.every(isProfileVitalReading))) ||
+    ((parsed as Partial<StoredProfile>).vitalTrackDashboardEnabled !== undefined &&
+      typeof (parsed as Partial<StoredProfile>).vitalTrackDashboardEnabled !== "boolean")
   ) {
     throw new Error("This local demo profile could not be read safely. Its saved data was left unchanged.");
   }
 
   const profile = parsed as StoredProfile;
-  return { email, medicines: profile.medicines, doseRecords: profile.doseRecords, prescriptionHistory: profile.prescriptionHistory ?? [] };
+  return {
+    email,
+    medicines: profile.medicines,
+    doseRecords: profile.doseRecords,
+    prescriptionHistory: profile.prescriptionHistory ?? [],
+    vitalReadings: profile.vitalReadings ?? [],
+    vitalTrackDashboardEnabled: profile.vitalTrackDashboardEnabled ?? false,
+  };
 }
 
 function isProfilePrescriptionEntry(value: unknown): value is PrescriptionHistoryEntry {
@@ -188,7 +217,7 @@ export function loadDemoProfile(
   const mayImportLegacy = assignment?.ownerEmail === email || (assignment === null && options.migrateLegacy === true);
 
   if (!mayImportLegacy) {
-    return { email, medicines: [], doseRecords: [], prescriptionHistory: [] };
+    return { email, medicines: [], doseRecords: [], prescriptionHistory: [], vitalReadings: [], vitalTrackDashboardEnabled: false };
   }
 
   // Validate both legacy values before making any storage changes.
@@ -200,9 +229,9 @@ export function loadDemoProfile(
     storage.setItem(PROFILE_MIGRATION_STORAGE_KEY, JSON.stringify({ version: 1, ownerEmail: email }));
   }
 
-  const profile: StoredProfile = { version: 1, email, medicines, doseRecords, prescriptionHistory: [] };
+  const profile: StoredProfile = { version: 1, email, medicines, doseRecords, prescriptionHistory: [], vitalReadings: [], vitalTrackDashboardEnabled: false };
   storage.setItem(profileKey, JSON.stringify(profile));
-  return { email, medicines, doseRecords, prescriptionHistory: [] };
+  return { email, medicines, doseRecords, prescriptionHistory: [], vitalReadings: [], vitalTrackDashboardEnabled: false };
 }
 
 export function serializeDemoProfile(profile: DemoProfileData): string {
@@ -212,6 +241,8 @@ export function serializeDemoProfile(profile: DemoProfileData): string {
     medicines: profile.medicines,
     doseRecords: profile.doseRecords,
     prescriptionHistory: profile.prescriptionHistory ?? [],
+    vitalReadings: profile.vitalReadings ?? [],
+    vitalTrackDashboardEnabled: profile.vitalTrackDashboardEnabled ?? false,
   } satisfies StoredProfile);
 }
 

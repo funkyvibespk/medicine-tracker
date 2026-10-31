@@ -8,6 +8,7 @@ import { sortDoseHistoryRecords, sortTakenDoseRecordsNewestFirst } from "../lib/
 import { appendPrescriptionChange, buildPrescriptionHistoryFilterOptions, createEmptyPrescriptionHistoryFilters, createInitialPrescriptionHistoryViewState, createPrescriptionHistoryEntry, filterCurrentPrescriptionMedicines, filterPrescriptionHistory, getPrescriptionHistoryResults, groupPrescriptionHistoryByMedicine, hasActivePrescriptionHistoryFilters, normalizeDoctorName, prescriptionHistoryViewReducer, sortPrescriptionHistory, validatePrescriptionHistoryFilters } from "../lib/prescriptionHistory.ts";
 import { applyMedicineUpdatePreservingCreationDate, formatMedicineAddedAt, normalizeOptionalMedicineDetails, sortMedicinesNewestFirst } from "../lib/medicineList.ts";
 import { getMedicineFormAppearance } from "../lib/medicineFormIcon.ts";
+import { deleteVitalReading, filterVitalReadings, latestVitalReadingOnDate, sortVitalReadingsNewestFirst, upsertVitalReading, validateVitalReading, vitalReadingLabel } from "../lib/vitalTrack.ts";
 import { addScheduleBaseline, getMedicineOccurrencesForDate, getScheduledTimesForDate } from "../lib/schedule.ts";
 import { ACTIVE_DEMO_EMAIL_KEY, ACTIVE_DEMO_SESSION_KEY, DOSES_STORAGE_KEY, MEDICINES_STORAGE_KEY, PROFILE_MIGRATION_STORAGE_KEY, demoProfileStorageKey, loadDemoProfile, saveDemoProfileForActiveSession, serializeDemoProfile } from "../lib/demoProfiles.ts";
 import { findBlockingMedicineIdentityMatch, findMedicineIdentityMatches, findPotentialMedicineIdentityPairs } from "../lib/medicineIdentity.ts";
@@ -747,7 +748,7 @@ test("a legitimate empty profile remains loadable and writable for its active se
     getItem: (key) => storage.get(key) ?? null,
     setItem: (key, value) => storage.set(key, value),
   };
-  const profile = { email: "empty-profile@example.invalid", medicines: [], doseRecords: [], prescriptionHistory: [] };
+  const profile = { email: "empty-profile@example.invalid", medicines: [], doseRecords: [], prescriptionHistory: [], vitalReadings: [], vitalTrackDashboardEnabled: false };
   storage.set(ACTIVE_DEMO_SESSION_KEY, "active");
   storage.set(ACTIVE_DEMO_EMAIL_KEY, profile.email);
 
@@ -1810,5 +1811,64 @@ test("unknown or missing medicine forms use a neutral fallback", () => {
   assert.equal(fallback.icon, "unknown");
   assert.equal(getMedicineFormAppearance(null).icon, "unknown");
   assert.deepEqual(getMedicineFormAppearance("unrecognized form"), fallback);
+});
+
+test("VitalTrack validates, records, edits, sorts, filters, and deletes local readings", () => {
+  const bp = { id: "bp-1", type: "blood-pressure", date: "2026-10-30", time: "08:15", systolic: 118, diastolic: 76, notes: "At rest" };
+  const heart = { id: "hr-1", type: "heart-rate", date: "2026-10-30", time: "09:20", bpm: 72 };
+  const sugar = { id: "sugar-1", type: "blood-sugar", date: "2026-10-31", time: "07:05", value: 5.8, unit: "mmol/L", context: "Fasting" };
+  assert.equal(validateVitalReading(bp), null);
+  assert.equal(validateVitalReading(heart), null);
+  assert.equal(validateVitalReading({ id: "spo2-1", type: "oxygen-saturation", date: "2026-10-30", time: "10:00", percent: 98 }), null);
+  assert.equal(validateVitalReading({ ...bp, systolic: 0 }), "Enter positive systolic and diastolic values.");
+  assert.equal(validateVitalReading({ id: "bad-o2", type: "oxygen-saturation", date: "2026-10-30", time: "10:00", percent: 101 }), "Enter an oxygen saturation from 0 to 100%.");
+  assert.equal(validateVitalReading({ ...sugar, context: "After Exercise" }), "Choose a blood-sugar context.");
+  assert.equal(vitalReadingLabel(sugar), "5.8 mmol/L · Fasting");
+
+  const original = [bp, heart, sugar];
+  const edited = { ...heart, bpm: 75, notes: "After walk" };
+  const withEdit = upsertVitalReading(original, edited);
+  assert.equal(withEdit.length, 3, "editing a reading replaces its ID instead of creating a duplicate");
+  assert.equal(withEdit.find((reading) => reading.id === heart.id).bpm, 75);
+  assert.deepEqual(sortVitalReadingsNewestFirst(original).map((reading) => reading.id), ["sugar-1", "hr-1", "bp-1"]);
+  assert.deepEqual(filterVitalReadings(original, { type: "blood-pressure", dateFrom: "2026-10-30", dateTo: "2026-10-30" }).map((reading) => reading.id), ["bp-1"]);
+  assert.equal(latestVitalReadingOnDate(original, "blood-pressure", "2026-10-30").id, "bp-1");
+  assert.equal(latestVitalReadingOnDate(original, "blood-pressure", "2026-10-31"), undefined, "a previous reading is never shown as recorded today");
+  assert.deepEqual(original.map((reading) => reading.id), ["bp-1", "hr-1", "sugar-1"], "sorting does not mutate saved order");
+  assert.deepEqual(deleteVitalReading(withEdit, "bp-1").map((reading) => reading.id), ["hr-1", "sugar-1"]);
+});
+
+test("VitalTrack profile data is account-scoped, survives reload, and legacy profiles default to empty", () => {
+  const storage = new Map();
+  const emailA = "vitals-a@example.invalid";
+  const emailB = "vitals-b@example.invalid";
+  const readingA = { id: "vital-a", type: "blood-pressure", date: "2026-10-30", time: "08:15", systolic: 120, diastolic: 80 };
+  const readingB = { id: "vital-b", type: "blood-sugar", date: "2026-10-30", time: "08:15", value: 100, unit: "mg/dL", context: "Before Meal" };
+  storage.set(demoProfileStorageKey(emailA), serializeDemoProfile({ email: emailA, medicines: [], doseRecords: [], vitalReadings: [readingA], vitalTrackDashboardEnabled: true }));
+  storage.set(demoProfileStorageKey(emailB), serializeDemoProfile({ email: emailB, medicines: [], doseRecords: [], vitalReadings: [readingB] }));
+  const reloadedA = loadDemoProfile({ getItem: (key) => storage.get(key) ?? null }, emailA);
+  const reloadedB = loadDemoProfile({ getItem: (key) => storage.get(key) ?? null }, emailB);
+  assert.deepEqual(reloadedA.vitalReadings, [readingA]);
+  assert.equal(reloadedA.vitalTrackDashboardEnabled, true);
+  assert.deepEqual(reloadedB.vitalReadings, [readingB]);
+  assert.equal(reloadedB.vitalTrackDashboardEnabled, false);
+
+  const legacyEmail = "vitals-legacy@example.invalid";
+  storage.set(demoProfileStorageKey(legacyEmail), JSON.stringify({ version: 1, email: legacyEmail, medicines: [], doseRecords: [] }));
+  const legacy = loadDemoProfile({ getItem: (key) => storage.get(key) ?? null }, legacyEmail);
+  assert.deepEqual(legacy.vitalReadings, []);
+  assert.equal(legacy.vitalTrackDashboardEnabled, false);
+});
+
+test("malformed VitalTrack readings are rejected without replacing the saved account profile", () => {
+  const email = "vitals-malformed@example.invalid";
+  const key = demoProfileStorageKey(email);
+  const raw = JSON.stringify({
+    version: 1, email, medicines: [], doseRecords: [],
+    vitalReadings: [{ id: "bad-reading", type: "oxygen-saturation", date: "2026-10-30", time: "08:00", percent: 101 }],
+  });
+  const storage = new Map([[key, raw]]);
+  assert.throws(() => loadDemoProfile({ getItem: (itemKey) => storage.get(itemKey) ?? null }, email), /could not be read safely/);
+  assert.equal(storage.get(key), raw);
 });
 
