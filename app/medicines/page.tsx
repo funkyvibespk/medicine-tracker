@@ -171,7 +171,7 @@ export default function MedicinesPage() {
           </button>}
         />
 
-        <details open className="mb-6 rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <details className="mb-6 rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <summary className="group flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 sm:px-5">
             <span className="min-w-0">
               <span className="block text-base font-bold text-slate-900 dark:text-white">Prescription History</span>
