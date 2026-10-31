@@ -93,9 +93,8 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        if (isAddModalOpen || editingMedicine) return;
         setOpenMenuId(null);
-        setIsAddModalOpen(false);
-        setEditingMedicine(null);
         setDeletingMedicine(null);
         setChangingDose(null);
         setAddingStockMed(null);
@@ -106,7 +105,7 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [isAddModalOpen, editingMedicine]);
 
   const todayStr = useMemo(() => localDateString(now), [now]);
   const canonicalDoseRecords = useMemo(() => canonicalizeOccurrenceRecords(doseRecords), [doseRecords]);
@@ -943,7 +942,6 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
                 return { added: true };
               }}
               onOpenExisting={(med) => { setIsAddModalOpen(false); setEditingMedicine(med); }}
-              onAddStock={(med, quantity) => { setIsAddModalOpen(false); setAddingStockMed(med); setStockToAdd(quantity); }}
               onRestart={(med) => {
                 const result = restartTreatment(med.id, med);
                 if (result.saved) { setIsAddModalOpen(false); setEditingMedicine(null); }

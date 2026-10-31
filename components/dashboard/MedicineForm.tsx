@@ -1,13 +1,14 @@
 "use client";
 
-import { useRef, useState } from "react";
-import type { FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { FormEvent, KeyboardEvent } from "react";
 import { Medicine, MedicineType, type AddMedicineResult, type DoseRecord, type MedicineUpdateResult } from "@/contexts/MedicineContext";
 import { localDateString } from "@/lib/schedule";
-import { availableVolumeFromContainers, inventoryUnitFor, inventoryUnitsCompatible, parseNonNegativeQuantity, validateInventoryThreshold } from "@/lib/medicineLogic";
+import { availableVolumeFromContainers, inventoryUnitFor, parseNonNegativeQuantity, validateInventoryThreshold } from "@/lib/medicineLogic";
 import { findMedicineIdentityMatches, type MedicineIdentityMatch } from "@/lib/medicineIdentity";
 import { normalizeOptionalMedicineDetails } from "@/lib/medicineList";
 import { normalizeDoctorName } from "@/lib/prescriptionHistory";
+import { keepDialogFocusInside } from "@/lib/accessibility";
 
 // ─── Per-type strength configuration ──────────────────────────────────────────
 
@@ -109,7 +110,6 @@ interface MedicineFormProps {
   onSave: (data: Medicine, options?: { allowLikelyDuplicate?: boolean }) => AddMedicineResult | void;
   onCancel: () => void;
   onOpenExisting?: (medicine: Medicine) => void;
-  onAddStock?: (medicine: Medicine, quantity: number) => void;
   onRestart?: (medicine: Medicine) => MedicineUpdateResult;
   onDiscontinue?: (medicine: Medicine) => boolean;
 }
@@ -120,7 +120,7 @@ function createMedicineId() {
   return `med-${Date.now()}`;
 }
 
-export default function MedicineForm({ initialData, existingMedicines = [], doseRecords = [], onSave, onCancel, onOpenExisting, onAddStock, onRestart, onDiscontinue }: MedicineFormProps) {
+export default function MedicineForm({ initialData, existingMedicines = [], doseRecords = [], onSave, onCancel, onOpenExisting, onRestart, onDiscontinue }: MedicineFormProps) {
   const initialType: MedicineType = initialData?.type ?? "Tablet";
   const initialConfig = STRENGTH_CONFIG[initialType];
   const { strengthValue: initSV, strengthUnit: initSU } = parseStrength(
@@ -156,14 +156,21 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
   const [strengthValue, setStrengthValue] = useState<string>(initSV);
   const [strengthUnit, setStrengthUnit] = useState<string>(initSU);
   const [syrupStockEntryUnit, setSyrupStockEntryUnit] = useState<"ml" | "bottles">("ml");
+  const [initialFormValues] = useState(() => JSON.stringify({ formData, strengthValue, strengthUnit, syrupStockEntryUnit }));
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [reviewingDuplicate, setReviewingDuplicate] = useState<{ candidate: Medicine; matches: MedicineIdentityMatch[] } | null>(null);
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   const [saveError, setSaveError] = useState("");
   const submittingRef = useRef(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const duplicateDialogRef = useRef<HTMLDivElement>(null);
+  const discardDialogRef = useRef<HTMLDivElement>(null);
+  const secondaryDialogReturnFocusRef = useRef<HTMLElement | null>(null);
   const [restartMode, setRestartMode] = useState(false);
   const today = localDateString();
   const hasActiveTreatment = Boolean(initialData?.treatmentPeriods?.some((period) => period.status === "active" && (!period.endDate || period.endDate >= today)));
+  const isDirty = JSON.stringify({ formData, strengthValue, strengthUnit, syrupStockEntryUnit }) !== initialFormValues;
 
   // ── Derived config for the current type ──
   const currentType = (formData.type as MedicineType) ?? "Tablet";
@@ -338,6 +345,7 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
     setSaveError("");
     const matches = findMedicineIdentityMatches(med, existingMedicines);
     if (matches.length) {
+      secondaryDialogReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setReviewingDuplicate({ candidate: med, matches });
       submittingRef.current = false;
       return;
@@ -353,6 +361,7 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
           ? "This medicine could not be updated. No changes were saved; reload and try again."
           : "This medicine could not be added safely.");
       } else {
+        secondaryDialogReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         setReviewingDuplicate({ candidate: med, matches: [failedResult.duplicateMatch] });
         setSaveError("A matching medicine was added while this form was open. Review it before continuing.");
       }
@@ -362,31 +371,87 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
     submittingRef.current = false;
   };
 
-  const continueWithSeparateLikelyMedicine = () => {
-    if (!reviewingDuplicate || initialData) return;
-    const names = reviewingDuplicate.matches.map((match) => match.medicine.name).join(", ");
-    if (!window.confirm(`This name is close to ${names}. Continuing creates a separate medicine record with its own schedule and inventory. Confirm that this is a different medicine and follow the current prescription.`)) return;
-    const result = onSave(reviewingDuplicate.candidate, { allowLikelyDuplicate: true });
-    if (result && !result.added) {
-      setReviewingDuplicate({ candidate: reviewingDuplicate.candidate, matches: result.duplicateMatch ? [result.duplicateMatch] : [] });
-      setSaveError("An exact match now exists, so a separate record was not created. Review the existing medicine.");
-      return;
-    }
-    setReviewingDuplicate(null);
-  };
-
   const openExistingMedicine = (medicine: Medicine) => {
     if (!onOpenExisting) return;
     onOpenExisting(medicine);
     setReviewingDuplicate(null);
   };
 
-  const addEnteredStockToExisting = (medicine: Medicine) => {
-    if (!reviewingDuplicate || !onAddStock || reviewingDuplicate.matches.length !== 1) return;
-    const quantity = reviewingDuplicate.candidate.inventoryAmount;
-    if (quantity <= 0 || !inventoryUnitsCompatible(medicine) || inventoryUnitFor(medicine).trim().toLowerCase() !== inventoryUnitFor(reviewingDuplicate.candidate).trim().toLowerCase()) return;
-    onAddStock(medicine, quantity);
-    setReviewingDuplicate(null);
+  const restoreSecondaryDialogFocus = () => {
+    const target = secondaryDialogReturnFocusRef.current;
+    secondaryDialogReturnFocusRef.current = null;
+    if (target?.isConnected) target.focus();
+  };
+
+  const handleEscape = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key !== "Escape") {
+      keepDialogFocusInside(event as KeyboardEvent<HTMLDivElement>);
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (confirmingDiscard) {
+      setConfirmingDiscard(false);
+      restoreSecondaryDialogFocus();
+      return;
+    }
+    if (reviewingDuplicate) {
+      setReviewingDuplicate(null);
+      setSaveError("");
+      restoreSecondaryDialogFocus();
+      return;
+    }
+    if (isDirty) {
+      secondaryDialogReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      setConfirmingDiscard(true);
+      return;
+    }
+    onCancel();
+  };
+
+  const restartExistingMedicine = (medicine: Medicine) => {
+    if (!onRestart) return;
+    const entered = reviewingDuplicate?.candidate;
+    const restartDetails = !initialData && entered
+      ? {
+          ...entered,
+          id: medicine.id,
+          name: medicine.name,
+          type: medicine.type,
+          strength: medicine.strength,
+          createdAt: medicine.createdAt,
+          expiryDate: medicine.expiryDate,
+          composition: medicine.composition,
+          inventoryAmount: medicine.inventoryAmount,
+          inventoryCapacity: medicine.inventoryCapacity,
+          inventoryContainerCapacity: medicine.inventoryContainerCapacity,
+          inventoryUnit: medicine.inventoryUnit,
+          lowStockThreshold: medicine.lowStockThreshold,
+          lowStockThresholdUnit: medicine.lowStockThresholdUnit,
+        }
+      : medicine;
+    const result = onRestart(restartDetails);
+    if (result.saved) {
+      setReviewingDuplicate(null);
+      return;
+    }
+    setSaveError(result.validationError || "The existing treatment could not be restarted. No changes were saved.");
+  };
+
+  useEffect(() => {
+    if (reviewingDuplicate) duplicateDialogRef.current?.querySelector<HTMLElement>("button")?.focus();
+    else if (!confirmingDiscard) restoreSecondaryDialogFocus();
+  }, [reviewingDuplicate, confirmingDiscard]);
+
+  useEffect(() => {
+    if (confirmingDiscard) discardDialogRef.current?.querySelector<HTMLElement>("button")?.focus();
+  }, [confirmingDiscard]);
+
+  const isTreatmentActive = (medicine: Medicine) => {
+    if (medicine.archivedAt) return false;
+    return medicine.treatmentPeriods?.length
+      ? medicine.treatmentPeriods.some((period) => period.status === "active" && (!period.endDate || period.endDate >= today))
+      : !medicine.endDate || medicine.endDate >= today;
   };
 
   const scheduleSummary = (medicine: Medicine) => medicine.frequency === "As needed (PRN)"
@@ -418,7 +483,7 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
 
   return (
     <>
-    <form onSubmit={handleSubmit} className="space-y-6 text-left">
+    <form ref={formRef} onSubmit={handleSubmit} onKeyDown={handleEscape} className="space-y-6 text-left">
 
       {/* ── 1. Medicine Details ─────────────────────────────────────────────── */}
       <div className="space-y-4">
@@ -435,6 +500,7 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
             type="text"
             id="medicineName"
             name="name"
+            autoFocus={!initialData}
             value={formData.name || ""}
             onChange={handleChange}
             placeholder="e.g. Panadol"
@@ -832,12 +898,12 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
     </form>
     {reviewingDuplicate && (
       <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/65 p-3 backdrop-blur-sm sm:p-5">
-        <div role="dialog" aria-modal="true" aria-labelledby="medicine-duplicate-title" className="max-h-[92dvh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-6">
+        <div ref={duplicateDialogRef} role="dialog" aria-modal="true" aria-labelledby="medicine-duplicate-title" onKeyDown={handleEscape} className="max-h-[92dvh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-6">
           <h3 id="medicine-duplicate-title" className="text-lg font-bold text-slate-900 dark:text-white">
             {reviewingDuplicate.matches.some((match) => match.kind === "exact") ? "This medicine is already tracked" : "Review a similar medicine"}
           </h3>
           <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-            Separate entries create separate schedules, inventory balances, and stock alerts. Nothing has been merged or changed.
+            Compare the existing medicine before continuing. Nothing has been merged or changed.
             {reviewingDuplicate.matches.some((match) => match.kind === "likely") && " A similar name is a review suggestion only; it does not mean the medicines are equivalent."}
           </p>
           {reviewingDuplicate.matches.length === 0 ? (
@@ -856,12 +922,11 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
                   ["Low-stock threshold", `${medicine.lowStockThreshold} ${medicine.lowStockThresholdUnit ?? inventoryUnitFor(medicine)}`, `${reviewingDuplicate.candidate.lowStockThreshold} ${reviewingDuplicate.candidate.lowStockThresholdUnit ?? inventoryUnitFor(reviewingDuplicate.candidate)}`],
                   ["Dose history", String(historyCount(medicine.id)), String(historyCount(reviewingDuplicate.candidate.id))],
                 ];
-                const canAddStock = !initialData && kind === "exact" && reviewingDuplicate.matches.length === 1 && onAddStock && reviewingDuplicate.candidate.inventoryAmount > 0 && inventoryUnitsCompatible(medicine) && inventoryUnitFor(medicine).trim().toLowerCase() === inventoryUnitFor(reviewingDuplicate.candidate).trim().toLowerCase();
                 return (
                   <section key={medicine.id} className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
                     <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-3 py-2.5 dark:bg-slate-800/70">
                       <p className="text-sm font-semibold text-slate-900 dark:text-white">{medicine.name} <span className="font-normal text-slate-500">· {kind === "exact" ? "normalized exact match" : "likely name match"}</span></p>
-                      {onOpenExisting && !initialData && <button type="button" onClick={() => openExistingMedicine(medicine)} className="min-h-9 rounded-lg border border-slate-300 px-3 text-xs font-semibold text-slate-700 hover:bg-white dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">Open existing medicine</button>}
+                      <p className="text-xs text-slate-600 dark:text-slate-300">{medicine.type} · {medicine.strength || "Strength not recorded"}</p>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full min-w-[520px] text-left text-xs">
@@ -869,17 +934,33 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
                         <tbody>{values.map(([label, existingValue, newValue]) => <tr key={label} className="border-t border-slate-100 dark:border-slate-800"><th className="whitespace-nowrap px-3 py-2 font-medium text-slate-600 dark:text-slate-300">{label}</th><td className="px-3 py-2 text-slate-700 dark:text-slate-200">{existingValue}</td><td className="px-3 py-2 text-slate-700 dark:text-slate-200">{newValue}</td></tr>)}</tbody>
                       </table>
                     </div>
-                    {canAddStock && <div className="border-t border-slate-100 px-3 py-2 dark:border-slate-800"><button type="button" onClick={() => addEnteredStockToExisting(medicine)} className="text-xs font-semibold text-teal-700 underline-offset-2 hover:underline dark:text-teal-300">Add entered {reviewingDuplicate.candidate.inventoryAmount} {inventoryUnitFor(reviewingDuplicate.candidate)} to this inventory</button><p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">This is an explicit stock adjustment; the schedule and existing balance are otherwise unchanged.</p></div>}
+                    <div className="flex justify-end border-t border-slate-100 p-3 dark:border-slate-800">
+                      {isTreatmentActive(medicine) ? (
+                        <button type="button" aria-label={`View existing ${medicine.name}`} onClick={() => openExistingMedicine(medicine)} className="min-h-10 rounded-xl border border-teal-300 px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50 dark:border-teal-700 dark:text-teal-200 dark:hover:bg-teal-950/40">View Existing</button>
+                      ) : (
+                        <button type="button" aria-label={`Restart existing ${medicine.name}`} onClick={() => restartExistingMedicine(medicine)} className="min-h-10 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-500">Restart Existing</button>
+                      )}
+                    </div>
                   </section>
                 );
               })}
             </div>
           )}
           <div className="mt-5 flex flex-wrap justify-end gap-2">
-            {reviewingDuplicate.matches.every((match) => match.kind === "likely") && !initialData && (
-              <button type="button" onClick={continueWithSeparateLikelyMedicine} className="min-h-10 rounded-xl border border-amber-300 px-3.5 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-200 dark:hover:bg-amber-950/40">This is different — continue separately</button>
-            )}
             <button type="button" onClick={() => { setReviewingDuplicate(null); setSaveError(""); }} className="min-h-10 rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">Cancel</button>
+          </div>
+        </div>
+      </div>
+    )}
+    {confirmingDiscard && (
+      <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/65 p-3 backdrop-blur-sm sm:p-5">
+        <div ref={discardDialogRef} role="dialog" aria-modal="true" aria-labelledby="medicine-unsaved-title" onKeyDown={handleEscape} className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-6">
+          <h3 id="medicine-unsaved-title" className="text-lg font-bold text-slate-900 dark:text-white">Save changes before closing?</h3>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">You have unsaved medicine details. Save them, discard them, or return to editing.</p>
+          <div className="mt-5 flex flex-wrap justify-end gap-2">
+            <button type="button" onClick={() => { setConfirmingDiscard(false); formRef.current?.requestSubmit(); }} className="min-h-10 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-500">Save Changes</button>
+            <button type="button" onClick={onCancel} className="min-h-10 rounded-xl border border-rose-300 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-300 dark:hover:bg-rose-950/30">Don&apos;t Save</button>
+            <button type="button" onClick={() => { setConfirmingDiscard(false); restoreSecondaryDialogFocus(); }} className="min-h-10 rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">Cancel</button>
           </div>
         </div>
       </div>

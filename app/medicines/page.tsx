@@ -513,7 +513,6 @@ export default function MedicinesPage() {
                 return { added: true };
               }}
               onOpenExisting={(med) => { setIsAddModalOpen(false); setEditingMedicine(med); }}
-              onAddStock={(med, quantity) => { setIsAddModalOpen(false); setAddingStockMed(med); setStockToAdd(quantity); }}
               onRestart={(med) => {
                 const result = restartTreatment(med.id, med);
                 if (result.saved) { setIsAddModalOpen(false); setEditingMedicine(null); }
