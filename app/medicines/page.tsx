@@ -55,9 +55,11 @@ export default function MedicinesPage() {
   if (!isHydrated) return <BrandedLoadingScreen />;
 
   const newestFirstMedicines = sortMedicinesNewestFirst(medicines);
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const filtered = newestFirstMedicines.filter((m) =>
-    m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    m.type.toLowerCase().includes(searchQuery.toLowerCase())
+    m.name.toLowerCase().includes(normalizedSearchQuery) ||
+    m.strength.toLowerCase().includes(normalizedSearchQuery) ||
+    m.type.toLowerCase().includes(normalizedSearchQuery)
   );
   const possibleDuplicatePairs = findPotentialMedicineIdentityPairs(medicines);
   const orderedPrescriptionHistory = sortPrescriptionHistory(prescriptionHistory);
@@ -274,7 +276,8 @@ export default function MedicinesPage() {
             </svg>
             <input
               type="search"
-              placeholder="Search medicines..."
+              aria-label="Search medicines by name, strength, or form"
+              placeholder="Search by name, strength, or form..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder:text-slate-500"
