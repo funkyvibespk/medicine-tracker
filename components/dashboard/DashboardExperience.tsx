@@ -15,18 +15,11 @@ import BrandedLoadingScreen from "@/components/BrandedLoadingScreen";
 import { sortDoseHistoryRecords, sortTakenDoseRecordsNewestFirst } from "@/lib/doseHistory";
 import { getMissedDoseNotificationsForToday } from "@/lib/missedDoses";
 import { latestVitalReadingOnDate, vitalReadingTypeLabel, vitalReadingLabel, type VitalReadingType } from "@/lib/vitalTrack";
+import { VitalReadingIcon, VitalReadingIconBadge } from "@/components/dashboard/VitalReadingIcon";
 import { canonicalizeOccurrenceRecords, comparePhysicalStock, doseUnitFor, filterDoseRecords, findCloseDoseConflict, getOccurrenceTimeStatus, getOutstandingMissedOccurrences, getStockStatus, getUnscheduledSameDayMissedOccurrences, inventoryUnitFor, inventoryUnitsCompatible, minutesFromScheduledOccurrence, parseNonNegativeQuantity, PhysicalStockComparison, scheduledOccurrenceId, scheduledOccurrenceKey } from "@/lib/medicineLogic";
 
 // Helper to pad numbers
 const pad = (n: number) => n.toString().padStart(2, "0");
-
-function VitalSnapshotIcon({ type }: { type: VitalReadingType }) {
-  const common = { className: "h-5 w-5", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true as const };
-  if (type === "blood-pressure") return <svg {...common}><path d="M20.8 4.8a5.4 5.4 0 0 0-7.6 0L12 6l-1.2-1.2a5.4 5.4 0 0 0-7.6 7.6L12 21l8.8-8.6a5.4 5.4 0 0 0 0-7.6Z"/><path d="M4.8 12h3l1.4-2.7 2.2 5.3 1.7-3h3.4"/></svg>;
-  if (type === "heart-rate") return <svg {...common}><rect x="3" y="4" width="18" height="16" rx="4"/><path d="M5.5 12h3l1.5-4 3.2 8 1.6-4h3.7"/></svg>;
-  if (type === "oxygen-saturation") return <svg {...common}><path d="M3 7h11a2.5 2.5 0 1 0-2.4-3.2"/><path d="M2 12h16a2.5 2.5 0 1 1-2.4 3.2"/><path d="M4 17h8"/></svg>;
-  return <svg {...common}><path d="M12 22s-7-4.4-7-11a7 7 0 1 1 14 0c0 6.6-7 11-7 11Z"/></svg>;
-}
 
 type ScheduledDose = {
   id: string;
@@ -627,7 +620,7 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
         {view === "overview" && vitalTrackDashboardEnabled && <section aria-labelledby="today-health-snapshot-title" className="order-6 mb-5 rounded-2xl border border-sky-100 bg-gradient-to-br from-white via-white to-sky-50/70 p-4 shadow-md shadow-sky-900/[0.04] sm:mb-6 sm:p-5 dark:border-sky-900/50 dark:from-slate-900 dark:via-slate-900 dark:to-sky-950/30">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-100 bg-sky-50 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/60 dark:text-sky-300" aria-hidden="true"><VitalSnapshotIcon type="heart-rate" /></span>
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-100 bg-sky-50 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/60 dark:text-sky-300" aria-hidden="true"><VitalReadingIcon type="heart-rate" /></span>
               <div className="min-w-0"><h2 id="today-health-snapshot-title" className="font-bold text-slate-900 dark:text-white">Today&apos;s Health Snapshot</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Latest readings recorded today · separate from medicine adherence</p></div>
             </div>
             <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:shrink-0 sm:justify-start"><Link href="/vitaltrack#add-reading" className="rounded-lg bg-teal-700 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">Add Reading</Link><Link href="/vitaltrack#vital-history" className="text-xs font-semibold text-teal-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:text-teal-300">View History</Link></div>
@@ -635,16 +628,9 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
           <div className="mt-4 grid grid-cols-2 gap-2.5 sm:mt-5 sm:gap-3.5">
             {(["blood-pressure", "heart-rate", "oxygen-saturation", "blood-sugar"] as VitalReadingType[]).map((type) => {
               const latest = latestVitalReadingOnDate(vitalReadings, type, todayStr);
-              const accent = type === "blood-pressure"
-                ? "border-red-100 bg-red-50/70 text-red-600 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300"
-                : type === "heart-rate"
-                  ? "border-orange-100 bg-orange-50/70 text-orange-600 dark:border-orange-900/60 dark:bg-orange-950/40 dark:text-orange-300"
-                  : type === "oxygen-saturation"
-                    ? "border-sky-100 bg-sky-50/70 text-sky-600 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-300"
-                    : "border-violet-100 bg-violet-50/70 text-violet-700 dark:border-violet-900/60 dark:bg-violet-950/50 dark:text-violet-300";
               return <article key={type} className="min-w-0 rounded-2xl border border-slate-200/80 bg-white/90 p-3.5 shadow-sm shadow-slate-900/[0.03] transition-shadow hover:shadow-md dark:border-slate-800 dark:bg-slate-900/80 sm:p-4">
                 <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
-                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border sm:h-10 sm:w-10 ${accent}`}><VitalSnapshotIcon type={type} /></span>
+                  <VitalReadingIconBadge type={type} className="h-9 w-9 sm:h-10 sm:w-10" />
                   <h3 className="min-w-0 text-xs font-semibold leading-snug text-slate-600 dark:text-slate-300 sm:text-sm">{vitalReadingTypeLabel(type)}</h3>
                 </div>
                 <p className={`mt-3 break-words font-bold tracking-tight ${latest ? "text-lg text-slate-900 dark:text-white sm:text-xl" : "text-sm leading-snug text-slate-500 dark:text-slate-400"}`}>{latest ? vitalReadingLabel(latest) : "Not recorded today"}</p>
