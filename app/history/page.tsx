@@ -241,6 +241,9 @@ export default function HistoryPage() {
                             {record.medicinePrescribingDoctor && (
                               <p className="text-xs text-slate-600 dark:text-slate-300">Prescribed by {record.medicinePrescribingDoctor}</p>
                             )}
+                            {record.status.startsWith("taken") && record.inventoryRemainingAfterDose !== undefined && (
+                              <p className="text-xs text-slate-600 dark:text-slate-300">Inventory Remaining: {record.inventoryRemainingAfterDose}{record.inventoryRemainingUnit ? ` ${record.inventoryRemainingUnit}` : ""}</p>
+                            )}
                             <p className="text-xs text-slate-500 dark:text-slate-400">
                               {record.isPrn ? "As needed" : `Scheduled ${formatScheduledRecordTime(record, records)}`}
                               {record.actualTakenTime && (

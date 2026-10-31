@@ -20,6 +20,11 @@ export interface OccurrenceRecord {
   isPrn?: boolean;
 }
 
+export interface DoseInventorySnapshotRecord {
+  inventoryRemainingAfterDose?: number;
+  inventoryRemainingUnit?: string;
+}
+
 export interface DoseDetailsSnapshotRecord {
   medicineName?: string;
   medicineType?: string;
@@ -179,7 +184,7 @@ export function getUnscheduledSameDayMissedOccurrences<T extends OccurrenceRecor
   );
 }
 
-interface DoseOutcomeRecord extends OccurrenceRecord {
+interface DoseOutcomeRecord extends OccurrenceRecord, DoseInventorySnapshotRecord {
   status?: string;
   medicineName?: string;
   medicineType?: string;
@@ -224,6 +229,8 @@ export function canonicalizeOccurrenceRecords<R extends DoseOutcomeRecord>(recor
       medicineDoseAmount: existing.medicineDoseAmount ?? record.medicineDoseAmount,
       medicineDoseUnit: existing.medicineDoseUnit ?? record.medicineDoseUnit,
       medicinePrescribingDoctor: existing.medicinePrescribingDoctor ?? record.medicinePrescribingDoctor,
+      inventoryRemainingAfterDose: existing.inventoryRemainingAfterDose ?? record.inventoryRemainingAfterDose,
+      inventoryRemainingUnit: existing.inventoryRemainingUnit ?? record.inventoryRemainingUnit,
     } as R);
   }
   return [...canonical.values()];
@@ -410,7 +417,7 @@ export interface ApplyTakenDoseResult<M extends StockedMedicine, R extends Occur
 }
 
 /** Pure operation used by the tracker when a dose is recorded as taken. */
-export function applyTakenDose<M extends StockedMedicine, R extends OccurrenceRecord>(
+export function applyTakenDose<M extends StockedMedicine, R extends OccurrenceRecord & DoseInventorySnapshotRecord>(
   medicines: M[],
   doseRecords: R[],
   record: R,
@@ -456,6 +463,11 @@ export function applyTakenDose<M extends StockedMedicine, R extends OccurrenceRe
   }
 
   const remaining = Math.max(0, Math.round((medicine.inventoryAmount - doseAmount + Number.EPSILON) * 1_000_000) / 1_000_000);
+  const recordWithInventorySnapshot = {
+    ...record,
+    inventoryRemainingAfterDose: remaining,
+    inventoryRemainingUnit: inventoryUnitFor(medicine),
+  } as R;
   const nextMedicines = medicines.map((item, index) => index === medicineIndex
     ? { ...item, inventoryAmount: remaining }
     : item);
@@ -464,11 +476,11 @@ export function applyTakenDose<M extends StockedMedicine, R extends OccurrenceRe
     // Keep duplicate legacy representations consistent without removing their IDs or fields.
     for (let index = 0; index < nextRecords.length; index++) {
       if (matchesOccurrence(nextRecords[index])) {
-        nextRecords[index] = { ...nextRecords[index], ...record, id: nextRecords[index].id };
+        nextRecords[index] = { ...nextRecords[index], ...recordWithInventorySnapshot, id: nextRecords[index].id };
       }
     }
   } else {
-    nextRecords.push(record);
+    nextRecords.push(recordWithInventorySnapshot);
   }
 
   return { accepted: true, medicines: nextMedicines, doseRecords: nextRecords };

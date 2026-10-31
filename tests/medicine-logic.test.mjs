@@ -146,6 +146,8 @@ test("new dose outcome snapshots capture medicine strength, form, dose amount, u
   assert.equal(skipped.doseRecords[0].medicineDoseAmount, medicine.doseAmount);
   assert.equal(skipped.doseRecords[0].medicineDoseUnit, medicine.doseUnit);
   assert.equal(skipped.doseRecords[0].medicinePrescribingDoctor, medicine.prescribingDoctor);
+  assert.equal(skipped.doseRecords[0].inventoryRemainingAfterDose, undefined, "skipping does not deduct stock or create an inventory snapshot");
+  assert.equal(skipped.doseRecords[0].inventoryRemainingUnit, undefined);
 });
 
 function identityMedicine(overrides = {}) {
@@ -229,6 +231,38 @@ test("duplicate action and reload cannot deduct a scheduled occurrence twice", (
   assert.equal(duplicate.reason, "duplicate");
   assert.equal(duplicate.medicines[0].inventoryAmount, 59.5);
   assert.equal(duplicate.doseRecords.length, 1);
+  assert.equal(first.doseRecords[0].inventoryRemainingAfterDose, 59.5);
+  assert.equal(first.doseRecords[0].inventoryRemainingUnit, "ml");
+  assert.equal(duplicate.doseRecords[0].inventoryRemainingAfterDose, 59.5);
+});
+
+test("Taken dose snapshots post-deduction inventory and remain unchanged after later stock edits", () => {
+  const tablet = {
+    id: "tablet-stock-snapshot", type: "Tablet", inventoryAmount: 9, inventoryUnit: "tablets",
+    doseUnit: "tablets", lowStockThreshold: 2, lowStockThresholdUnit: "tablets",
+  };
+  const record = {
+    id: "tablet-stock-dose", medicineId: tablet.id, scheduledDate: "2026-10-16", scheduledTime: "10:00",
+    actualTakenTime: localIso("2026-10-16", "10:02"), status: "taken_on_time",
+  };
+
+  const taken = applyTakenDose([tablet], [], record, 1);
+  assert.equal(taken.accepted, true);
+  assert.equal(taken.medicines[0].inventoryAmount, 8);
+  assert.equal(taken.doseRecords.length, 1);
+  assert.equal(taken.doseRecords[0].inventoryRemainingAfterDose, 8);
+  assert.equal(taken.doseRecords[0].inventoryRemainingUnit, "tablets");
+
+  const repeated = applyTakenDose(taken.medicines, taken.doseRecords, record, 1);
+  assert.equal(repeated.accepted, false);
+  assert.equal(repeated.reason, "duplicate");
+  assert.equal(repeated.medicines[0].inventoryAmount, 8);
+  assert.equal(repeated.doseRecords.length, 1);
+  assert.equal(repeated.doseRecords[0].inventoryRemainingAfterDose, 8);
+
+  const laterStockEdit = { ...repeated.medicines[0], inventoryAmount: 20 };
+  assert.equal(laterStockEdit.inventoryAmount, 20);
+  assert.equal(repeated.doseRecords[0].inventoryRemainingAfterDose, 8);
 });
 
 test("a taken legacy occurrence is not duplicated when a pending record appears first", () => {
@@ -557,6 +591,10 @@ test("legacy dose records without optional dose snapshots load and round-trip un
   profileStorage.set(key, serializeDemoProfile({ email, medicines: [], doseRecords: [withDoctorSnapshot] }));
   assert.deepEqual(loadDemoProfile(storage, email).doseRecords, [withDoctorSnapshot]);
 
+  const withInventorySnapshot = { ...legacyRecord, inventoryRemainingAfterDose: 8, inventoryRemainingUnit: "tablets" };
+  profileStorage.set(key, serializeDemoProfile({ email, medicines: [], doseRecords: [withInventorySnapshot] }));
+  assert.deepEqual(loadDemoProfile(storage, email).doseRecords, [withInventorySnapshot]);
+
   const snapshottedRecord = { ...legacyRecord, medicineDoseAmount: 0.5, medicineDoseUnit: "ml" };
   profileStorage.set(key, serializeDemoProfile({ email, medicines: [], doseRecords: [snapshottedRecord] }));
   assert.deepEqual(loadDemoProfile(storage, email).doseRecords, [snapshottedRecord]);
@@ -609,6 +647,8 @@ test("profile validation rejects malformed medicine and dose entries without wri
     { label: "dose amount snapshot is malformed", medicines: [], doseRecords: [{ ...takenRecord("2026-10-16", "10:00", localIso("2026-10-16", "10:10")), medicineDoseAmount: -1 }] },
     { label: "dose unit snapshot is malformed", medicines: [], doseRecords: [{ ...takenRecord("2026-10-16", "10:00", localIso("2026-10-16", "10:10")), medicineDoseUnit: 2 }] },
     { label: "dose doctor snapshot is malformed", medicines: [], doseRecords: [{ ...takenRecord("2026-10-16", "10:00", localIso("2026-10-16", "10:10")), medicinePrescribingDoctor: 2 }] },
+    { label: "inventory remaining snapshot is malformed", medicines: [], doseRecords: [{ ...takenRecord("2026-10-16", "10:00", localIso("2026-10-16", "10:10")), inventoryRemainingAfterDose: -1 }] },
+    { label: "inventory remaining unit snapshot is malformed", medicines: [], doseRecords: [{ ...takenRecord("2026-10-16", "10:00", localIso("2026-10-16", "10:10")), inventoryRemainingUnit: 3 }] },
     { label: "invalid dose date", medicines: [], doseRecords: [{ ...takenRecord("2026-10-16", "10:00", localIso("2026-10-16", "10:10")), scheduledDate: "2026-02-30" }] },
   ];
 
