@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { Medicine, MedicineType, type AddMedicineResult, type DoseRecord } from "@/contexts/MedicineContext";
+import { Medicine, MedicineType, type AddMedicineResult, type DoseRecord, type MedicineUpdateResult } from "@/contexts/MedicineContext";
 import { localDateString } from "@/lib/schedule";
 import { availableVolumeFromContainers, inventoryUnitFor, inventoryUnitsCompatible, parseNonNegativeQuantity, validateInventoryThreshold } from "@/lib/medicineLogic";
 import { findMedicineIdentityMatches, type MedicineIdentityMatch } from "@/lib/medicineIdentity";
@@ -110,6 +110,8 @@ interface MedicineFormProps {
   onCancel: () => void;
   onOpenExisting?: (medicine: Medicine) => void;
   onAddStock?: (medicine: Medicine, quantity: number) => void;
+  onRestart?: (medicine: Medicine) => MedicineUpdateResult;
+  onDiscontinue?: (medicine: Medicine) => boolean;
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────────
@@ -118,7 +120,7 @@ function createMedicineId() {
   return `med-${Date.now()}`;
 }
 
-export default function MedicineForm({ initialData, existingMedicines = [], doseRecords = [], onSave, onCancel, onOpenExisting, onAddStock }: MedicineFormProps) {
+export default function MedicineForm({ initialData, existingMedicines = [], doseRecords = [], onSave, onCancel, onOpenExisting, onAddStock, onRestart, onDiscontinue }: MedicineFormProps) {
   const initialType: MedicineType = initialData?.type ?? "Tablet";
   const initialConfig = STRENGTH_CONFIG[initialType];
   const { strengthValue: initSV, strengthUnit: initSU } = parseStrength(
@@ -159,6 +161,9 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
   const [reviewingDuplicate, setReviewingDuplicate] = useState<{ candidate: Medicine; matches: MedicineIdentityMatch[] } | null>(null);
   const [saveError, setSaveError] = useState("");
   const submittingRef = useRef(false);
+  const [restartMode, setRestartMode] = useState(false);
+  const today = localDateString();
+  const hasActiveTreatment = Boolean(initialData?.treatmentPeriods?.some((period) => period.status === "active" && (!period.endDate || period.endDate >= today)));
 
   // ── Derived config for the current type ──
   const currentType = (formData.type as MedicineType) ?? "Tablet";
@@ -312,9 +317,9 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
       frequency: normalizeFrequency(formData.frequency),
       intervalHours: formData.frequency === "Every X hours" ? formData.intervalHours : undefined,
       scheduleTimes,
-      startDate: formData.startDate || localDateString(),
+      startDate: restartMode ? localDateString() : formData.startDate || localDateString(),
       createdAt: initialData ? initialData.createdAt : new Date().toISOString(),
-      endDate: formData.endDate || undefined,
+      endDate: restartMode ? undefined : formData.endDate || undefined,
       ...normalizeOptionalMedicineDetails(formData),
       instructions: formData.instructions?.trim() || "",
       notes: formData.notes?.trim() || "",
@@ -338,16 +343,17 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
       return;
     }
 
-    const result = onSave(med);
-    if (result && !result.added) {
-      if (result.validationError) {
-        setSaveError(result.validationError);
-      } else if (!result.duplicateMatch) {
+    const result = restartMode && onRestart ? onRestart(med) : onSave(med);
+    const failedResult = result && ((restartMode && "saved" in result && !result.saved) || (!restartMode && "added" in result && !result.added)) ? result : null;
+    if (failedResult) {
+      if (failedResult.validationError) {
+        setSaveError(failedResult.validationError);
+      } else if (!failedResult.duplicateMatch) {
         setSaveError(initialData
           ? "This medicine could not be updated. No changes were saved; reload and try again."
           : "This medicine could not be added safely.");
       } else {
-        setReviewingDuplicate({ candidate: med, matches: [result.duplicateMatch] });
+        setReviewingDuplicate({ candidate: med, matches: [failedResult.duplicateMatch] });
         setSaveError("A matching medicine was added while this form was open. Review it before continuing.");
       }
       submittingRef.current = false;
@@ -792,7 +798,22 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
       </div>
 
       {/* ── Submit / Cancel ─────────────────────────────────────────────────── */}
-      <div className="pt-4 flex flex-col min-[360px]:flex-row items-center justify-center gap-3 sm:justify-end">
+      <div className="pt-4 flex flex-col min-[360px]:flex-row min-[360px]:flex-wrap items-center justify-center gap-3 sm:justify-end">
+        {initialData && hasActiveTreatment && onDiscontinue && <button
+          type="button"
+          onClick={() => {
+            if (!window.confirm(`Discontinue ${initialData.name}? Future scheduled doses will stop. Existing dose and prescription history will be preserved.`)) return;
+            if (onDiscontinue(initialData)) onCancel();
+            else setSaveError("The treatment could not be discontinued. No changes were saved; reload and try again.");
+          }}
+          className="min-h-11 rounded-xl border border-amber-300 px-4 py-2.5 text-sm font-semibold text-amber-800 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950/30"
+        >Discontinue treatment</button>}
+        {initialData && !hasActiveTreatment && onRestart && !restartMode && <button
+          type="button"
+          onClick={() => { setRestartMode(true); setFormData((current) => ({ ...current, startDate: localDateString(), endDate: "" })); }}
+          className="min-h-11 rounded-xl border border-teal-300 px-4 py-2.5 text-sm font-semibold text-teal-800 hover:bg-teal-50 dark:border-teal-800 dark:text-teal-300 dark:hover:bg-teal-950/30"
+        >Start new treatment period</button>}
+        {restartMode && <button type="button" onClick={() => setRestartMode(false)} className="min-h-11 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-300">Cancel restart</button>}
         <button
           type="button"
           onClick={onCancel}
@@ -804,7 +825,7 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
           type="submit"
           className="min-h-11 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-teal-500 active:scale-95"
         >
-          {initialData ? "Save Changes" : "Add Medicine"}
+          {restartMode ? "Start Treatment" : initialData ? "Save Changes" : "Add Medicine"}
         </button>
       </div>
       {saveError && <p className="text-sm font-medium text-rose-700 dark:text-rose-300" role="alert">{saveError}</p>}

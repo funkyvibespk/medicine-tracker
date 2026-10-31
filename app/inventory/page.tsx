@@ -13,7 +13,7 @@ import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibilit
 import BrandedLoadingScreen from "@/components/BrandedLoadingScreen";
 
 export default function InventoryPage() {
-  const { medicines, addStock, isHydrated } = useMedicine();
+  const { medicines, inventoryTransactions, addStock, isHydrated } = useMedicine();
   const [addingStockMedId, setAddingStockMedId] = useState<string | null>(null);
   const [stockToAdd, setStockToAdd] = useState<number>(0);
   useDialogFocusRestore(Boolean(addingStockMedId));
@@ -39,6 +39,7 @@ export default function InventoryPage() {
 
   const outCount = withStatus.filter((s) => s.isOut).length;
   const lowCount = withStatus.filter((s) => s.isLow).length;
+  const recentTransactions = inventoryTransactions.slice().sort((a, b) => b.recordedAt.localeCompare(a.recordedAt)).slice(0, 30);
 
   // Sort: Out first, then Low, then Ok
   const sorted = [...withStatus].sort((a, b) => {
@@ -199,6 +200,18 @@ export default function InventoryPage() {
             })}
           </div>
         )}
+        <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div><h2 className="text-lg font-bold text-slate-900 dark:text-white">Stock activity</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Refills, adjustments, and recorded dose deductions.</p></div>
+            <span className="text-xs text-slate-500 dark:text-slate-400">Latest {recentTransactions.length} of {inventoryTransactions.length}</span>
+          </div>
+          {recentTransactions.length === 0 ? <p className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500 dark:bg-slate-950/50 dark:text-slate-400">No stock activity recorded yet.</p> : <ol className="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
+            {recentTransactions.map((transaction) => <li key={transaction.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-3 first:pt-0 last:pb-0">
+              <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{transaction.medicineName ?? medicines.find((medicine) => medicine.id === transaction.medicineId)?.name ?? "Medicine no longer tracked"}</p><p className="text-xs text-slate-500 dark:text-slate-400">{transaction.kind === "dose" ? "Dose recorded" : transaction.kind === "refill" ? "Stock refill" : "Stock adjustment"} · {new Date(transaction.recordedAt).toLocaleString()}</p></div>
+              <div className="text-right text-sm"><p className="font-semibold text-slate-800 dark:text-slate-100">{transaction.kind === "dose" ? "−" : transaction.quantityChange > 0 ? "+" : ""}{transaction.quantityChange} {transaction.unit}</p><p className="text-xs text-slate-500 dark:text-slate-400">Balance: {transaction.balanceAfter} {transaction.unit}</p></div>
+            </li>)}
+          </ol>}
+        </section>
       </main>
       </div>
 

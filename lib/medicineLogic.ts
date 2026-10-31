@@ -13,6 +13,7 @@ export interface StockedMedicine {
 export interface OccurrenceRecord {
   id: string;
   medicineId: string;
+  treatmentPeriodId?: string;
   scheduledDate: string;
   scheduledTime: string;
   scheduledInstant?: string;
@@ -164,8 +165,19 @@ export interface PendingOccurrenceCandidate extends OccurrenceRecord {
   medicinePrescribingDoctor?: string;
 }
 
-export function scheduledOccurrenceKey(medicineId: string, scheduledDate: string, scheduledTime: string, scheduledInstant?: string): string {
-  return JSON.stringify([medicineId, scheduledDate, scheduledTime, scheduledInstant ?? null]);
+export function scheduledOccurrenceKey(medicineId: string, scheduledDate: string, scheduledTime: string, scheduledInstant?: string, treatmentPeriodId?: string): string {
+  return JSON.stringify([medicineId, scheduledDate, scheduledTime, scheduledInstant ?? null, treatmentPeriodId ?? null]);
+}
+
+export function sameDoseOccurrenceIdentity(a: OccurrenceRecord, b: OccurrenceRecord): boolean {
+  const periodMatches = a.treatmentPeriodId && b.treatmentPeriodId
+    ? a.treatmentPeriodId === b.treatmentPeriodId
+    : !a.treatmentPeriodId && !b.treatmentPeriodId ||
+      a.treatmentPeriodId === `legacy-current-${a.medicineId}` || b.treatmentPeriodId === `legacy-current-${b.medicineId}`;
+  return a.medicineId === b.medicineId && a.scheduledDate === b.scheduledDate &&
+    Boolean(a.isPrn) === Boolean(b.isPrn) &&
+    (a.isPrn || (a.scheduledTime === b.scheduledTime && (a.scheduledInstant ? a.scheduledInstant === b.scheduledInstant : !b.scheduledInstant))) &&
+    periodMatches;
 }
 
 export function getOutstandingMissedOccurrences<T extends OccurrenceRecord & { status?: string }>(records: T[], today: string): T[] {
@@ -182,7 +194,7 @@ export function getUnscheduledSameDayMissedOccurrences<T extends OccurrenceRecor
 ): T[] {
   return canonicalizeOccurrenceRecords(records).filter((record) =>
     !record.isPrn && record.scheduledDate === today && record.status === "missed" && !record.actualTakenTime &&
-    !representedOccurrenceKeys.has(scheduledOccurrenceKey(record.medicineId, record.scheduledDate, record.scheduledTime, record.scheduledInstant))
+    !representedOccurrenceKeys.has(scheduledOccurrenceKey(record.medicineId, record.scheduledDate, record.scheduledTime, record.scheduledInstant, record.treatmentPeriodId))
   );
 }
 
@@ -200,8 +212,13 @@ interface DoseOutcomeRecord extends OccurrenceRecord, DoseInventorySnapshotRecor
 export function canonicalizeOccurrenceRecords<R extends DoseOutcomeRecord>(records: R[]): R[] {
   const canonical = new Map<string, R>();
   for (const record of records) {
-    const key = scheduledOccurrenceKey(record.medicineId, record.scheduledDate, record.scheduledTime, record.scheduledInstant);
-    const existing = canonical.get(key);
+    const key = scheduledOccurrenceKey(record.medicineId, record.scheduledDate, record.scheduledTime, record.scheduledInstant, record.treatmentPeriodId);
+    let existingKey = key;
+    let existing = canonical.get(key);
+    if (!existing) {
+      const legacyMatch = [...canonical.entries()].find(([, candidate]) => sameDoseOccurrenceIdentity(candidate, record));
+      if (legacyMatch) [existingKey, existing] = legacyMatch;
+    }
     if (!existing) {
       canonical.set(key, record);
       continue;
@@ -219,7 +236,7 @@ export function canonicalizeOccurrenceRecords<R extends DoseOutcomeRecord>(recor
       ? actualTakenTime ? (isTakenOutcome(chosen.status) ? chosen.status : "taken_late") : chosen.status
       : existing.status === "skipped" || record.status === "skipped" ? "skipped"
         : existing.status === "missed" || record.status === "missed" ? "missed" : existing.status;
-    canonical.set(key, {
+    canonical.set(existingKey, {
       ...existing,
       ...chosen,
       id: existing.id,
@@ -233,6 +250,7 @@ export function canonicalizeOccurrenceRecords<R extends DoseOutcomeRecord>(recor
       medicinePrescribingDoctor: existing.medicinePrescribingDoctor ?? record.medicinePrescribingDoctor,
       inventoryRemainingAfterDose: existing.inventoryRemainingAfterDose ?? record.inventoryRemainingAfterDose,
       inventoryRemainingUnit: existing.inventoryRemainingUnit ?? record.inventoryRemainingUnit,
+      treatmentPeriodId: existing.treatmentPeriodId === record.treatmentPeriodId ? existing.treatmentPeriodId : undefined,
     } as R);
   }
   return [...canonical.values()];
@@ -249,7 +267,7 @@ export function upsertMissedOccurrenceRecords<R extends DoseOutcomeRecord>(
 ): R[] {
   const nextRecords = [...doseRecords];
   const recordsByOccurrence = new Map<string, number[]>();
-  const keyFor = (record: OccurrenceRecord) => scheduledOccurrenceKey(record.medicineId, record.scheduledDate, record.scheduledTime, record.scheduledInstant);
+  const keyFor = (record: OccurrenceRecord) => scheduledOccurrenceKey(record.medicineId, record.scheduledDate, record.scheduledTime, record.scheduledInstant, record.treatmentPeriodId);
   nextRecords.forEach((record, index) => {
     if (record.isPrn) return;
     const key = keyFor(record);
@@ -262,7 +280,7 @@ export function upsertMissedOccurrenceRecords<R extends DoseOutcomeRecord>(
   for (const candidate of candidates) {
     if (candidate.isPrn) continue;
     const key = keyFor(candidate);
-    const existingIndices = recordsByOccurrence.get(key);
+    const existingIndices = recordsByOccurrence.get(key) ?? nextRecords.map((record, index) => sameDoseOccurrenceIdentity(record, candidate) ? index : -1).filter((index) => index >= 0);
     if (existingIndices?.length) {
       const existing = existingIndices.map((index) => nextRecords[index]);
       if (existing.some((record) => record.actualTakenTime || record.status === "missed" || record.status === "skipped" || isTakenOutcome(record.status))) continue;
@@ -283,13 +301,13 @@ export function upsertPendingOccurrenceRecords<R extends DoseOutcomeRecord>(
   candidates: PendingOccurrenceCandidate[],
 ): R[] {
   const existing = new Set(doseRecords.filter((record) => !record.isPrn).map((record) =>
-    scheduledOccurrenceKey(record.medicineId, record.scheduledDate, record.scheduledTime, record.scheduledInstant)
+    scheduledOccurrenceKey(record.medicineId, record.scheduledDate, record.scheduledTime, record.scheduledInstant, record.treatmentPeriodId)
   ));
   const additions: R[] = [];
   for (const candidate of candidates) {
     if (candidate.isPrn) continue;
-    const key = scheduledOccurrenceKey(candidate.medicineId, candidate.scheduledDate, candidate.scheduledTime, candidate.scheduledInstant);
-    if (existing.has(key)) continue;
+    const key = scheduledOccurrenceKey(candidate.medicineId, candidate.scheduledDate, candidate.scheduledTime, candidate.scheduledInstant, candidate.treatmentPeriodId);
+    if (existing.has(key) || doseRecords.some((record) => sameDoseOccurrenceIdentity(record, candidate))) continue;
     existing.add(key);
     additions.push(candidate as R);
   }
@@ -322,9 +340,7 @@ export function applySkippedDose<R extends OccurrenceRecord & { status?: string 
   }
 
   const matchesOccurrence = (saved: R) =>
-    !saved.isPrn && saved.medicineId === record.medicineId && saved.scheduledDate === record.scheduledDate &&
-    saved.scheduledTime === record.scheduledTime &&
-    (record.scheduledInstant ? saved.scheduledInstant === record.scheduledInstant : !saved.scheduledInstant);
+    sameDoseOccurrenceIdentity(saved, record);
   const matches = doseRecords.map((saved, index) => ({ saved, index })).filter(({ saved }) => matchesOccurrence(saved));
   if (matches.some(({ saved }) => saved.actualTakenTime !== undefined || isTakenOutcome(saved.status))) {
     return { accepted: false, reason: "already-taken", doseRecords };
@@ -364,7 +380,7 @@ export function findCloseDoseConflict<R extends OccurrenceRecord>(
     .filter((item) => item.distance <= OVERDUE_THRESHOLD_MS);
   const nearbyTaken = doseRecords
     .filter((record) => !record.isPrn && record.medicineId === medicineId && record.actualTakenTime &&
-      scheduledOccurrenceKey(record.medicineId, record.scheduledDate, record.scheduledTime, record.scheduledInstant) !== targetOccurrenceKey)
+      scheduledOccurrenceKey(record.medicineId, record.scheduledDate, record.scheduledTime, record.scheduledInstant, record.treatmentPeriodId) !== targetOccurrenceKey)
     .map((record) => ({ relatedAt: new Date(record.actualTakenTime!), distance: Math.abs(new Date(record.actualTakenTime!).getTime() - targetScheduledAt.getTime()), source: "taken" as const }))
     .filter((item) => Number.isFinite(item.relatedAt.getTime()) && item.distance <= OVERDUE_THRESHOLD_MS);
   const nearest = [...nearbyScheduled, ...nearbyTaken].sort((a, b) => a.distance - b.distance)[0];
@@ -453,12 +469,7 @@ export function applyTakenDose<M extends StockedMedicine, R extends OccurrenceRe
   }
 
   const matchesOccurrence = (saved: R) =>
-    saved.medicineId === record.medicineId &&
-    saved.scheduledDate === record.scheduledDate &&
-    (record.isPrn
-      ? Boolean(saved.isPrn)
-      : !saved.isPrn && saved.scheduledTime === record.scheduledTime &&
-        (record.scheduledInstant ? saved.scheduledInstant === record.scheduledInstant : !saved.scheduledInstant))
+    sameDoseOccurrenceIdentity(saved, record)
   const existingIndex = doseRecords.findIndex(matchesOccurrence);
   if (doseRecords.some((saved) => matchesOccurrence(saved) && (Boolean(saved.actualTakenTime) || isTakenOutcome((saved as DoseOutcomeRecord).status)))) {
     return { accepted: false, reason: "duplicate", medicines, doseRecords };
@@ -478,7 +489,7 @@ export function applyTakenDose<M extends StockedMedicine, R extends OccurrenceRe
     // Keep duplicate legacy representations consistent without removing their IDs or fields.
     for (let index = 0; index < nextRecords.length; index++) {
       if (matchesOccurrence(nextRecords[index])) {
-        nextRecords[index] = { ...nextRecords[index], ...recordWithInventorySnapshot, id: nextRecords[index].id };
+        nextRecords[index] = { ...nextRecords[index], ...recordWithInventorySnapshot, id: nextRecords[index].id, treatmentPeriodId: nextRecords[index].treatmentPeriodId };
       }
     }
   } else {
@@ -488,8 +499,8 @@ export function applyTakenDose<M extends StockedMedicine, R extends OccurrenceRe
   return { accepted: true, medicines: nextMedicines, doseRecords: nextRecords };
 }
 
-export function scheduledOccurrenceId(medicineId: string, scheduledDate: string, scheduledTime: string, scheduledInstant?: string): string {
-  return `${medicineId}-${scheduledDate}-${scheduledTime}${scheduledInstant ? `-${new Date(scheduledInstant).getTime()}` : ""}`;
+export function scheduledOccurrenceId(medicineId: string, scheduledDate: string, scheduledTime: string, scheduledInstant?: string, treatmentPeriodId?: string): string {
+  return `${medicineId}-${scheduledDate}-${scheduledTime}${scheduledInstant ? `-${new Date(scheduledInstant).getTime()}` : ""}${treatmentPeriodId ? `-${treatmentPeriodId}` : ""}`;
 }
 
 export function minutesFromScheduledOccurrence(

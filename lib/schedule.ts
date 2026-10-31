@@ -1,4 +1,4 @@
-import type { Medicine, MedicineScheduleRevision } from "@/contexts/MedicineContext";
+import type { Medicine, MedicineScheduleRevision, MedicineTreatmentPeriod } from "@/contexts/MedicineContext";
 
 export interface ScheduledOccurrence {
   scheduledDate: string;
@@ -6,11 +6,35 @@ export interface ScheduledOccurrence {
   scheduledAt: Date;
   /** Present for elapsed-hour schedules so repeated wall-clock times remain distinct. */
   scheduledInstant?: string;
+  treatmentPeriodId?: string;
 }
 
 export function localDateString(date: Date = new Date()) {
   const pad = (value: number) => value.toString().padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/** Project a period's recorded treatment details onto the stable medicine identity for schedule generation. */
+export function medicineForTreatmentPeriod(medicine: Medicine, period: MedicineTreatmentPeriod): Medicine {
+  return {
+    ...medicine,
+    name: period.medicineName,
+    type: period.medicineType,
+    strength: period.medicineStrength,
+    doseAmount: period.doseAmount,
+    doseUnit: period.doseUnit,
+    frequency: period.frequency,
+    intervalHours: period.intervalHours,
+    scheduleTimes: [...period.scheduleTimes],
+    startDate: period.startDate,
+    endDate: period.endDate,
+    instructions: period.instructions,
+    prescribingDoctor: period.prescribingDoctor,
+    prescribingClinic: period.prescribingClinic,
+    prescriptionDate: period.prescriptionDate,
+    prescriptionNotes: period.prescriptionNotes,
+    scheduleRevisions: period.scheduleRevisions,
+  };
 }
 
 /** Preserve the current day's schedule for legacy profiles without revision history. */
@@ -139,9 +163,40 @@ function withScheduleRevision(medicine: Medicine, revision: MedicineScheduleRevi
 
 /** Generate occurrences using only schedule revisions known to have been active then. */
 export function getMedicineOccurrencesForDate(medicine: Medicine, dateString: string): ScheduledOccurrence[] {
+  const archivedAt = medicine.archivedAt ? new Date(medicine.archivedAt).getTime() : Number.POSITIVE_INFINITY;
+  if (medicine.archivedAt && !Number.isFinite(archivedAt)) return [];
   const revisions = medicine.scheduleRevisions?.slice().sort((a, b) => a.effectiveAt.localeCompare(b.effectiveAt));
-  if (!revisions?.length) return scheduleFromSnapshot(medicine, dateString);
+  if (!medicine.treatmentPeriods?.length) {
+    const occurrences = revisions?.length
+      ? occurrencesFromRevisions(medicine, dateString, revisions)
+      : scheduleFromSnapshot(medicine, dateString);
+    return occurrences.filter((occurrence) => occurrence.scheduledAt.getTime() <= archivedAt);
+  }
 
+  const occurrences: ScheduledOccurrence[] = [];
+  const firstPeriod = medicine.treatmentPeriods.slice().sort((a, b) => a.startedAt.localeCompare(b.startedAt))[0];
+  if (revisions?.length) {
+    const legacy = occurrencesFromRevisions(medicine, dateString, revisions).filter((occurrence) =>
+      occurrence.scheduledAt.getTime() < new Date(firstPeriod.startedAt).getTime()
+    );
+    occurrences.push(...legacy);
+  }
+  for (const period of medicine.treatmentPeriods) {
+    if (dateString < period.startDate || (period.endDate && dateString > period.endDate)) continue;
+    const periodMedicine = medicineForTreatmentPeriod(medicine, period);
+    const periodOccurrences = occurrencesFromRevisions(periodMedicine, dateString, period.scheduleRevisions ?? []);
+    const startsAt = new Date(period.startedAt).getTime();
+    const endsAt = period.endedAt ? new Date(period.endedAt).getTime() : Number.POSITIVE_INFINITY;
+    occurrences.push(...periodOccurrences.filter((occurrence) => {
+      const time = occurrence.scheduledAt.getTime();
+      return time >= startsAt && time < endsAt && time <= archivedAt;
+    }).map((occurrence) => ({ ...occurrence, treatmentPeriodId: period.id })));
+  }
+  return occurrences.sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
+}
+
+function occurrencesFromRevisions(medicine: Medicine, dateString: string, revisions: MedicineScheduleRevision[]): ScheduledOccurrence[] {
+  if (!revisions.length) return scheduleFromSnapshot(medicine, dateString);
   const occurrences: ScheduledOccurrence[] = [];
   revisions.forEach((revision, index) => {
     const revisionStart = new Date(revision.effectiveAt).getTime();

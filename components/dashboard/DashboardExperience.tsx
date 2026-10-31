@@ -9,14 +9,14 @@ import BottomNav from "@/components/dashboard/BottomNav";
 import WorkspaceNav from "@/components/dashboard/WorkspaceNav";
 import WorkspaceHeader from "@/components/dashboard/WorkspaceHeader";
 import WorkspacePageHeading from "@/components/dashboard/WorkspacePageHeading";
-import { formatDuration, getMedicineOccurrencesForDate, isPrnMedicine, localDateString } from "@/lib/schedule";
+import { formatDuration, getMedicineOccurrencesForDate, isPrnMedicine, localDateString, medicineForTreatmentPeriod } from "@/lib/schedule";
 import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
 import BrandedLoadingScreen from "@/components/BrandedLoadingScreen";
 import { sortDoseHistoryRecords, sortTakenDoseRecordsNewestFirst } from "@/lib/doseHistory";
 import { getMissedDoseNotificationsForToday } from "@/lib/missedDoses";
 import { latestVitalReadingOnDate, vitalReadingTypeLabel, vitalReadingLabel, type VitalReadingType } from "@/lib/vitalTrack";
 import { VitalReadingIcon, VitalReadingIconBadge } from "@/components/dashboard/VitalReadingIcon";
-import { canonicalizeOccurrenceRecords, comparePhysicalStock, doseUnitFor, filterDoseRecords, findCloseDoseConflict, getOccurrenceTimeStatus, getOutstandingMissedOccurrences, getStockStatus, getUnscheduledSameDayMissedOccurrences, inventoryUnitFor, inventoryUnitsCompatible, minutesFromScheduledOccurrence, parseNonNegativeQuantity, PhysicalStockComparison, scheduledOccurrenceId, scheduledOccurrenceKey } from "@/lib/medicineLogic";
+import { canonicalizeOccurrenceRecords, comparePhysicalStock, doseUnitFor, filterDoseRecords, findCloseDoseConflict, getOccurrenceTimeStatus, getOutstandingMissedOccurrences, getStockStatus, getUnscheduledSameDayMissedOccurrences, inventoryUnitFor, inventoryUnitsCompatible, minutesFromScheduledOccurrence, parseNonNegativeQuantity, PhysicalStockComparison, sameDoseOccurrenceIdentity, scheduledOccurrenceId, scheduledOccurrenceKey } from "@/lib/medicineLogic";
 
 // Helper to pad numbers
 const pad = (n: number) => n.toString().padStart(2, "0");
@@ -27,6 +27,7 @@ type ScheduledDose = {
   scheduledDate: string;
   time: string;
   scheduledInstant?: string;
+  treatmentPeriodId?: string;
   identityAmbiguous?: boolean;
   record?: DoseRecord;
   status: DoseStatus;
@@ -44,10 +45,15 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
     doseRecords,
     addMedicine,
     updateMedicine,
+    discontinueTreatment,
+    restartTreatment,
     updateDoseRecord,
     recordTakenDose,
     skipDoseOccurrence,
     deleteMedicine,
+    prescriptionHistory,
+    medicineEditHistory,
+    inventoryTransactions,
     addStock,
     vitalReadings,
     vitalTrackDashboardEnabled,
@@ -115,15 +121,17 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
       for (const occurrence of occurrences) wallTimeCounts.set(occurrence.scheduledTime, (wallTimeCounts.get(occurrence.scheduledTime) ?? 0) + 1);
       occurrences.forEach((occurrence) => {
         const { scheduledTime: time, scheduledAt: scheduledTimeDate, scheduledInstant } = occurrence;
-        const id = scheduledOccurrenceId(med.id, todayStr, time, scheduledInstant);
-        const occurrenceKey = scheduledOccurrenceKey(med.id, todayStr, time, scheduledInstant);
+        const periodMedicine = occurrence.treatmentPeriodId
+          ? medicineForTreatmentPeriod(med, med.treatmentPeriods!.find((period) => period.id === occurrence.treatmentPeriodId)!)
+          : med;
+        const id = scheduledOccurrenceId(med.id, todayStr, time, scheduledInstant, occurrence.treatmentPeriodId);
         const identityAmbiguous = Boolean(scheduledInstant && (wallTimeCounts.get(time) ?? 0) > 1 && canonicalDoseRecords.some(
-          (item) => !item.isPrn && item.medicineId === med.id && item.scheduledDate === todayStr && item.scheduledTime === time && !item.scheduledInstant,
+          (item) => !item.isPrn && item.medicineId === med.id && item.scheduledDate === todayStr && item.scheduledTime === time && !item.scheduledInstant && (!occurrence.treatmentPeriodId || item.treatmentPeriodId === occurrence.treatmentPeriodId),
         ));
         const record = canonicalDoseRecords.find(
           (item) => !item.isPrn && item.medicineId === med.id && item.scheduledDate === todayStr && (
-            scheduledOccurrenceKey(item.medicineId, item.scheduledDate, item.scheduledTime, item.scheduledInstant) === occurrenceKey ||
-            (!item.scheduledInstant && wallTimeCounts.get(time) === 1 && item.scheduledTime === time)
+            sameDoseOccurrenceIdentity(item, { id, medicineId: med.id, scheduledDate: todayStr, scheduledTime: time, scheduledInstant, treatmentPeriodId: occurrence.treatmentPeriodId }) ||
+            (!item.scheduledInstant && wallTimeCounts.get(time) === 1 && item.scheduledTime === time && (!occurrence.treatmentPeriodId || item.treatmentPeriodId === occurrence.treatmentPeriodId))
           )
         );
 
@@ -170,10 +178,11 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
 
         doses.push({
           id,
-          med,
+          med: periodMedicine,
           scheduledDate: todayStr,
           time,
           scheduledInstant,
+          treatmentPeriodId: occurrence.treatmentPeriodId,
           identityAmbiguous,
           record,
           status,
@@ -187,14 +196,16 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
 
     const representedOccurrenceKeys = new Set<string>();
     for (const dose of doses) {
-      representedOccurrenceKeys.add(scheduledOccurrenceKey(dose.med.id, dose.scheduledDate, dose.time, dose.scheduledInstant));
+      representedOccurrenceKeys.add(scheduledOccurrenceKey(dose.med.id, dose.scheduledDate, dose.time, dose.scheduledInstant, dose.treatmentPeriodId));
       if (dose.record) {
-        representedOccurrenceKeys.add(scheduledOccurrenceKey(dose.record.medicineId, dose.record.scheduledDate, dose.record.scheduledTime, dose.record.scheduledInstant));
+        representedOccurrenceKeys.add(scheduledOccurrenceKey(dose.record.medicineId, dose.record.scheduledDate, dose.record.scheduledTime, dose.record.scheduledInstant, dose.record.treatmentPeriodId));
       }
     }
     for (const record of getUnscheduledSameDayMissedOccurrences(canonicalDoseRecords, todayStr, representedOccurrenceKeys)) {
-      const med = medicines.find((medicine) => medicine.id === record.medicineId);
-      if (!med) continue;
+      const storedMedicine = medicines.find((medicine) => medicine.id === record.medicineId);
+      if (!storedMedicine) continue;
+      const recordPeriod = storedMedicine.treatmentPeriods?.find((period) => period.id === record.treatmentPeriodId);
+      const med = recordPeriod ? medicineForTreatmentPeriod(storedMedicine, recordPeriod) : storedMedicine;
       const sameWallTimeOccurrences = doses.filter((dose) => dose.med.id === med.id && dose.scheduledDate === record.scheduledDate && dose.time === record.scheduledTime);
       // A legacy record with no instant cannot safely be attached to repeated wall-clock occurrences.
       if (!record.scheduledInstant && sameWallTimeOccurrences.length > 0) continue;
@@ -226,14 +237,14 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
       const dateString = localDateString(date);
       return getMedicineOccurrencesForDate(med, dateString).map((occurrence) => ({
         medicineId: med.id,
-        occurrenceKey: scheduledOccurrenceKey(med.id, occurrence.scheduledDate, occurrence.scheduledTime, occurrence.scheduledInstant),
+      occurrenceKey: scheduledOccurrenceKey(med.id, occurrence.scheduledDate, occurrence.scheduledTime, occurrence.scheduledInstant, occurrence.treatmentPeriodId),
         scheduledAt: occurrence.scheduledAt,
       }));
     }));
 
     const dosesWithConflicts = doses.map((dose) => {
       if (dose.status.startsWith("taken") || dose.status === "skipped") return dose;
-      const occurrenceKey = scheduledOccurrenceKey(dose.med.id, dose.scheduledDate, dose.time, dose.scheduledInstant);
+      const occurrenceKey = scheduledOccurrenceKey(dose.med.id, dose.scheduledDate, dose.time, dose.scheduledInstant, dose.treatmentPeriodId);
       const closeConflict = findCloseDoseConflict(dose.med.id, occurrenceKey, dose.scheduledDateObj, nearbyScheduleOccurrences, canonicalDoseRecords);
       return closeConflict ? { ...dose, closeConflict } : dose;
     });
@@ -260,10 +271,14 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
     () => getMissedDoseNotificationsForToday(medicines, doseRecords, todayStr),
     [medicines, doseRecords, todayStr],
   );
-  const prnMedicines = medicines.filter((med) => isPrnMedicine(med) && med.startDate <= todayStr && (!med.endDate || med.endDate >= todayStr));
+  const hasActivePeriodToday = (medicine: Medicine) => medicine.treatmentPeriods?.length
+    ? medicine.treatmentPeriods.some((period) => period.status === "active" && period.startDate <= todayStr && (!period.endDate || period.endDate >= todayStr))
+    : !medicine.archivedAt && medicine.startDate <= todayStr && (!medicine.endDate || medicine.endDate >= todayStr);
+  const prnMedicines = medicines.filter((med) => hasActivePeriodToday(med) && isPrnMedicine(med));
 
-  const activeMedicines = medicines.filter((medicine) => medicine.startDate <= todayStr && (!medicine.endDate || medicine.endDate >= todayStr));
+  const activeMedicines = medicines.filter(hasActivePeriodToday);
   const stockAlerts = medicines.filter((medicine) => {
+    if (!hasActivePeriodToday(medicine)) return false;
     const status = getStockStatus(medicine);
     return status !== "available";
   });
@@ -288,18 +303,18 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
           return occurrence.scheduledAt <= now;
         });
         for (const occurrence of occurrences) {
-          const key = scheduledOccurrenceKey(medicine.id, date, occurrence.scheduledTime, occurrence.scheduledInstant);
+          const key = scheduledOccurrenceKey(medicine.id, date, occurrence.scheduledTime, occurrence.scheduledInstant, occurrence.treatmentPeriodId);
           if (countedOccurrences.has(key)) continue;
           countedOccurrences.add(key);
           countedWallTimes.add(JSON.stringify([medicine.id, date, occurrence.scheduledTime]));
           expected++;
           const wallTimeCount = wallTimeCounts.get(occurrence.scheduledTime) ?? 0;
-          if (canonicalDoseRecords.some((record) => record.medicineId === medicine.id && record.scheduledDate === date && record.scheduledTime === occurrence.scheduledTime && Boolean(record.actualTakenTime) && !record.isPrn && (record.scheduledInstant === occurrence.scheduledInstant || (!record.scheduledInstant && wallTimeCount === 1)))) taken++;
+          if (canonicalDoseRecords.some((record) => record.medicineId === medicine.id && record.scheduledDate === date && record.scheduledTime === occurrence.scheduledTime && Boolean(record.actualTakenTime) && !record.isPrn && (record.scheduledInstant === occurrence.scheduledInstant || (!record.scheduledInstant && wallTimeCount === 1)) && (!record.treatmentPeriodId || !occurrence.treatmentPeriodId || record.treatmentPeriodId === occurrence.treatmentPeriodId))) taken++;
         }
       }
       for (const record of canonicalDoseRecords) {
         if (record.isPrn || record.scheduledDate !== date || (record.status !== "missed" && !record.actualTakenTime)) continue;
-        const key = scheduledOccurrenceKey(record.medicineId, date, record.scheduledTime, record.scheduledInstant);
+        const key = scheduledOccurrenceKey(record.medicineId, date, record.scheduledTime, record.scheduledInstant, record.treatmentPeriodId);
         if (countedOccurrences.has(key)) continue;
         if (countedWallTimes.has(JSON.stringify([record.medicineId, date, record.scheduledTime]))) continue;
         if (date === todayStr) {
@@ -339,6 +354,7 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
       scheduledDate: dose.scheduledDate,
       scheduledTime: dose.time,
       scheduledInstant: dose.record?.scheduledInstant ?? dose.scheduledInstant,
+      treatmentPeriodId: dose.treatmentPeriodId,
       status: dose.status,
     });
   };
@@ -358,6 +374,7 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
       scheduledDate: dose.scheduledDate,
       scheduledTime: dose.time,
       scheduledInstant: dose.record ? dose.record.scheduledInstant : dose.scheduledInstant,
+      treatmentPeriodId: dose.treatmentPeriodId,
       actualTakenTime: takenTime.toISOString(),
       status
     }, dose.med.doseAmount);
@@ -365,15 +382,18 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
   };
 
   const recordPrnDose = (med: Medicine) => {
+    const activePeriodId = med.treatmentPeriods?.find((period) => period.status === "active")?.id;
     if (
       med.inventoryAmount < med.doseAmount ||
-      doseRecords.some((record) => record.isPrn && record.medicineId === med.id && record.scheduledDate === todayStr && Boolean(record.actualTakenTime))
+      doseRecords.some((record) => record.isPrn && record.medicineId === med.id && record.scheduledDate === todayStr && Boolean(record.actualTakenTime) &&
+        (record.treatmentPeriodId === activePeriodId || (!record.treatmentPeriodId && (!activePeriodId || activePeriodId === `legacy-current-${med.id}`))))
     ) return;
     const takenTime = new Date();
     const time = `${pad(takenTime.getHours())}:${pad(takenTime.getMinutes())}`;
     recordTakenDose({
-      id: `prn-${med.id}-${todayStr}`,
+      id: `prn-${med.id}-${todayStr}${activePeriodId ? `-${activePeriodId}` : ""}`,
       medicineId: med.id,
+      treatmentPeriodId: activePeriodId,
       scheduledDate: todayStr,
       scheduledTime: time,
       actualTakenTime: takenTime.toISOString(),
@@ -417,6 +437,7 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
         medicineId: changingDose.med.id,
         scheduledDate: changingDose.scheduledDate,
         scheduledTime: changingDose.time,
+        treatmentPeriodId: changingDose.treatmentPeriodId,
         actualTakenTime: newTakenDate.toISOString(),
         status
       }, changingDose.med.doseAmount);
@@ -468,8 +489,8 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
   const recentStockCheckHistory = stockCheckDose
     ? canonicalDoseRecords
         .filter((record) => !record.isPrn && record.medicineId === stockCheckDose.med.id &&
-          scheduledOccurrenceKey(record.medicineId, record.scheduledDate, record.scheduledTime, record.scheduledInstant) !==
-            scheduledOccurrenceKey(stockCheckDose.med.id, stockCheckDose.scheduledDate, stockCheckDose.time, stockCheckDose.scheduledInstant))
+          scheduledOccurrenceKey(record.medicineId, record.scheduledDate, record.scheduledTime, record.scheduledInstant, record.treatmentPeriodId) !==
+            scheduledOccurrenceKey(stockCheckDose.med.id, stockCheckDose.scheduledDate, stockCheckDose.time, stockCheckDose.scheduledInstant, stockCheckDose.treatmentPeriodId))
         .slice()
         .sort((a, b) => {
           const timeFor = (record: DoseRecord) => record.scheduledInstant
@@ -872,7 +893,9 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">As needed</h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {prnMedicines.map((med) => {
-                const prnTakenToday = doseRecords.some((record) => record.isPrn && record.medicineId === med.id && record.scheduledDate === todayStr && Boolean(record.actualTakenTime));
+                const activePeriodId = med.treatmentPeriods?.find((period) => period.status === "active")?.id;
+                const prnTakenToday = doseRecords.some((record) => record.isPrn && record.medicineId === med.id && record.scheduledDate === todayStr && Boolean(record.actualTakenTime) &&
+                  (record.treatmentPeriodId === activePeriodId || (!record.treatmentPeriodId && (!activePeriodId || activePeriodId === `legacy-current-${med.id}`))));
                 return <div key={med.id} className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
                   <div>
                     <div className="flex min-w-0 items-center gap-2"><MedicineFormIcon type={med.type} size="sm" /><h3 className="truncate text-lg font-bold text-slate-900 dark:text-white">{med.name}</h3></div>
@@ -880,7 +903,7 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
                     <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">As needed · Dose: {med.doseAmount} {med.doseUnit ?? doseUnitFor(med)}</p>
                     {med.instructions && <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{med.instructions}</p>}
                     <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{med.inventoryAmount} {inventoryUnitFor(med)} remaining</p>
-                    {doseRecords.filter((record) => record.isPrn && record.medicineId === med.id && record.scheduledDate === todayStr).map((record) => (
+                    {doseRecords.filter((record) => record.isPrn && record.medicineId === med.id && record.scheduledDate === todayStr && (record.treatmentPeriodId === activePeriodId || (!record.treatmentPeriodId && (!activePeriodId || activePeriodId === `legacy-current-${med.id}`)))).map((record) => (
                       <p key={record.id} className="mt-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">Taken at {record.actualTakenTime ? formatIsoTo12Hour(record.actualTakenTime) : "—"}</p>
                     ))}
                   </div>
@@ -910,7 +933,7 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
               onSave={(med, options) => {
                 if (editingMedicine) {
                   const result = updateMedicine(editingMedicine.id, med);
-                  if (!result.saved) return { added: false, validationError: result.validationError };
+                  if (!result.saved) return { added: false, validationError: result.validationError, duplicateMatch: result.duplicateMatch };
                 } else {
                   const result = addMedicine(med, options);
                   if (!result.added) return result;
@@ -921,6 +944,12 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
               }}
               onOpenExisting={(med) => { setIsAddModalOpen(false); setEditingMedicine(med); }}
               onAddStock={(med, quantity) => { setIsAddModalOpen(false); setAddingStockMed(med); setStockToAdd(quantity); }}
+              onRestart={(med) => {
+                const result = restartTreatment(med.id, med);
+                if (result.saved) { setIsAddModalOpen(false); setEditingMedicine(null); }
+                return result;
+              }}
+              onDiscontinue={(med) => discontinueTreatment(med.id)}
               onCancel={() => { setIsAddModalOpen(false); setEditingMedicine(null); }}
             />
           </div>
@@ -931,12 +960,20 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
       {deletingMedicine && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
           <div role="dialog" aria-modal="true" aria-labelledby="delete-medicine-title" onKeyDown={keepDialogFocusInside} className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900 text-center">
-            <h3 id="delete-medicine-title" className="text-lg font-bold text-slate-900 dark:text-white">Delete this medicine?</h3>
-            <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">This removes the medicine from your list. Recorded doses remain in History.</p>
+            {(() => {
+              const willArchive = doseRecords.some((record) => record.medicineId === deletingMedicine.id) ||
+                prescriptionHistory.some((entry) => entry.medicineId === deletingMedicine.id) ||
+                medicineEditHistory.some((entry) => entry.medicineId === deletingMedicine.id) ||
+                inventoryTransactions.some((entry) => entry.medicineId === deletingMedicine.id);
+              return <>
+            <h3 id="delete-medicine-title" className="text-lg font-bold text-slate-900 dark:text-white">{willArchive ? "Archive this medicine?" : "Delete this medicine?"}</h3>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">{willArchive ? "Future doses will stop. The medicine identity, inventory, and all linked history remain available for review or restart." : "This medicine has no linked history and will be removed from your list."}</p>
             <div className="mt-6 flex justify-end gap-3">
               <button onClick={() => setDeletingMedicine(null)} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">Cancel</button>
-              <button onClick={() => { deleteMedicine(deletingMedicine.id); setDeletingMedicine(null); }} className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white">Delete</button>
+              <button onClick={() => { deleteMedicine(deletingMedicine.id); setDeletingMedicine(null); }} className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white">{willArchive ? "Archive & Preserve History" : "Delete"}</button>
             </div>
+              </>;
+            })()}
           </div>
         </div>
       )}

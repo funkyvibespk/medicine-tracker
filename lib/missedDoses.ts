@@ -1,6 +1,6 @@
 import type { DoseRecord, Medicine } from "@/contexts/MedicineContext";
 import type { MissedOccurrenceCandidate, PendingOccurrenceCandidate } from "@/lib/medicineLogic";
-import { getMedicineOccurrencesForDate, localDateString } from "@/lib/schedule";
+import { getMedicineOccurrencesForDate, localDateString, medicineForTreatmentPeriod } from "@/lib/schedule";
 import { getOutstandingMissedOccurrences, isOccurrenceOverdue, scheduledOccurrenceId, upsertMissedOccurrenceRecords, upsertPendingOccurrenceRecords } from "@/lib/medicineLogic";
 
 function dateFromLocalString(dateString: string) {
@@ -41,11 +41,13 @@ export function getMissedDoseNotificationsForToday(medicines: Medicine[], doseRe
     const occurrencesOnScheduledDate = getMedicineOccurrencesForDate(medicine, record.scheduledDate);
     let occurrenceIndex = -1;
     if (record.scheduledInstant) {
-      occurrenceIndex = occurrencesOnScheduledDate.findIndex((occurrence) => occurrence.scheduledInstant === record.scheduledInstant);
+      occurrenceIndex = occurrencesOnScheduledDate.findIndex((occurrence) => occurrence.scheduledInstant === record.scheduledInstant &&
+        (record.treatmentPeriodId === occurrence.treatmentPeriodId || (!record.treatmentPeriodId && occurrence.treatmentPeriodId === `legacy-current-${medicine.id}`)));
     } else {
       const matchingWallTimes = occurrencesOnScheduledDate
         .map((occurrence, index) => ({ occurrence, index }))
-        .filter(({ occurrence }) => occurrence.scheduledTime === record.scheduledTime);
+        .filter(({ occurrence }) => occurrence.scheduledTime === record.scheduledTime &&
+          (record.treatmentPeriodId === occurrence.treatmentPeriodId || (!record.treatmentPeriodId && occurrence.treatmentPeriodId === `legacy-current-${medicine.id}`)));
       if (matchingWallTimes.length === 1) occurrenceIndex = matchingWallTimes[0].index;
     }
     if (occurrenceIndex < 0) return false;
@@ -103,16 +105,30 @@ export function reconcileHistoricalMissedOccurrences(
       if (scheduledAt >= now) continue;
 
       const candidateBase = {
-        id: scheduledOccurrenceId(medicine.id, occurrence.scheduledDate, occurrence.scheduledTime, occurrence.scheduledInstant),
+        id: scheduledOccurrenceId(medicine.id, occurrence.scheduledDate, occurrence.scheduledTime, occurrence.scheduledInstant, occurrence.treatmentPeriodId),
         medicineId: medicine.id,
+        treatmentPeriodId: occurrence.treatmentPeriodId,
         scheduledDate: occurrence.scheduledDate,
         scheduledTime: occurrence.scheduledTime,
         scheduledInstant: occurrence.scheduledInstant,
-        medicineName: medicine.name,
-        medicineType: medicine.type,
-        medicineStrength: medicine.strength,
-        medicineDoseAmount: medicine.doseAmount,
-        medicineDoseUnit: medicine.doseUnit,
+        medicineName: occurrence.treatmentPeriodId
+          ? medicineForTreatmentPeriod(medicine, medicine.treatmentPeriods!.find((period) => period.id === occurrence.treatmentPeriodId)!).name
+          : medicine.name,
+        medicineType: occurrence.treatmentPeriodId
+          ? medicineForTreatmentPeriod(medicine, medicine.treatmentPeriods!.find((period) => period.id === occurrence.treatmentPeriodId)!).type
+          : medicine.type,
+        medicineStrength: occurrence.treatmentPeriodId
+          ? medicineForTreatmentPeriod(medicine, medicine.treatmentPeriods!.find((period) => period.id === occurrence.treatmentPeriodId)!).strength
+          : medicine.strength,
+        medicineDoseAmount: occurrence.treatmentPeriodId
+          ? medicineForTreatmentPeriod(medicine, medicine.treatmentPeriods!.find((period) => period.id === occurrence.treatmentPeriodId)!).doseAmount
+          : medicine.doseAmount,
+        medicineDoseUnit: occurrence.treatmentPeriodId
+          ? medicineForTreatmentPeriod(medicine, medicine.treatmentPeriods!.find((period) => period.id === occurrence.treatmentPeriodId)!).doseUnit
+          : medicine.doseUnit,
+        medicinePrescribingDoctor: occurrence.treatmentPeriodId
+          ? medicineForTreatmentPeriod(medicine, medicine.treatmentPeriods!.find((period) => period.id === occurrence.treatmentPeriodId)!).prescribingDoctor
+          : undefined,
       };
       const nextOccurrence = occurrences[index + 1];
 

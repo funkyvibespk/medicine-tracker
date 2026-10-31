@@ -21,6 +21,7 @@ export interface PrescribableMedicine {
 export interface PrescriptionHistoryEntry {
   id: string;
   medicineId: string;
+  treatmentPeriodId?: string;
   recordedAt: string;
   prescriptionDate?: string;
   prescribingDoctor?: string;
@@ -338,10 +339,12 @@ export function createPrescriptionHistoryEntry(
   medicine: PrescribableMedicine,
   recordedAt: string,
   id: string,
+  treatmentPeriodId?: string,
 ): PrescriptionHistoryEntry {
   return {
     id,
     medicineId: medicine.id,
+    treatmentPeriodId,
     recordedAt,
     prescriptionDate: normalizedText(medicine.prescriptionDate) || undefined,
     prescribingDoctor: normalizeDoctorName(medicine.prescribingDoctor) || undefined,
@@ -377,15 +380,16 @@ export function appendPrescriptionChange(
   updated: PrescribableMedicine,
   recordedAt: string,
   createId: () => string,
+  treatmentPeriodId?: string,
 ): PrescriptionHistoryEntry[] {
   if (samePrescriptionDetails(previous, updated)) return [...history];
 
   const medicineEntries = history.filter((entry) => entry.medicineId === previous.id);
   const latest = sortPrescriptionHistory(medicineEntries)[0];
   const next = [...history];
-  if (!latest) next.push(createPrescriptionHistoryEntry(previous, recordedAt, createId()));
-  else if (!entryMatchesMedicine(latest, previous)) next.push(createPrescriptionHistoryEntry(previous, recordedAt, createId()));
-  next.push(createPrescriptionHistoryEntry(updated, recordedAt, createId()));
+  if (!latest) next.push(createPrescriptionHistoryEntry(previous, recordedAt, createId(), treatmentPeriodId));
+  else if (!entryMatchesMedicine(latest, previous)) next.push(createPrescriptionHistoryEntry(previous, recordedAt, createId(), treatmentPeriodId));
+  next.push(createPrescriptionHistoryEntry(updated, recordedAt, createId(), treatmentPeriodId));
   return next;
 }
 

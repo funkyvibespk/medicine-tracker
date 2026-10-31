@@ -15,6 +15,8 @@ export interface DemoProfileData {
   medicines: unknown[];
   doseRecords: unknown[];
   prescriptionHistory?: PrescriptionHistoryEntry[];
+  medicineEditHistory?: unknown[];
+  inventoryTransactions?: unknown[];
   vitalReadings?: VitalReading[];
   vitalTrackDashboardEnabled?: boolean;
 }
@@ -87,8 +89,14 @@ function isProfileMedicineEntry(value: unknown): boolean {
     (value.intervalHours === undefined || isFiniteNumber(value.intervalHours)) &&
     (value.endDate === undefined || isCalendarDate(value.endDate)) &&
     (value.createdAt === undefined || typeof value.createdAt === "string") &&
+    (value.updatedAt === undefined || typeof value.updatedAt === "string") &&
+    (value.archivedAt === undefined || typeof value.archivedAt === "string") &&
     (value.scheduleRevisions === undefined ||
       (Array.isArray(value.scheduleRevisions) && value.scheduleRevisions.every(isProfileScheduleRevision))) &&
+    (value.treatmentPeriods === undefined || (Array.isArray(value.treatmentPeriods) &&
+      value.treatmentPeriods.every(isProfileTreatmentPeriod) &&
+      new Set(value.treatmentPeriods.map((period) => (period as Record<string, unknown>).id)).size === value.treatmentPeriods.length &&
+      value.treatmentPeriods.filter((period) => isRecord(period) && period.status === "active").length <= 1)) &&
     hasOptionalString(value, "prescribingDoctor") && hasOptionalString(value, "prescribingClinic") &&
     hasOptionalString(value, "prescriptionDate") && hasOptionalString(value, "prescriptionNotes") &&
     hasOptionalString(value, "composition") &&
@@ -101,6 +109,22 @@ function isProfileMedicineEntry(value: unknown): boolean {
     hasOptionalNonNegativeNumber(value, "lowStockThreshold");
 }
 
+function isProfileTreatmentPeriod(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  return isNonEmptyString(value.id) && (value.status === "active" || value.status === "discontinued" || value.status === "completed") &&
+    isCalendarDate(value.startDate) && (value.endDate === undefined || isCalendarDate(value.endDate)) &&
+    typeof value.startedAt === "string" && Number.isFinite(Date.parse(value.startedAt)) &&
+    (value.endedAt === undefined || (typeof value.endedAt === "string" && Number.isFinite(Date.parse(value.endedAt)))) &&
+    typeof value.createdAt === "string" && Number.isFinite(Date.parse(value.createdAt)) &&
+    typeof value.updatedAt === "string" && Number.isFinite(Date.parse(value.updatedAt)) &&
+    isNonEmptyString(value.medicineName) && isNonEmptyString(value.medicineType) && typeof value.medicineStrength === "string" &&
+    isFiniteNumber(value.doseAmount) && isNonEmptyString(value.frequency) && Array.isArray(value.scheduleTimes) && value.scheduleTimes.every(isClockTime) &&
+    (value.intervalHours === undefined || isFiniteNumber(value.intervalHours)) &&
+    Array.isArray(value.scheduleRevisions) && value.scheduleRevisions.every(isProfileScheduleRevision) &&
+    hasOptionalString(value, "doseUnit") && hasOptionalString(value, "prescribingDoctor") && hasOptionalString(value, "prescribingClinic") &&
+    hasOptionalString(value, "prescriptionDate") && hasOptionalString(value, "prescriptionNotes") && hasOptionalString(value, "instructions");
+}
+
 function isProfileDoseRecord(value: unknown): boolean {
   if (!isRecord(value)) return false;
   return isNonEmptyString(value.id) && isNonEmptyString(value.medicineId) &&
@@ -109,6 +133,7 @@ function isProfileDoseRecord(value: unknown): boolean {
     (value.scheduledInstant === undefined || typeof value.scheduledInstant === "string") &&
     (value.actualTakenTime === undefined || typeof value.actualTakenTime === "string") &&
     (value.isPrn === undefined || typeof value.isPrn === "boolean") &&
+    hasOptionalString(value, "treatmentPeriodId") &&
     hasOptionalString(value, "medicineName") && hasOptionalString(value, "medicineType") &&
     hasOptionalString(value, "medicineStrength") &&
     hasOptionalNonNegativeNumber(value, "medicineDoseAmount") &&
@@ -154,6 +179,12 @@ function parseProfile(raw: string, email: string): DemoProfileData {
     ((parsed as Partial<StoredProfile>).prescriptionHistory !== undefined &&
       (!Array.isArray((parsed as Partial<StoredProfile>).prescriptionHistory) ||
         !(parsed as Partial<StoredProfile>).prescriptionHistory!.every(isProfilePrescriptionEntry))) ||
+    ((parsed as Partial<StoredProfile>).medicineEditHistory !== undefined &&
+      (!Array.isArray((parsed as Partial<StoredProfile>).medicineEditHistory) ||
+        !(parsed as Partial<StoredProfile>).medicineEditHistory!.every(isProfileMedicineEditEntry))) ||
+    ((parsed as Partial<StoredProfile>).inventoryTransactions !== undefined &&
+      (!Array.isArray((parsed as Partial<StoredProfile>).inventoryTransactions) ||
+        !(parsed as Partial<StoredProfile>).inventoryTransactions!.every(isProfileInventoryTransaction))) ||
     ((parsed as Partial<StoredProfile>).vitalReadings !== undefined &&
       (!Array.isArray((parsed as Partial<StoredProfile>).vitalReadings) ||
         !(parsed as Partial<StoredProfile>).vitalReadings!.every(isProfileVitalReading))) ||
@@ -169,6 +200,8 @@ function parseProfile(raw: string, email: string): DemoProfileData {
     medicines: profile.medicines,
     doseRecords: profile.doseRecords,
     prescriptionHistory: profile.prescriptionHistory ?? [],
+    medicineEditHistory: profile.medicineEditHistory ?? [],
+    inventoryTransactions: profile.inventoryTransactions ?? [],
     vitalReadings: profile.vitalReadings ?? [],
     vitalTrackDashboardEnabled: profile.vitalTrackDashboardEnabled ?? false,
   };
@@ -181,9 +214,29 @@ function isProfilePrescriptionEntry(value: unknown): value is PrescriptionHistor
   const optionalStrings = [entry.prescriptionDate, entry.prescribingDoctor, entry.prescribingClinic, entry.prescriptionNotes, entry.doseUnit, entry.endDate, entry.instructions, entry.composition];
   return requiredStrings.every((field) => typeof field === "string") &&
     optionalStrings.every((field) => field === undefined || typeof field === "string") &&
+    (entry.treatmentPeriodId === undefined || typeof entry.treatmentPeriodId === "string") &&
     typeof entry.doseAmount === "number" && Number.isFinite(entry.doseAmount) &&
     (entry.intervalHours === undefined || (typeof entry.intervalHours === "number" && Number.isFinite(entry.intervalHours))) &&
     Array.isArray(entry.scheduleTimes) && entry.scheduleTimes.every((time) => typeof time === "string");
+}
+
+function isProfileMedicineEditEntry(value: unknown): boolean {
+  return isRecord(value) && isNonEmptyString(value.id) && isNonEmptyString(value.medicineId) &&
+    (value.treatmentPeriodId === undefined || typeof value.treatmentPeriodId === "string") &&
+    typeof value.recordedAt === "string" && Number.isFinite(Date.parse(value.recordedAt)) &&
+    Array.isArray(value.changedFields) && value.changedFields.every((field) => typeof field === "string") &&
+    isRecord(value.previous) && isRecord(value.updated);
+}
+
+function isProfileInventoryTransaction(value: unknown): boolean {
+  return isRecord(value) && isNonEmptyString(value.id) && isNonEmptyString(value.medicineId) &&
+    hasOptionalString(value, "medicineName") &&
+    (value.treatmentPeriodId === undefined || typeof value.treatmentPeriodId === "string") &&
+    typeof value.recordedAt === "string" && Number.isFinite(Date.parse(value.recordedAt)) &&
+    (value.kind === "refill" || value.kind === "adjustment" || value.kind === "dose") &&
+    isFiniteNumber(value.quantityChange) && isNonEmptyString(value.unit) &&
+    isFiniteNumber(value.balanceAfter) && value.balanceAfter >= 0 &&
+    hasOptionalNonNegativeNumber(value, "previousBalance") && hasOptionalString(value, "previousUnit");
 }
 
 function parseAssignment(raw: string): MigrationAssignment {
@@ -241,6 +294,8 @@ export function serializeDemoProfile(profile: DemoProfileData): string {
     medicines: profile.medicines,
     doseRecords: profile.doseRecords,
     prescriptionHistory: profile.prescriptionHistory ?? [],
+    medicineEditHistory: profile.medicineEditHistory ?? [],
+    inventoryTransactions: profile.inventoryTransactions ?? [],
     vitalReadings: profile.vitalReadings ?? [],
     vitalTrackDashboardEnabled: profile.vitalTrackDashboardEnabled ?? false,
   } satisfies StoredProfile);

@@ -8,7 +8,7 @@ import BottomNav from "@/components/dashboard/BottomNav";
 import WorkspaceNav from "@/components/dashboard/WorkspaceNav";
 import WorkspaceHeader from "@/components/dashboard/WorkspaceHeader";
 import WorkspacePageHeading from "@/components/dashboard/WorkspacePageHeading";
-import { estimatedDosesPerDay } from "@/lib/schedule";
+import { estimatedDosesPerDay, localDateString } from "@/lib/schedule";
 import { keepDialogFocusInside, useDialogFocusRestore } from "@/lib/accessibility";
 import { doseUnitFor, getStockStatus, inventoryUnitFor, inventoryUnitsCompatible } from "@/lib/medicineLogic";
 import { findPotentialMedicineIdentityPairs } from "@/lib/medicineIdentity";
@@ -39,7 +39,7 @@ function formatMedicineExpiryDate(value: string): string {
 }
 
 export default function MedicinesPage() {
-  const { medicines, doseRecords, prescriptionHistory, addMedicine, updateMedicine, deleteMedicine, addStock, isHydrated } = useMedicine();
+  const { medicines, doseRecords, prescriptionHistory, medicineEditHistory, inventoryTransactions, addMedicine, updateMedicine, deleteMedicine, discontinueTreatment, restartTreatment, addStock, isHydrated } = useMedicine();
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingMedicine, setEditingMedicine] = useState<Medicine | null>(null);
@@ -84,14 +84,20 @@ export default function MedicinesPage() {
         option.medicineEntryIndex === prescriptionHistoryView.draftFilters.medicineEntryIndex,
   );
   const latestPrescriptionByMedicine = new Map<string, string>();
+  const latestPrescriptionByPeriod = new Map<string, string>();
   for (const entry of orderedPrescriptionHistory) {
     if (entry.medicineId?.trim() && !latestPrescriptionByMedicine.has(entry.medicineId)) latestPrescriptionByMedicine.set(entry.medicineId, entry.id);
+    if (entry.treatmentPeriodId && !latestPrescriptionByPeriod.has(entry.treatmentPeriodId)) latestPrescriptionByPeriod.set(entry.treatmentPeriodId, entry.id);
   }
   const clearPrescriptionFilters = () => dispatchPrescriptionHistoryView({ type: "clear" });
   const renderPrescriptionEntry = (entry: (typeof orderedPrescriptionHistory)[number]) => {
     const hasMedicineId = Boolean(entry.medicineId?.trim());
-    const isCurrent = hasMedicineId && latestPrescriptionByMedicine.get(entry.medicineId) === entry.id;
-    const isTracked = hasMedicineId && medicines.some((medicine) => medicine.id === entry.medicineId);
+    const linkedMedicine = hasMedicineId ? medicines.find((medicine) => medicine.id === entry.medicineId) : undefined;
+    const linkedPeriod = entry.treatmentPeriodId ? linkedMedicine?.treatmentPeriods?.find((period) => period.id === entry.treatmentPeriodId) : undefined;
+    const isCurrent = linkedPeriod
+      ? linkedPeriod.status === "active" && latestPrescriptionByPeriod.get(linkedPeriod.id) === entry.id
+      : hasMedicineId && latestPrescriptionByMedicine.get(entry.medicineId) === entry.id;
+    const isTracked = Boolean(linkedMedicine);
     const recordedAt = new Date(entry.recordedAt);
     const recordedLabel = Number.isNaN(recordedAt.getTime()) ? "Date unavailable" : recordedAt.toLocaleString();
     const schedule = entry.frequency === "As needed (PRN)"
@@ -107,6 +113,7 @@ export default function MedicinesPage() {
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
               {!hasMedicineId ? "Medicine link unavailable" : isTracked ? (isCurrent ? "Current prescription" : "Previous prescription") : "Medicine no longer tracked"}
             </p>
+            {linkedPeriod && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Treatment period: {linkedPeriod.startDate}{linkedPeriod.endDate ? ` to ${linkedPeriod.endDate}` : " · ongoing"}</p>}
           </div>
           <span className="text-xs text-slate-500 dark:text-slate-400">Recorded in ChillDose: {recordedLabel}</span>
         </div>
@@ -364,6 +371,9 @@ export default function MedicinesPage() {
               const isOut = stockStatus === "out";
               const isUnknown = stockStatus === "unknown";
               const prescribingDoctor = normalizeDoctorName(med.prescribingDoctor);
+              const hasActiveTreatment = med.treatmentPeriods?.length
+                ? med.treatmentPeriods.some((period) => period.status === "active")
+                : !med.archivedAt && (!med.endDate || med.endDate >= localDateString());
               const dosesPerDay = estimatedDosesPerDay(med);
               const daysLeft = inventoryUnitsCompatible(med) && dosesPerDay !== null && dosesPerDay > 0 && med.doseAmount > 0
                 ? Math.floor(med.inventoryAmount / (dosesPerDay * med.doseAmount))
@@ -392,6 +402,7 @@ export default function MedicinesPage() {
                       <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${formAppearance.backgroundClass} ${formAppearance.iconClass}`}>
                         {med.type}
                       </span>
+                      {!hasActiveTreatment && <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">Treatment discontinued</span>}
                       {isOut && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-700 dark:bg-rose-900/40 dark:text-rose-300">
                           Out of stock
@@ -492,7 +503,7 @@ export default function MedicinesPage() {
               onSave={(med, options) => {
                 if (editingMedicine) {
                   const result = updateMedicine(editingMedicine.id, med);
-                  if (!result.saved) return { added: false, validationError: result.validationError };
+                  if (!result.saved) return { added: false, validationError: result.validationError, duplicateMatch: result.duplicateMatch };
                 } else {
                   const result = addMedicine(med, options);
                   if (!result.added) return result;
@@ -503,6 +514,12 @@ export default function MedicinesPage() {
               }}
               onOpenExisting={(med) => { setIsAddModalOpen(false); setEditingMedicine(med); }}
               onAddStock={(med, quantity) => { setIsAddModalOpen(false); setAddingStockMed(med); setStockToAdd(quantity); }}
+              onRestart={(med) => {
+                const result = restartTreatment(med.id, med);
+                if (result.saved) { setIsAddModalOpen(false); setEditingMedicine(null); }
+                return result;
+              }}
+              onDiscontinue={(med) => discontinueTreatment(med.id)}
               onCancel={() => { setIsAddModalOpen(false); setEditingMedicine(null); }}
             />
           </div>
@@ -536,9 +553,15 @@ export default function MedicinesPage() {
                 <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
               </svg>
             </div>
-            <h3 id="delete-medicine-title" className="text-lg font-bold text-slate-900 dark:text-white">Delete &quot;{deletingMedicine.name}&quot;?</h3>
+            {(() => {
+              const willArchive = doseRecords.some((record) => record.medicineId === deletingMedicine.id) ||
+                prescriptionHistory.some((entry) => entry.medicineId === deletingMedicine.id) ||
+                medicineEditHistory.some((entry) => entry.medicineId === deletingMedicine.id) ||
+                inventoryTransactions.some((entry) => entry.medicineId === deletingMedicine.id);
+              return <>
+            <h3 id="delete-medicine-title" className="text-lg font-bold text-slate-900 dark:text-white">{willArchive ? "Archive" : "Delete"} &quot;{deletingMedicine.name}&quot;?</h3>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-              This removes the medicine from your list. Recorded doses remain in History.
+              {willArchive ? "This stops future doses and keeps the medicine identity, inventory, and every linked history record for review or restart." : "This medicine has no linked history and will be removed from your list."}
             </p>
             <div className="mt-6 flex justify-center gap-3">
               <button
@@ -551,9 +574,11 @@ export default function MedicinesPage() {
                 onClick={() => { deleteMedicine(deletingMedicine.id); setDeletingMedicine(null); }}
                 className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-500"
               >
-                Delete
+                {willArchive ? "Archive & Preserve History" : "Delete"}
               </button>
             </div>
+              </>;
+            })()}
           </div>
         </div>
       )}

@@ -8,8 +8,9 @@ import { sortDoseHistoryRecords, sortTakenDoseRecordsNewestFirst } from "../lib/
 import { appendPrescriptionChange, buildPrescriptionHistoryFilterOptions, createEmptyPrescriptionHistoryFilters, createInitialPrescriptionHistoryViewState, createPrescriptionHistoryEntry, filterCurrentPrescriptionMedicines, filterPrescriptionHistory, getPrescriptionHistoryResults, groupPrescriptionHistoryByMedicine, hasActivePrescriptionHistoryFilters, normalizeDoctorName, prescriptionHistoryViewReducer, sortPrescriptionHistory, validatePrescriptionHistoryFilters } from "../lib/prescriptionHistory.ts";
 import { applyMedicineUpdatePreservingCreationDate, formatMedicineAddedAt, normalizeOptionalMedicineDetails, sortMedicinesNewestFirst } from "../lib/medicineList.ts";
 import { getMedicineFormAppearance } from "../lib/medicineFormIcon.ts";
+import { createTreatmentPeriod, ensureCurrentTreatmentPeriod } from "../lib/treatmentPeriods.ts";
 import { deleteVitalReading, filterVitalReadings, latestVitalReadingOnDate, sortVitalReadingsNewestFirst, upsertVitalReading, validateVitalReading, vitalReadingLabel } from "../lib/vitalTrack.ts";
-import { addScheduleBaseline, getMedicineOccurrencesForDate, getScheduledTimesForDate } from "../lib/schedule.ts";
+import { addScheduleBaseline, getMedicineOccurrencesForDate, getScheduledTimesForDate, localDateString } from "../lib/schedule.ts";
 import { ACTIVE_DEMO_EMAIL_KEY, ACTIVE_DEMO_SESSION_KEY, DOSES_STORAGE_KEY, MEDICINES_STORAGE_KEY, PROFILE_MIGRATION_STORAGE_KEY, demoProfileStorageKey, loadDemoProfile, saveDemoProfileForActiveSession, serializeDemoProfile } from "../lib/demoProfiles.ts";
 import { findBlockingMedicineIdentityMatch, findMedicineIdentityMatches, findPotentialMedicineIdentityPairs } from "../lib/medicineIdentity.ts";
 import {
@@ -748,11 +749,12 @@ test("a legitimate empty profile remains loadable and writable for its active se
     getItem: (key) => storage.get(key) ?? null,
     setItem: (key, value) => storage.set(key, value),
   };
-  const profile = { email: "empty-profile@example.invalid", medicines: [], doseRecords: [], prescriptionHistory: [], vitalReadings: [], vitalTrackDashboardEnabled: false };
+  const profile = { email: "empty-profile@example.invalid", medicines: [], doseRecords: [], prescriptionHistory: [], medicineEditHistory: [], inventoryTransactions: [], vitalReadings: [], vitalTrackDashboardEnabled: false };
   storage.set(ACTIVE_DEMO_SESSION_KEY, "active");
   storage.set(ACTIVE_DEMO_EMAIL_KEY, profile.email);
 
-  assert.deepEqual(loadDemoProfile(syntheticStorage, profile.email), profile);
+  const emptyLegacyShape = { email: profile.email, medicines: [], doseRecords: [], prescriptionHistory: [], vitalReadings: [], vitalTrackDashboardEnabled: false };
+  assert.deepEqual(loadDemoProfile(syntheticStorage, profile.email), emptyLegacyShape);
   assert.equal(saveDemoProfileForActiveSession(syntheticStorage, profile), true);
   assert.deepEqual(loadDemoProfile(syntheticStorage, profile.email), profile);
 });
@@ -1889,5 +1891,115 @@ test("malformed VitalTrack readings are rejected without replacing the saved acc
   const storage = new Map([[key, raw]]);
   assert.throws(() => loadDemoProfile({ getItem: (itemKey) => storage.get(itemKey) ?? null }, email), /could not be read safely/);
   assert.equal(storage.get(key), raw);
+});
+
+test("treatment periods preserve a medicine identity while keeping successive schedules separate", () => {
+  const created = { ...syrup({ createdAt: "2026-10-01T00:00:00.000Z", startDate: "2026-10-01", scheduleTimes: ["10:00"] }) };
+  const first = createTreatmentPeriod(created, new Date("2026-10-01T00:00:00.000Z"), "period-first");
+  first.endDate = "2026-10-01";
+  first.endedAt = new Date(2026, 9, 1, 23, 59, 59, 999).toISOString();
+  first.status = "discontinued";
+  const restarted = createTreatmentPeriod({ ...created, startDate: "2026-10-02", prescribingDoctor: "Dr. New Doctor" }, new Date("2026-10-02T00:00:00.000Z"), "period-restart");
+  restarted.prescribingDoctor = "Dr. New Doctor";
+  const medicine = { ...created, treatmentPeriods: [first, restarted] };
+
+  const previousDay = getMedicineOccurrencesForDate(medicine, "2026-10-01");
+  const restartDay = getMedicineOccurrencesForDate(medicine, "2026-10-02");
+  assert.ok(previousDay.every((occurrence) => occurrence.treatmentPeriodId === "period-first"));
+  assert.ok(restartDay.length > 0);
+  assert.ok(restartDay.every((occurrence) => occurrence.treatmentPeriodId === "period-restart"));
+  assert.equal(first.prescribingDoctor, undefined, "the prior prescription snapshot is not overwritten by the restart");
+  assert.equal(restarted.prescribingDoctor, "Dr. New Doctor");
+  assert.equal(medicine.id, created.id, "a restart retains the medicine identity");
+});
+
+test("legacy treatment hydration is additive and does not reactivate known discontinued periods", () => {
+  const legacy = syrup({ treatmentPeriods: undefined });
+  const hydrated = ensureCurrentTreatmentPeriod(legacy, new Date("2026-10-20T10:00:00.000Z"));
+  assert.equal(hydrated.id, legacy.id);
+  assert.equal(hydrated.treatmentPeriods.length, 1);
+  assert.match(hydrated.treatmentPeriods[0].id, /^legacy-current-/);
+  assert.equal(legacy.treatmentPeriods, undefined, "legacy object is not mutated");
+
+  const discontinued = { ...hydrated, treatmentPeriods: [{ ...hydrated.treatmentPeriods[0], status: "discontinued", endDate: "2026-10-19" }] };
+  const loadedAgain = ensureCurrentTreatmentPeriod(discontinued, new Date("2026-10-20T10:00:00.000Z"));
+  assert.equal(loadedAgain, discontinued, "a known ended lifecycle is not silently reactivated on load");
+  assert.equal(loadedAgain.treatmentPeriods.length, 1);
+});
+
+test("legacy current-period hydration retains today's earlier schedule without linking older records", () => {
+  const now = new Date(2026, 9, 20, 12, 0);
+  const legacy = syrup({ createdAt: "2026-10-01T08:00:00.000Z", startDate: "2026-10-01", frequency: "Once daily", intervalHours: undefined, scheduleTimes: ["08:00"] });
+  const hydrated = ensureCurrentTreatmentPeriod(legacy, now);
+  const periods = hydrated.treatmentPeriods;
+  assert.equal(periods.length, 1);
+  assert.equal(periods[0].id, `legacy-current-${legacy.id}`);
+  assert.deepEqual(getMedicineOccurrencesForDate(hydrated, localDateString(now)).map(({ scheduledTime }) => scheduledTime), ["08:00"]);
+  assert.equal(legacy.treatmentPeriods, undefined, "hydration does not rewrite the input medicine");
+});
+
+test("dose occurrence identity distinguishes explicit treatment periods and preserves period links on outcomes", () => {
+  const periodOne = { ...takenRecord("2026-10-20", "10:00", undefined, "period-dose-one"), treatmentPeriodId: "period-one", status: "overdue" };
+  const periodTwo = { ...periodOne, id: "period-dose-two", treatmentPeriodId: "period-two" };
+  assert.equal(canonicalizeOccurrenceRecords([periodOne, periodTwo]).length, 2);
+  const skipped = applySkippedDose([periodOne], { ...periodOne, status: "overdue" });
+  assert.equal(skipped.accepted, true);
+  assert.equal(skipped.doseRecords[0].treatmentPeriodId, "period-one");
+
+  const medicine = syrup({ inventoryAmount: 10 });
+  const taken = applyTakenDose([medicine], [], {
+    ...periodTwo, actualTakenTime: "2026-10-20T10:01:00.000Z", status: "taken_on_time",
+  }, 1);
+  assert.equal(taken.accepted, true);
+  assert.equal(taken.doseRecords[0].treatmentPeriodId, "period-two");
+  assert.equal(taken.medicines[0].inventoryAmount, 9);
+  assert.equal(applyTakenDose(taken.medicines, taken.doseRecords, taken.doseRecords[0], 1).accepted, false);
+  assert.equal(taken.medicines[0].inventoryAmount, 9, "duplicate action does not deduct again");
+});
+
+test("lifecycle history and stock transactions round-trip in profile storage without changing legacy fields", () => {
+  const email = "lifecycle-profile@example.invalid";
+  const medicine = syrup({ createdAt: "2026-10-01T08:00:00.000Z", updatedAt: "2026-10-03T08:00:00.000Z" });
+  const dose = { ...takenRecord("2026-10-03", "10:00", "2026-10-03T10:02:00.000Z"), treatmentPeriodId: "period-one" };
+  const period = createTreatmentPeriod(medicine, new Date("2026-10-01T08:00:00.000Z"), "period-one");
+  const profile = {
+    email, medicines: [{ ...medicine, treatmentPeriods: [period] }], doseRecords: [dose],
+    medicineEditHistory: [{ id: "edit-one", medicineId: medicine.id, treatmentPeriodId: period.id, recordedAt: "2026-10-03T10:00:00.000Z", changedFields: ["prescribingDoctor"], previous: {}, updated: {} }],
+    inventoryTransactions: [{ id: "tx-one", medicineId: medicine.id, medicineName: medicine.name, treatmentPeriodId: period.id, recordedAt: "2026-10-03T10:02:00.000Z", kind: "dose", quantityChange: -1, unit: "ml", balanceAfter: 59, previousBalance: 60, previousUnit: "ml" }],
+  };
+  const storage = new Map([[demoProfileStorageKey(email), serializeDemoProfile(profile)]]);
+  const loaded = loadDemoProfile({ getItem: (key) => storage.get(key) ?? null }, email);
+  assert.deepEqual(JSON.parse(JSON.stringify(loaded.medicines)), JSON.parse(JSON.stringify(profile.medicines)));
+  assert.deepEqual(JSON.parse(JSON.stringify(loaded.doseRecords)), JSON.parse(JSON.stringify(profile.doseRecords)));
+  assert.deepEqual(loaded.medicineEditHistory, profile.medicineEditHistory);
+  assert.deepEqual(loaded.inventoryTransactions, profile.inventoryTransactions);
+
+  const otherEmail = "lifecycle-other-account@example.invalid";
+  const otherProfile = { email: otherEmail, medicines: [], doseRecords: [], medicineEditHistory: [], inventoryTransactions: [] };
+  storage.set(demoProfileStorageKey(otherEmail), serializeDemoProfile(otherProfile));
+  const loadedOther = loadDemoProfile({ getItem: (key) => storage.get(key) ?? null }, otherEmail);
+  assert.deepEqual(loadedOther.medicineEditHistory, []);
+  assert.deepEqual(loadedOther.inventoryTransactions, []);
+  assert.equal(loadedOther.medicines.length, 0, "lifecycle metadata stays within its account profile");
+
+  const legacyEmail = "lifecycle-legacy@example.invalid";
+  storage.set(demoProfileStorageKey(legacyEmail), JSON.stringify({ version: 1, email: legacyEmail, medicines: [medicine], doseRecords: [takenRecord("2026-10-03", "10:00", undefined)] }));
+  const legacy = loadDemoProfile({ getItem: (key) => storage.get(key) ?? null }, legacyEmail);
+  assert.deepEqual(legacy.medicines, [medicine]);
+  assert.deepEqual(JSON.parse(JSON.stringify(legacy.doseRecords)), JSON.parse(JSON.stringify([takenRecord("2026-10-03", "10:00", undefined)])));
+  assert.deepEqual(legacy.medicineEditHistory, []);
+  assert.deepEqual(legacy.inventoryTransactions, []);
+});
+
+test("medicine list sorting uses latest edit time, then creation time, without mutating data", () => {
+  const medicines = [
+    { id: "old", name: "Zeta", createdAt: "2026-10-01T00:00:00.000Z" },
+    { id: "edited", name: "Beta", createdAt: "2026-10-02T00:00:00.000Z", updatedAt: "2026-10-05T00:00:00.000Z" },
+    { id: "tie-b", name: "Beta", createdAt: "2026-10-03T00:00:00.000Z" },
+    { id: "tie-a", name: "Alpha", createdAt: "2026-10-03T00:00:00.000Z" },
+  ];
+  const sorted = sortMedicinesNewestFirst(medicines);
+  assert.deepEqual(sorted.map(({ id }) => id), ["edited", "tie-a", "tie-b", "old"]);
+  assert.deepEqual(medicines.map(({ id }) => id), ["old", "edited", "tie-b", "tie-a"]);
 });
 

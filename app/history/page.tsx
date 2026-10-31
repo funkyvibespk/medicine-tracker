@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useMedicine } from "@/contexts/MedicineContext";
+import { useMedicine, type MedicineEditHistoryEntry } from "@/contexts/MedicineContext";
 import BottomNav from "@/components/dashboard/BottomNav";
 import WorkspaceNav from "@/components/dashboard/WorkspaceNav";
 import WorkspaceHeader from "@/components/dashboard/WorkspaceHeader";
 import WorkspacePageHeading from "@/components/dashboard/WorkspacePageHeading";
 import MedicineFormIcon from "@/components/dashboard/MedicineFormIcon";
-import { getMedicineOccurrencesForDate, localDateString } from "@/lib/schedule";
-import { canonicalizeOccurrenceRecords, inventoryUnitsCompatible, scheduledOccurrenceKey } from "@/lib/medicineLogic";
+import { getMedicineOccurrencesForDate, localDateString, medicineForTreatmentPeriod } from "@/lib/schedule";
+import { canonicalizeOccurrenceRecords, inventoryUnitsCompatible, sameDoseOccurrenceIdentity, scheduledOccurrenceKey } from "@/lib/medicineLogic";
 import BrandedLoadingScreen from "@/components/BrandedLoadingScreen";
 import { sortDoseHistoryRecords } from "@/lib/doseHistory";
 
@@ -42,7 +42,7 @@ function formatScheduledRecordTime(record: ScheduledRecordLabel, records: Schedu
 }
 
 export default function HistoryPage() {
-  const { medicines, doseRecords, isHydrated, recordTakenDose, skipDoseOccurrence } = useMedicine();
+  const { medicines, doseRecords, medicineEditHistory, isHydrated, recordTakenDose, skipDoseOccurrence } = useMedicine();
   const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
@@ -58,6 +58,7 @@ export default function HistoryPage() {
   }, [now]);
 
   const canonicalDoseRecords = useMemo(() => canonicalizeOccurrenceRecords(doseRecords), [doseRecords]);
+  const orderedMedicineEdits = useMemo(() => medicineEditHistory.slice().sort((a, b) => b.recordedAt.localeCompare(a.recordedAt) || b.id.localeCompare(a.id)), [medicineEditHistory]);
 
   // Include unresolved overdue occurrences so they remain actionable until the next scheduled dose is due.
   const grouped = useMemo(() => {
@@ -98,13 +99,16 @@ export default function HistoryPage() {
         );
 
         for (const occurrence of occurrences) {
-          const key = scheduledOccurrenceKey(med.id, dayStr, occurrence.scheduledTime, occurrence.scheduledInstant);
+          const key = scheduledOccurrenceKey(med.id, dayStr, occurrence.scheduledTime, occurrence.scheduledInstant, occurrence.treatmentPeriodId);
           if (countedOccurrences.has(key)) continue;
           countedOccurrences.add(key);
           countedWallTimes.add(JSON.stringify([med.id, dayStr, occurrence.scheduledTime]));
           totalScheduled++;
           const taken = canonicalDoseRecords.find(
-            (record) => record.medicineId === med.id && record.scheduledDate === dayStr && record.scheduledTime === occurrence.scheduledTime && record.actualTakenTime && (record.scheduledInstant === occurrence.scheduledInstant || (!record.scheduledInstant && wallTimeCounts.get(occurrence.scheduledTime) === 1))
+            (record) => record.actualTakenTime && sameDoseOccurrenceIdentity(record, {
+              id: `summary-${med.id}-${dayStr}-${occurrence.scheduledTime}`, medicineId: med.id, scheduledDate: dayStr,
+              scheduledTime: occurrence.scheduledTime, scheduledInstant: occurrence.scheduledInstant, treatmentPeriodId: occurrence.treatmentPeriodId,
+            }) && (!record.scheduledInstant && wallTimeCounts.get(occurrence.scheduledTime) !== 1 ? false : true)
           );
           if (taken) totalTaken++;
         }
@@ -113,7 +117,7 @@ export default function HistoryPage() {
 
     for (const record of canonicalDoseRecords) {
       if (record.isPrn || !days.includes(record.scheduledDate) || (record.status !== "missed" && record.status !== "overdue" && !record.actualTakenTime)) continue;
-      const key = scheduledOccurrenceKey(record.medicineId, record.scheduledDate, record.scheduledTime, record.scheduledInstant);
+      const key = scheduledOccurrenceKey(record.medicineId, record.scheduledDate, record.scheduledTime, record.scheduledInstant, record.treatmentPeriodId);
       if (countedOccurrences.has(key)) continue;
       if (countedWallTimes.has(JSON.stringify([record.medicineId, record.scheduledDate, record.scheduledTime]))) continue;
       if (record.scheduledDate === todayStr) {
@@ -213,8 +217,11 @@ export default function HistoryPage() {
                 <div className="space-y-2">
                   {records
                     .map((record) => {
-                      const med = getMed(record.medicineId);
+                      const storedMedicine = getMed(record.medicineId);
+                      const recordPeriod = storedMedicine?.treatmentPeriods?.find((period) => period.id === record.treatmentPeriodId);
+                      const med = storedMedicine && recordPeriod ? medicineForTreatmentPeriod(storedMedicine, recordPeriod) : storedMedicine;
                       const medicineName = record.medicineName ?? med?.name ?? "Deleted medicine";
+                      const doseAmount = record.medicineDoseAmount ?? recordPeriod?.doseAmount;
                       const ambiguousLegacyOccurrence = Boolean(med && !record.scheduledInstant && getMedicineOccurrencesForDate(med, record.scheduledDate).filter((occurrence) => occurrence.scheduledTime === record.scheduledTime).length > 1);
                       const { text, cls } = statusLabel(record.status);
 
@@ -257,15 +264,18 @@ export default function HistoryPage() {
                               <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
                                 <button
                                   type="button"
-                                  disabled={!inventoryUnitsCompatible(med) || med.inventoryAmount < med.doseAmount}
-                                  onClick={() => recordTakenDose({
-                                    ...record,
-                                    scheduledInstant: record.scheduledInstant,
-                                    actualTakenTime: new Date().toISOString(),
-                                    status: "taken_late",
-                                  }, med.doseAmount)}
+                                  disabled={!inventoryUnitsCompatible(med) || doseAmount === undefined || med.inventoryAmount < doseAmount}
+                                  onClick={() => {
+                                    if (doseAmount === undefined) return;
+                                    recordTakenDose({
+                                      ...record,
+                                      scheduledInstant: record.scheduledInstant,
+                                      actualTakenTime: new Date().toISOString(),
+                                      status: "taken_late",
+                                    }, doseAmount);
+                                  }}
                                   className="text-xs font-semibold text-teal-700 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:text-slate-400 dark:text-teal-300 dark:disabled:text-slate-500"
-                                  title={!inventoryUnitsCompatible(med) || med.inventoryAmount < med.doseAmount ? "Review available stock before recording this dose." : undefined}
+                                  title={!inventoryUnitsCompatible(med) || doseAmount === undefined || med.inventoryAmount < doseAmount ? "The historical dose quantity or available stock cannot be confirmed." : undefined}
                                 >
                                   Record as taken
                                 </button>
@@ -294,6 +304,34 @@ export default function HistoryPage() {
             ))}
           </div>
         )}
+
+        {orderedMedicineEdits.length > 0 && <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
+          <div className="mb-4"><h2 className="text-lg font-bold text-slate-900 dark:text-white">Medicine &amp; treatment changes</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">A chronological record of medicine edits and treatment periods.</p></div>
+          <ol className="divide-y divide-slate-100 dark:divide-slate-800">
+            {orderedMedicineEdits.map((entry: MedicineEditHistoryEntry) => {
+              const medicine = medicines.find((item) => item.id === entry.medicineId);
+              const name = String(entry.updated.name ?? entry.previous.name ?? medicine?.name ?? "Medicine");
+              const recordedAt = new Date(entry.recordedAt);
+              const previousValues = entry.previous as Record<string, unknown>;
+              const updatedValues = entry.updated as Record<string, unknown>;
+              const changeDetails = entry.changedFields
+                .filter((field) => !["treatmentStatus", "treatmentPeriod", "archivedAt", "scheduleRevisions", "updatedAt"].includes(field))
+                .map((field) => {
+                  const label = field.replace(/[A-Z]/g, (letter) => ` ${letter.toLowerCase()}`);
+                  const valueLabel = (value: unknown) => Array.isArray(value) ? value.join(", ") : value === undefined || value === null || value === "" ? "Not recorded" : typeof value === "object" ? "Details updated" : String(value);
+                  return `${label}: ${valueLabel(previousValues[field])} → ${valueLabel(updatedValues[field])}`;
+                });
+              const description = entry.changedFields.includes("archivedAt") ? "Medicine archived; historical records preserved."
+                : entry.changedFields.includes("treatmentPeriod") ? "A new treatment period was started."
+                  : entry.changedFields.includes("treatmentStatus") ? "Treatment discontinued."
+                    : changeDetails.length ? changeDetails.join(" · ") : "Medicine details updated.";
+              return <li key={entry.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-3 first:pt-0 last:pb-0">
+                <div className="flex min-w-0 items-center gap-2"><MedicineFormIcon type={entry.updated.type ?? entry.previous.type ?? medicine?.type} size="sm" /><div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{name}</p><p className="text-xs text-slate-500 dark:text-slate-400">{description}</p></div></div>
+                <time className="shrink-0 text-xs text-slate-500 dark:text-slate-400" dateTime={entry.recordedAt}>{Number.isNaN(recordedAt.getTime()) ? "Date unavailable" : recordedAt.toLocaleString()}</time>
+              </li>;
+            })}
+          </ol>
+        </section>}
       </main>
       </div>
 

@@ -1,6 +1,8 @@
 export interface MedicineWithCreationDate {
   id: string;
   createdAt?: string;
+  updatedAt?: string;
+  name?: string;
 }
 
 export interface OptionalMedicineDetails {
@@ -31,12 +33,12 @@ function timestamp(value: string | undefined): number | null {
 /** Sorts a derived view; dated medicines come first, newest first. */
 export function sortMedicinesNewestFirst<T extends MedicineWithCreationDate>(medicines: readonly T[]): T[] {
   return medicines
-    .map((medicine, index) => ({ medicine, index, createdAt: timestamp(medicine.createdAt) }))
+    .map((medicine, index) => ({ medicine, index, sortTime: timestamp(medicine.updatedAt) ?? timestamp(medicine.createdAt) }))
     .sort((a, b) => {
-      if (a.createdAt !== null && b.createdAt !== null && a.createdAt !== b.createdAt) return b.createdAt - a.createdAt;
-      if (a.createdAt !== null && b.createdAt === null) return -1;
-      if (a.createdAt === null && b.createdAt !== null) return 1;
-      return a.medicine.id.localeCompare(b.medicine.id) || a.index - b.index;
+      if (a.sortTime !== null && b.sortTime !== null && a.sortTime !== b.sortTime) return b.sortTime - a.sortTime;
+      if (a.sortTime !== null && b.sortTime === null) return -1;
+      if (a.sortTime === null && b.sortTime !== null) return 1;
+      return (a.medicine.name ?? "").localeCompare(b.medicine.name ?? "") || a.medicine.id.localeCompare(b.medicine.id) || a.index - b.index;
     })
     .map(({ medicine }) => medicine);
 }
