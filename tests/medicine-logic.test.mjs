@@ -1768,7 +1768,7 @@ test("prescription date changes retain previous issued date separately from reco
   ]);
 });
 
-test("prescription history filters use historical doctor, issued date, and medicine snapshots together", () => {
+test("prescription history filters use historical doctor, event date, and medicine snapshots together", () => {
   const medicineAOld = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Medicine Alpha", strength: "10 mg", prescribingDoctor: "Ahmed Khan", prescriptionDate: "2026-08-01" }), "2026-08-03T10:00:00.000Z", "alpha-old");
   const medicineANew = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Medicine Alpha", strength: "20 mg", prescribingDoctor: "Sara Noor", prescriptionDate: "2026-09-10" }), "2026-09-12T10:00:00.000Z", "alpha-new");
   const medicineBOld = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-b", name: "Medicine Beta", prescribingDoctor: "Dr. Ahmed Khan", prescriptionDate: "2026-08-15" }), "2026-08-16T10:00:00.000Z", "beta-old");
@@ -1808,12 +1808,12 @@ test("missing medicine IDs stay in separate history groups and unknown IDs remai
   assert.deepEqual(groups.map((group) => group.entries[0].id), ["missing-a", "missing-b", "unknown-a", "unknown-b"]);
 });
 
-test("history filters match older snapshots before grouping and clearing filters restores every entry", () => {
+test("history filters match older snapshots before grouping while empty filters do not display records", () => {
   const older = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Medicine Alpha", strength: "10 mg", prescribingDoctor: "Dr. Ahmed Khan", prescriptionDate: "2026-08-01" }), "2026-08-03T10:00:00.000Z", "alpha-old-filter");
   const latest = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Medicine Alpha", strength: "20 mg", prescribingDoctor: "Sara Noor", prescriptionDate: "2026-09-10" }), "2026-09-12T10:00:00.000Z", "alpha-latest-filter");
   const other = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-b", name: "Medicine Beta", prescribingDoctor: "Ahmed Khan", prescriptionDate: "2026-08-15" }), "2026-08-16T10:00:00.000Z", "beta-filter");
   const entries = [older, latest, other];
-  const olderMatch = filterPrescriptionHistory(entries, { doctor: "ahmed", medicine: "alpha", prescriptionDateFrom: "2026-08-01", prescriptionDateTo: "2026-08-01" });
+  const olderMatch = filterPrescriptionHistory(entries, { doctor: "ahmed", medicine: "alpha", prescriptionDateFrom: "2026-08-03", prescriptionDateTo: "2026-08-03" });
   const groups = groupPrescriptionHistoryByMedicine(olderMatch);
   assert.deepEqual(groups.map((group) => group.entries.map((entry) => entry.id)), [["alpha-old-filter"]]);
   assert.deepEqual(filterPrescriptionHistory(entries, { doctor: "nobody" }), []);
@@ -1823,7 +1823,7 @@ test("history filters match older snapshots before grouping and clearing filters
   assert.equal(hasActivePrescriptionHistoryFilters(activeFilters), true);
   const clearedFilters = createEmptyPrescriptionHistoryFilters();
   assert.equal(hasActivePrescriptionHistoryFilters(clearedFilters), false);
-  assert.deepEqual(filterPrescriptionHistory(entries, clearedFilters).map((entry) => entry.id), entries.map((entry) => entry.id));
+  assert.deepEqual(filterPrescriptionHistory(entries, clearedFilters), entries, "the pure filter helper returns matches; the view state decides whether they are displayed");
   assert.equal(hasActivePrescriptionHistoryFilters({ doctor: "   ", medicine: "  " }), false);
 });
 
@@ -1879,20 +1879,32 @@ test("prescription filter options select all snapshots for the normalized doctor
   assert.ok(doctor && medicine);
   assert.deepEqual(filterPrescriptionHistory(ordered, { doctorIdentity: doctor.doctorIdentity }).map((entry) => entry.id), ["rigix-new-match", "rigix-old-match"]);
   assert.deepEqual(filterPrescriptionHistory(ordered, { medicineId: medicine.medicineId }).map((entry) => entry.id), ["rigix-new-match", "rigix-old-match"]);
-  assert.deepEqual(filterPrescriptionHistory(ordered, { prescriptionDateFrom: "2026-08-01", prescriptionDateTo: "2026-08-01" }).map((entry) => entry.id), ["rigix-old-match", "unrelated"]);
-  assert.deepEqual(filterPrescriptionHistory(ordered, { prescriptionDateFrom: "2026-08-02", prescriptionDateTo: "2026-10-20" }).map((entry) => entry.id), ["rigix-new-match"]);
-  assert.deepEqual(filterPrescriptionHistory(ordered, { prescriptionDateFrom: "2026-08-02" }).map((entry) => entry.id), ["rigix-new-match"]);
+  assert.deepEqual(filterPrescriptionHistory(ordered, { prescriptionDateFrom: "2026-08-03", prescriptionDateTo: "2026-08-03" }).map((entry) => entry.id), ["rigix-old-match"]);
+  assert.deepEqual(filterPrescriptionHistory(ordered, { prescriptionDateFrom: "2026-08-02", prescriptionDateTo: "2026-10-21" }).map((entry) => entry.id), ["rigix-new-match", "rigix-old-match", "unrelated"]);
+  assert.deepEqual(filterPrescriptionHistory(ordered, { prescriptionDateFrom: "2026-08-02" }).map((entry) => entry.id), ["rigix-new-match", "rigix-old-match", "unrelated"]);
 });
 
-test("prescription history defaults to all and filter edits and clearing update results immediately", () => {
+test("history event-date filters use recorded timestamps, inclusive day boundaries, and AND with other filters", () => {
+  const localTimestamp = (day, hour, minute, second = 0, millisecond = 0) => new Date(2026, 7, day, hour, minute, second, millisecond).toISOString();
+  const insideStart = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Alpha", prescribingDoctor: "Doctor A", prescriptionDate: "2026-01-01" }), localTimestamp(1, 0, 0), "event-start");
+  const insideEnd = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Alpha", prescribingDoctor: "Doctor A", prescriptionDate: "2026-12-31" }), localTimestamp(1, 23, 59, 59, 999), "event-end");
+  const outside = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Alpha", prescribingDoctor: "Doctor A", prescriptionDate: "2026-08-01" }), localTimestamp(2, 0, 0), "event-outside");
+  const unknownTime = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Alpha", prescribingDoctor: "Doctor A", prescriptionDate: "2026-08-01" }), undefined, "event-unknown");
+  const otherDoctor = createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-b", name: "Beta", prescribingDoctor: "Doctor B" }), localTimestamp(1, 12, 0), "event-other-doctor");
+  const entries = [insideStart, insideEnd, outside, unknownTime, otherDoctor];
+  assert.deepEqual(filterPrescriptionHistory(entries, { prescriptionDateFrom: "2026-08-01", prescriptionDateTo: "2026-08-01" }).map((entry) => entry.id), ["event-start", "event-end", "event-other-doctor"]);
+  assert.deepEqual(filterPrescriptionHistory(entries, { doctorIdentity: "doctor a", medicineId: "med-a", prescriptionDateFrom: "2026-08-01", prescriptionDateTo: "2026-08-01" }).map((entry) => entry.id), ["event-start", "event-end"]);
+});
+
+test("prescription history remains hidden until filters are selected and clearing returns to empty state", () => {
   const entries = [
     createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Alpha", prescribingDoctor: "Doctor A", prescriptionDate: "2026-08-01" }), "2026-08-02T10:00:00.000Z", "alpha"),
     createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-b", name: "Beta", prescribingDoctor: "Doctor B", prescriptionDate: "2026-09-01" }), "2026-09-02T10:00:00.000Z", "beta"),
   ];
   let state = createInitialPrescriptionHistoryViewState();
   let results = getPrescriptionHistoryResults(entries, state);
-  assert.equal(results.mode, "all");
-  assert.deepEqual(results.entries.map((entry) => entry.id), ["alpha", "beta"]);
+  assert.equal(results.mode, "hidden");
+  assert.deepEqual(results.entries, []);
   assert.equal(results.totalCount, 2);
 
   state = prescriptionHistoryViewReducer(state, { type: "edit-filters", updates: { doctorIdentity: "doctor a" } });
@@ -1908,16 +1920,10 @@ test("prescription history defaults to all and filter edits and clearing update 
   assert.equal(results.countLabel, "0 matching snapshots of 2 total");
   assert.deepEqual(results.entries, []);
 
-  state = prescriptionHistoryViewReducer(state, { type: "show-all" });
-  results = getPrescriptionHistoryResults(entries, state);
-  assert.equal(results.mode, "all");
-  assert.equal(results.countLabel, "Showing all 2 snapshots");
-  assert.equal(results.resultCount, 2);
-
   state = prescriptionHistoryViewReducer(state, { type: "clear" });
   results = getPrescriptionHistoryResults(entries, state);
-  assert.equal(results.mode, "all");
-  assert.equal(results.countLabel, "Showing all 2 snapshots");
+  assert.equal(results.mode, "hidden");
+  assert.deepEqual(results.entries, []);
   assert.equal(hasActivePrescriptionHistoryFilters(state.draftFilters), false);
 });
 

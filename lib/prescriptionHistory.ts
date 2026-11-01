@@ -184,18 +184,16 @@ export function buildPrescriptionHistoryFilterOptions(
 export interface PrescriptionHistoryViewState {
   draftFilters: PrescriptionHistoryFilters;
   appliedFilters: PrescriptionHistoryFilters | null;
-  showAll: boolean;
   validationMessage: string | null;
 }
 
 export type PrescriptionHistoryViewAction =
   | { type: "edit-filters"; updates: Partial<PrescriptionHistoryFilters> }
   | { type: "apply-filters" }
-  | { type: "show-all" }
   | { type: "clear" };
 
 export function createInitialPrescriptionHistoryViewState(): PrescriptionHistoryViewState {
-  return { draftFilters: createEmptyPrescriptionHistoryFilters(), appliedFilters: null, showAll: true, validationMessage: null };
+  return { draftFilters: createEmptyPrescriptionHistoryFilters(), appliedFilters: null, validationMessage: null };
 }
 
 /** Pure UI-state transitions keep unapplied edits from presenting stale results. */
@@ -209,23 +207,19 @@ export function prescriptionHistoryViewReducer(
     return {
       draftFilters,
       appliedFilters: validationMessage || !hasActivePrescriptionHistoryFilters(draftFilters) ? null : { ...draftFilters },
-      showAll: !validationMessage && !hasActivePrescriptionHistoryFilters(draftFilters),
       validationMessage,
     };
   }
   if (action.type === "apply-filters") {
     const validationMessage = validatePrescriptionHistoryFilters(state.draftFilters);
     return validationMessage
-      ? { ...state, appliedFilters: null, showAll: false, validationMessage }
-      : { ...state, appliedFilters: { ...state.draftFilters }, showAll: false, validationMessage: null };
+      ? { ...state, appliedFilters: null, validationMessage }
+      : { ...state, appliedFilters: { ...state.draftFilters }, validationMessage: null };
   }
-  if (action.type === "show-all") {
-    return { draftFilters: createEmptyPrescriptionHistoryFilters(), appliedFilters: null, showAll: true, validationMessage: null };
-  }
-  return { ...createInitialPrescriptionHistoryViewState(), showAll: true };
+  return createInitialPrescriptionHistoryViewState();
 }
 
-export type PrescriptionHistoryResultsMode = "hidden" | "filtered" | "all";
+export type PrescriptionHistoryResultsMode = "hidden" | "filtered";
 
 export interface PrescriptionHistoryResults {
   mode: PrescriptionHistoryResultsMode;
@@ -239,17 +233,11 @@ export function getPrescriptionHistoryResults(
   entries: readonly PrescriptionHistoryEntry[],
   state: PrescriptionHistoryViewState,
 ): PrescriptionHistoryResults {
-  const mode: PrescriptionHistoryResultsMode = state.showAll ? "all" : state.appliedFilters ? "filtered" : "hidden";
-  const results = mode === "all"
-    ? [...entries]
-    : mode === "filtered"
-      ? filterPrescriptionHistory(entries, state.appliedFilters!)
-      : [];
-  const countLabel = mode === "all"
-    ? `Showing all ${entries.length} snapshot${entries.length === 1 ? "" : "s"}`
-    : mode === "filtered"
-      ? `${results.length} matching snapshot${results.length === 1 ? "" : "s"} of ${entries.length} total`
-      : "Results hidden";
+  const mode: PrescriptionHistoryResultsMode = state.appliedFilters && hasActivePrescriptionHistoryFilters(state.appliedFilters) ? "filtered" : "hidden";
+  const results = mode === "filtered" ? filterPrescriptionHistory(entries, state.appliedFilters!) : [];
+  const countLabel = mode === "filtered"
+    ? `${results.length} matching snapshot${results.length === 1 ? "" : "s"} of ${entries.length} total`
+    : "Results hidden";
   return { mode, entries: results, totalCount: entries.length, resultCount: results.length, countLabel };
 }
 
@@ -280,15 +268,23 @@ export function filterPrescriptionHistory(
 ): PrescriptionHistoryEntry[] {
   const doctorQuery = normalizeDoctorNameForSearch(filters.doctor);
   const medicineQuery = normalizedText(filters.medicine).toLowerCase();
+  const eventDate = (recordedAt?: string) => {
+    if (!recordedAt) return "";
+    const date = new Date(recordedAt);
+    if (!Number.isFinite(date.getTime())) return "";
+    const pad = (value: number) => String(value).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  };
   return entries.filter((entry, index) => {
+    const recordedDate = eventDate(entry.recordedAt);
     if (filters.doctorIdentity && normalizeDoctorNameForSearch(entry.prescribingDoctor) !== filters.doctorIdentity) return false;
     if (doctorQuery && !normalizeDoctorNameForSearch(entry.prescribingDoctor).includes(doctorQuery)) return false;
     if (medicineQuery && !entry.medicineName.toLowerCase().includes(medicineQuery)) return false;
     if (filters.medicineId && entry.medicineId !== filters.medicineId) return false;
     if (filters.medicineEntryId && entry.id !== filters.medicineEntryId) return false;
     if (filters.medicineEntryIndex !== undefined && index !== filters.medicineEntryIndex) return false;
-    if (filters.prescriptionDateFrom && (!entry.prescriptionDate || entry.prescriptionDate < filters.prescriptionDateFrom)) return false;
-    if (filters.prescriptionDateTo && (!entry.prescriptionDate || entry.prescriptionDate > filters.prescriptionDateTo)) return false;
+    if (filters.prescriptionDateFrom && (!recordedDate || recordedDate < filters.prescriptionDateFrom)) return false;
+    if (filters.prescriptionDateTo && (!recordedDate || recordedDate > filters.prescriptionDateTo)) return false;
     return true;
   });
 }

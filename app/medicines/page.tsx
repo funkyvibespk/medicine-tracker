@@ -16,7 +16,6 @@ import BrandedLoadingScreen from "@/components/BrandedLoadingScreen";
 import {
   buildPrescriptionHistoryFilterOptions,
   createInitialPrescriptionHistoryViewState,
-  filterCurrentPrescriptionMedicines,
   getPrescriptionHistoryResults,
   groupPrescriptionHistoryByMedicine,
   hasActivePrescriptionHistoryFilters,
@@ -70,12 +69,6 @@ export default function MedicinesPage() {
   const prescriptionHistoryResultsMode = prescriptionHistoryResults.mode;
   const filteredPrescriptionHistory = prescriptionHistoryResults.entries;
   const prescriptionHistoryGroups = groupPrescriptionHistoryByMedicine(filteredPrescriptionHistory);
-  const currentMedicineFilter = prescriptionHistoryView.appliedFilters ?? prescriptionHistoryView.draftFilters;
-  const currentMedicineDetails = prescriptionHistoryResultsMode === "all"
-    ? currentMedicines.filter((medicine) => !orderedPrescriptionHistory.some((entry) => entry.medicineId === medicine.id))
-    : prescriptionHistoryResultsMode === "filtered"
-      ? filterCurrentPrescriptionMedicines(currentMedicines, currentMedicineFilter)
-      : [];
   const hasPrescriptionFilters = hasActivePrescriptionHistoryFilters(prescriptionHistoryView.draftFilters);
   const canClearPrescriptionHistory = hasPrescriptionFilters || prescriptionHistoryView.appliedFilters !== null;
   const selectedMedicineOption = prescriptionHistoryFilterOptions.medicines.find((option) =>
@@ -138,37 +131,6 @@ export default function MedicinesPage() {
       </li>
     );
   };
-  const renderCurrentMedicineDetails = (medicine: Medicine) => {
-    const schedule = medicine.frequency === "As needed (PRN)"
-      ? "As needed (PRN)"
-      : medicine.frequency === "Every X hours"
-        ? `Every ${medicine.intervalHours ?? 8} hours${medicine.scheduleTimes.length ? ` · ${medicine.scheduleTimes.join(", ")}` : ""}`
-        : `${medicine.frequency}${medicine.scheduleTimes.length ? ` · ${medicine.scheduleTimes.join(", ")}` : ""}`;
-    return (
-      <article key={medicine.id} className="rounded-xl border border-sky-100 bg-sky-50/60 p-4 dark:border-sky-900/50 dark:bg-sky-950/20">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h3 className="font-semibold text-slate-900 dark:text-white">{medicine.name} <span className="font-normal text-slate-500 dark:text-slate-400">· {medicine.type}{medicine.strength ? ` · ${medicine.strength}` : ""}</span></h3>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Current saved medicine details · not a historical snapshot</p>
-          </div>
-          {medicine.createdAt && <span className="text-xs text-slate-500 dark:text-slate-400">Added {formatMedicineAddedAt(medicine.createdAt)}</span>}
-        </div>
-        <dl className="mt-3 grid gap-x-6 gap-y-1 text-sm text-slate-700 dark:text-slate-300 sm:grid-cols-2">
-          <div><dt className="inline font-medium">Doctor: </dt><dd className="inline">{normalizeDoctorName(medicine.prescribingDoctor) || "Not recorded"}</dd></div>
-          {medicine.prescribingClinic && <div><dt className="inline font-medium">Clinic/Hospital: </dt><dd className="inline">{medicine.prescribingClinic}</dd></div>}
-          {medicine.prescriptionDate && <div><dt className="inline font-medium">Prescription issued: </dt><dd className="inline">{medicine.prescriptionDate}</dd></div>}
-          <div><dt className="inline font-medium">Dose and schedule: </dt><dd className="inline">{medicine.doseAmount} {medicine.doseUnit || "units"} · {schedule}</dd></div>
-          <div><dt className="inline font-medium">Treatment dates: </dt><dd className="inline">{medicine.startDate}{medicine.endDate ? ` to ${medicine.endDate}` : " · ongoing"}</dd></div>
-          {medicine.instructions && <div><dt className="inline font-medium">Instructions: </dt><dd className="inline">{medicine.instructions}</dd></div>}
-          {medicine.prescriptionNotes && <div><dt className="inline font-medium">Prescription notes: </dt><dd className="inline">{medicine.prescriptionNotes}</dd></div>}
-          {medicine.composition && <div><dt className="inline font-medium">Composition: </dt><dd className="inline">{medicine.composition}</dd></div>}
-          {medicine.expiryDate && <div><dt className="inline font-medium">Expiry date: </dt><dd className="inline">{medicine.expiryDate}</dd></div>}
-          <div><dt className="inline font-medium">Current stock: </dt><dd className="inline">{medicine.inventoryAmount} {inventoryUnitFor(medicine)}</dd></div>
-        </dl>
-      </article>
-    );
-  };
-
   return (
     <div className="workspace-app min-h-screen bg-slate-50 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-100 pb-24">
 
@@ -198,7 +160,7 @@ export default function MedicinesPage() {
             </svg>
           </summary>
           <div className="border-t border-slate-100 px-4 pb-4 pt-4 dark:border-slate-800 sm:px-5 sm:pb-5">
-            <p className="text-sm text-slate-600 dark:text-slate-300">All saved snapshots are shown by default. Filters update the results as you make a selection. Older medicines without saved snapshots are identified separately using their current saved details.</p>
+            <p className="text-sm text-slate-600 dark:text-slate-300">Select a doctor, medicine, or history date to view matching prescription history.</p>
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-700 dark:bg-slate-950/50 sm:p-4">
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <div>
@@ -232,11 +194,11 @@ export default function MedicinesPage() {
                   </select>
                 </div>
                 <div>
-                  <label htmlFor="prescriptionDateFrom" className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Prescription date from</label>
+                  <label htmlFor="prescriptionDateFrom" className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">History event date from</label>
                   <input id="prescriptionDateFrom" type="date" value={prescriptionHistoryView.draftFilters.prescriptionDateFrom ?? ""} onChange={(event) => dispatchPrescriptionHistoryView({ type: "edit-filters", updates: { prescriptionDateFrom: event.target.value } })} className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
                 </div>
                 <div>
-                  <label htmlFor="prescriptionDateTo" className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Prescription date to</label>
+                  <label htmlFor="prescriptionDateTo" className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">History event date to</label>
                   <input id="prescriptionDateTo" type="date" value={prescriptionHistoryView.draftFilters.prescriptionDateTo ?? ""} onChange={(event) => dispatchPrescriptionHistoryView({ type: "edit-filters", updates: { prescriptionDateTo: event.target.value } })} className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
                 </div>
               </div>
@@ -250,30 +212,20 @@ export default function MedicinesPage() {
             {prescriptionHistoryResultsMode === "hidden" ? (
               <p className="mt-4 rounded-xl border border-dashed border-slate-200 px-4 py-5 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300">
                 {orderedPrescriptionHistory.length === 0
-                  ? "No prescription snapshots are saved for this account yet. New medicine prescriptions and meaningful prescribed-detail changes will appear here."
-                  : "Correct the date range to display matching records."}
+                  ? "No prescription snapshots are saved for this account yet. Select a doctor, medicine, or history event date to view matching history when records are available."
+                  : prescriptionHistoryView.validationMessage
+                    ? "Correct the selected filters to display matching history."
+                    : "Select a doctor, medicine, or history event date to view prescription history. Clear filters to hide the results again."}
               </p>
             ) : (
               <>
                 <p className="mt-4 text-sm font-semibold text-slate-700 dark:text-slate-200" aria-live="polite">
                   {prescriptionHistoryResults.countLabel}
                 </p>
-                {currentMedicineDetails.length > 0 && (
-                  <section className="mt-4 space-y-3" aria-label="Current medicine details">
-                    {prescriptionHistoryResultsMode === "all" && <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Current details for medicines without saved history</h3>}
-                    {currentMedicineDetails.map(renderCurrentMedicineDetails)}
-                  </section>
-                )}
                 {filteredPrescriptionHistory.length === 0 ? (
-                  currentMedicineDetails.length > 0 ? (
-                    <p className="mt-3 rounded-xl border border-dashed border-slate-200 px-4 py-5 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                      {prescriptionHistoryResultsMode === "all" ? "No saved prescription snapshots are available; current details are labeled separately above." : "No saved prescription snapshots matched these filters; matching current medicine details are shown above."}
-                    </p>
-                  ) : (
-                    <div className="mt-3 rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center dark:border-slate-700">
-                      <p className="text-sm text-slate-500 dark:text-slate-400">{prescriptionHistoryResultsMode === "all" ? "No prescription snapshots are saved for this account yet." : "No records matched these filters. Adjust your selections or clear them to start again."}</p>
-                    </div>
-                  )
+                  <div className="mt-3 rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center dark:border-slate-700">
+                    <p className="text-sm text-slate-500 dark:text-slate-400">No records matched these filters. Adjust your selections or clear them to start again.</p>
+                  </div>
                 ) : (
                   <div className="mt-3 space-y-3">
                     {prescriptionHistoryGroups.map((group) => {
