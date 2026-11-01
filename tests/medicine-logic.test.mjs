@@ -9,7 +9,7 @@ import { appendPrescriptionChange, buildPrescriptionHistoryFilterOptions, create
 import { applyMedicineUpdatePreservingCreationDate, formatMedicineAddedAt, normalizeOptionalMedicineDetails, sortMedicinesNewestFirst } from "../lib/medicineList.ts";
 import { getMedicineFormAppearance } from "../lib/medicineFormIcon.ts";
 import { hasMedicineFormChanges, medicineDuplicateAction, medicineFormCloseAction, medicineFormEscapeAction, unsavedChangesChoiceAction } from "../lib/medicineFormUX.ts";
-import { createTreatmentPeriod, ensureCurrentTreatmentPeriod } from "../lib/treatmentPeriods.ts";
+import { archiveMedicineForDeletion, createTreatmentPeriod, ensureCurrentTreatmentPeriod } from "../lib/treatmentPeriods.ts";
 import { deleteVitalReading, filterVitalReadings, latestVitalReadingOnDate, sortVitalReadingsNewestFirst, upsertVitalReading, validateVitalReading, vitalReadingLabel } from "../lib/vitalTrack.ts";
 import { addScheduleBaseline, getMedicineOccurrencesForDate, getScheduledTimesForDate, localDateString } from "../lib/schedule.ts";
 import { ACTIVE_DEMO_EMAIL_KEY, ACTIVE_DEMO_SESSION_KEY, DOSES_STORAGE_KEY, MEDICINES_STORAGE_KEY, PROFILE_MIGRATION_STORAGE_KEY, demoProfileStorageKey, loadDemoProfile, saveDemoProfileForActiveSession, serializeDemoProfile } from "../lib/demoProfiles.ts";
@@ -26,6 +26,7 @@ import {
   getOccurrenceTimeStatus,
   getOutstandingMissedOccurrences,
   getStockStatus,
+  hasDependentMedicineHistory,
   getUnscheduledSameDayMissedOccurrences,
   inventoryUnitFor,
   isOccurrenceOverdue,
@@ -571,6 +572,66 @@ test("unknown legacy schedule periods do not create missed occurrences, and dele
   const afterDelete = reconcileHistoricalMissedOccurrences([], materialized, now);
   assert.equal(afterDelete, materialized);
   assert.equal(afterDelete.some((record) => record.medicineId === known.id), true);
+});
+
+test("deletion archives medicines with dependent history and permanently deletes only history-free records", () => {
+  const medicine = syrup({ id: "deletion-target", treatmentPeriods: undefined, scheduleRevisions: undefined });
+  const emptyHistory = { doseRecords: [], prescriptionHistory: [], medicineEditHistory: [], inventoryTransactions: [] };
+  assert.equal(hasDependentMedicineHistory(medicine, emptyHistory), false);
+  assert.equal(hasDependentMedicineHistory({ ...medicine, treatmentPeriods: [{}] }, emptyHistory), true);
+  assert.equal(hasDependentMedicineHistory({ ...medicine, scheduleRevisions: [{}] }, emptyHistory), true);
+  for (const source of Object.keys(emptyHistory)) {
+    assert.equal(hasDependentMedicineHistory(medicine, { ...emptyHistory, [source]: [{ medicineId: medicine.id }] }), true, `${source} keeps the medicine archived`);
+  }
+  assert.equal(hasDependentMedicineHistory(medicine, { ...emptyHistory, doseRecords: [{ medicineId: "another-medicine" }] }), false);
+});
+
+test("archiving preserves identity and historical records while stopping current schedules and reconciliation", () => {
+  const startedAt = localIso("2026-10-14", "00:00");
+  const medicine = syrup({
+    id: "archived-schedule",
+    frequency: "Once daily",
+    intervalHours: undefined,
+    scheduleTimes: ["08:00"],
+    startDate: "2026-10-14",
+    createdAt: startedAt,
+    scheduleRevisions: [revision(startedAt, { frequency: "Once daily", scheduleTimes: ["08:00"] })],
+  });
+  const period = createTreatmentPeriod(medicine, new Date(startedAt), "period-to-archive");
+  const withPeriod = { ...medicine, treatmentPeriods: [period] };
+  const archivedAt = localIso("2026-10-15", "07:00");
+  const archived = archiveMedicineForDeletion(withPeriod, archivedAt, "2026-10-15");
+  const previousTaken = { ...takenRecord("2026-10-14", "08:00", localIso("2026-10-14", "08:05")), medicineId: medicine.id };
+  const previousSkipped = { ...takenRecord("2026-10-14", "20:00", undefined), medicineId: medicine.id, status: "skipped" };
+  const previousMissed = { ...takenRecord("2026-10-13", "08:00", undefined), medicineId: medicine.id, status: "missed" };
+  const doseRecords = [previousTaken, previousSkipped, previousMissed];
+  const history = [createPrescriptionHistoryEntry(prescriptionMedicine({ id: medicine.id }), "2026-10-14T09:00:00.000Z", "archive-linked-history")];
+  const inventoryTransactions = [{ id: "archive-inventory", medicineId: medicine.id, medicineName: medicine.name, treatmentPeriodId: period.id, recordedAt: "2026-10-14T09:00:00.000Z", kind: "dose", quantityChange: -0.5, unit: "ml", balanceAfter: 59.5, previousBalance: 60, previousUnit: "ml" }];
+
+  assert.equal(archived.id, medicine.id);
+  assert.equal(archived.archivedAt, archivedAt);
+  assert.equal(archived.inventoryAmount, medicine.inventoryAmount);
+  assert.equal(archived.treatmentPeriods[0].status, "discontinued");
+  assert.equal(archived.treatmentPeriods[0].endedAt, archivedAt);
+  assert.equal(withPeriod.treatmentPeriods[0].status, "active", "archiving does not mutate the original period");
+  assert.deepEqual(doseRecords.map((record) => record.status), ["taken_late", "skipped", "missed"]);
+  assert.equal(history[0].medicineId, medicine.id);
+  assert.equal(inventoryTransactions[0].medicineId, medicine.id);
+
+  const email = "archived-medicine@example.invalid";
+  const profile = { email, medicines: [archived], doseRecords, prescriptionHistory: history, inventoryTransactions };
+  const storageKey = demoProfileStorageKey(email);
+  const stored = new Map([[storageKey, serializeDemoProfile(profile)]]);
+  const reloaded = loadDemoProfile({ getItem: (key) => stored.get(key) ?? null }, email);
+  assert.equal(reloaded.medicines[0].id, medicine.id);
+  assert.equal(reloaded.medicines[0].archivedAt, archivedAt);
+  assert.deepEqual(reloaded.doseRecords.map((record) => record.status), ["taken_late", "skipped", "missed"]);
+  assert.equal(reloaded.prescriptionHistory[0].id, "archive-linked-history");
+  assert.equal(reloaded.inventoryTransactions[0].id, "archive-inventory");
+
+  assert.equal(getMedicineOccurrencesForDate(archived, "2026-10-14").length, 1, "past scheduled occurrences remain available for historical views");
+  assert.equal(getMedicineOccurrencesForDate(archived, "2026-10-15").length, 0, "a future occurrence after deletion is not generated");
+  assert.deepEqual(reconcileHistoricalMissedOccurrences([archived], doseRecords, new Date(localIso("2026-10-15", "12:00"))), doseRecords, "archived schedules do not generate new missed records or rewrite saved outcomes");
 });
 
 test("legacy local profile shape remains readable and new optional schedule history round-trips", () => {

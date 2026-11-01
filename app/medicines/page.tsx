@@ -55,14 +55,15 @@ export default function MedicinesPage() {
 
   if (!isHydrated) return <BrandedLoadingScreen />;
 
-  const newestFirstMedicines = sortMedicinesNewestFirst(medicines);
+  const currentMedicines = medicines.filter((medicine) => !medicine.archivedAt);
+  const newestFirstMedicines = sortMedicinesNewestFirst(currentMedicines);
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const filtered = newestFirstMedicines.filter((m) =>
     m.name.toLowerCase().includes(normalizedSearchQuery) ||
     m.strength.toLowerCase().includes(normalizedSearchQuery) ||
     m.type.toLowerCase().includes(normalizedSearchQuery)
   );
-  const possibleDuplicatePairs = findPotentialMedicineIdentityPairs(medicines);
+  const possibleDuplicatePairs = findPotentialMedicineIdentityPairs(currentMedicines);
   const orderedPrescriptionHistory = sortPrescriptionHistory(prescriptionHistory);
   const prescriptionHistoryFilterOptions = buildPrescriptionHistoryFilterOptions(orderedPrescriptionHistory, medicines);
   const prescriptionHistoryResults = getPrescriptionHistoryResults(orderedPrescriptionHistory, prescriptionHistoryView);
@@ -71,9 +72,9 @@ export default function MedicinesPage() {
   const prescriptionHistoryGroups = groupPrescriptionHistoryByMedicine(filteredPrescriptionHistory);
   const currentMedicineFilter = prescriptionHistoryView.appliedFilters ?? prescriptionHistoryView.draftFilters;
   const currentMedicineDetails = prescriptionHistoryResultsMode === "all"
-    ? medicines.filter((medicine) => !orderedPrescriptionHistory.some((entry) => entry.medicineId === medicine.id))
+    ? currentMedicines.filter((medicine) => !orderedPrescriptionHistory.some((entry) => entry.medicineId === medicine.id))
     : prescriptionHistoryResultsMode === "filtered"
-      ? filterCurrentPrescriptionMedicines(medicines, currentMedicineFilter)
+      ? filterCurrentPrescriptionMedicines(currentMedicines, currentMedicineFilter)
       : [];
   const hasPrescriptionFilters = hasActivePrescriptionHistoryFilters(prescriptionHistoryView.draftFilters);
   const canClearPrescriptionHistory = hasPrescriptionFilters || prescriptionHistoryView.appliedFilters !== null;
@@ -179,7 +180,7 @@ export default function MedicinesPage() {
 
         <WorkspacePageHeading
           title="My Medicines"
-          description={`${medicines.length} medication${medicines.length !== 1 ? "s" : ""} tracked`}
+          description={`${currentMedicines.length} medication${currentMedicines.length !== 1 ? "s" : ""} tracked`}
           action={<button aria-label="Add medicine" onClick={() => setIsAddModalOpen(true)} className="workspace-primary-button inline-flex min-h-10 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition-all active:scale-95">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="M5 12h14" /><path d="M12 5v14" /></svg>
             <span>Add Medicine</span>
@@ -329,7 +330,7 @@ export default function MedicinesPage() {
         )}
 
         {/* Search */}
-        {medicines.length > 0 && (
+        {currentMedicines.length > 0 && (
           <div className="mb-6 relative">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" aria-hidden="true">
               <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
@@ -346,7 +347,7 @@ export default function MedicinesPage() {
         )}
 
         {/* Empty state */}
-        {medicines.length === 0 ? (
+        {currentMedicines.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white/50 px-6 py-20 text-center dark:border-slate-800 dark:bg-slate-900/30">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-teal-50 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400 mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8">

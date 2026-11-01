@@ -26,6 +26,25 @@ export interface DoseInventorySnapshotRecord {
   inventoryRemainingUnit?: string;
 }
 
+export interface MedicineDeletionHistorySources {
+  doseRecords: readonly { medicineId: string }[];
+  prescriptionHistory: readonly { medicineId: string }[];
+  medicineEditHistory: readonly { medicineId: string }[];
+  inventoryTransactions: readonly { medicineId: string }[];
+}
+
+/** Keep a medicine tombstone whenever a related historical record or period exists. */
+export function hasDependentMedicineHistory(
+  medicine: { id: string; treatmentPeriods?: readonly unknown[]; scheduleRevisions?: readonly unknown[] },
+  sources: MedicineDeletionHistorySources,
+): boolean {
+  return Boolean(medicine.treatmentPeriods?.length || medicine.scheduleRevisions?.length) ||
+    sources.doseRecords.some((record) => record.medicineId === medicine.id) ||
+    sources.prescriptionHistory.some((record) => record.medicineId === medicine.id) ||
+    sources.medicineEditHistory.some((record) => record.medicineId === medicine.id) ||
+    sources.inventoryTransactions.some((record) => record.medicineId === medicine.id);
+}
+
 export interface DoseDetailsSnapshotRecord {
   medicineName?: string;
   medicineType?: string;

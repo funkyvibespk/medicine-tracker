@@ -36,7 +36,7 @@ export function getMissedDoseNotificationsForToday(medicines: Medicine[], doseRe
 
   return outstandingMisses.filter((record) => {
     const medicine = medicinesById.get(record.medicineId);
-    if (!medicine) return false;
+    if (!medicine || medicine.archivedAt) return false;
 
     const occurrencesOnScheduledDate = getMedicineOccurrencesForDate(medicine, record.scheduledDate);
     let occurrenceIndex = -1;
@@ -81,6 +81,7 @@ export function reconcileHistoricalMissedOccurrences(
   const missedOccurrences: MissedOccurrenceCandidate[] = [];
 
   for (const medicine of medicines) {
+    if (medicine.archivedAt) continue;
     if (!medicine.scheduleRevisions?.length) continue;
 
     const earliestDate = firstKnownDate(medicine);

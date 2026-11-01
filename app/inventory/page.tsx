@@ -20,10 +20,11 @@ export default function InventoryPage() {
 
   if (!isHydrated) return <BrandedLoadingScreen />;
 
-  const addingMed = medicines.find((m) => m.id === addingStockMedId) ?? null;
+  const currentMedicines = medicines.filter((medicine) => !medicine.archivedAt);
+  const addingMed = currentMedicines.find((m) => m.id === addingStockMedId) ?? null;
 
   // Compute stock status for each medicine
-  const withStatus = medicines.map((med) => {
+  const withStatus = currentMedicines.map((med) => {
     const dosesPerDay = estimatedDosesPerDay(med);
     const daysLeft =
       inventoryUnitsCompatible(med) && dosesPerDay !== null && dosesPerDay > 0 && med.doseAmount > 0
@@ -57,7 +58,7 @@ export default function InventoryPage() {
       <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
 
         <WorkspacePageHeading title="Inventory" description={<>
-          {medicines.length} medicine{medicines.length !== 1 ? "s" : ""}
+          {currentMedicines.length} medicine{currentMedicines.length !== 1 ? "s" : ""}
           {outCount > 0 && <span className="ml-1.5 font-medium text-rose-600 dark:text-rose-400">· {outCount} out of stock</span>}
           {lowCount > 0 && <span className="ml-1.5 font-medium text-amber-600 dark:text-amber-400">· {lowCount} low</span>}
         </>} />
@@ -84,7 +85,7 @@ export default function InventoryPage() {
         )}
 
         {/* Empty state */}
-        {medicines.length === 0 ? (
+        {currentMedicines.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white/50 px-6 py-20 text-center dark:border-slate-800 dark:bg-slate-900/30">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-teal-50 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400 mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8">

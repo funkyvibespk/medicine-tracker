@@ -40,6 +40,19 @@ export function createTreatmentPeriod(medicine: Medicine, now = new Date(), peri
   };
 }
 
+/** Archive an existing medicine identity without altering its saved historical snapshots. */
+export function archiveMedicineForDeletion(medicine: Medicine, archivedAt: string, endDate: string): Medicine {
+  return {
+    ...medicine,
+    archivedAt,
+    endDate,
+    updatedAt: archivedAt,
+    treatmentPeriods: (medicine.treatmentPeriods ?? []).map((period) => period.status === "active"
+      ? { ...period, status: "discontinued", endDate, endedAt: archivedAt, updatedAt: archivedAt }
+      : period),
+  };
+}
+
 /** Add a current-period baseline without assigning historical records to it. */
 export function ensureCurrentTreatmentPeriod(medicine: Medicine, now = new Date()): Medicine {
   // Once period history exists, never infer a new active treatment on reload.

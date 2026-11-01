@@ -260,7 +260,7 @@ export default function HistoryPage() {
                             {(record.status === "missed" || record.status === "overdue") && !record.actualTakenTime && ambiguousLegacyOccurrence && (
                               <p role="status" className="mt-1 text-xs text-amber-700 dark:text-amber-300">This older dose falls in a repeated local time and cannot be assigned safely.</p>
                             )}
-                            {(record.status === "missed" || record.status === "overdue") && !record.actualTakenTime && med && !ambiguousLegacyOccurrence && (
+                            {(record.status === "missed" || record.status === "overdue") && !record.actualTakenTime && med && !med.archivedAt && !ambiguousLegacyOccurrence && (
                               <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
                                 <button
                                   type="button"

@@ -9,12 +9,12 @@ import {
   saveDemoProfileForActiveSession,
 } from "@/lib/demoProfiles";
 import { DEMO_SESSION_CHANGE_EVENT, readDemoSession } from "@/lib/demoSession";
-import { applySkippedDose, applyTakenDose, inventoryUnitFor, sameDoseOccurrenceIdentity, validateInventoryThreshold, validateMedicineStrength, withDoseDetailsSnapshot } from "@/lib/medicineLogic";
+import { applySkippedDose, applyTakenDose, hasDependentMedicineHistory, inventoryUnitFor, sameDoseOccurrenceIdentity, validateInventoryThreshold, validateMedicineStrength, withDoseDetailsSnapshot } from "@/lib/medicineLogic";
 import { findBlockingMedicineIdentityMatch } from "@/lib/medicineIdentity";
 import { reconcileHistoricalMissedOccurrences } from "@/lib/missedDoses";
 import { addScheduleBaseline, localDateString, medicineForTreatmentPeriod } from "@/lib/schedule";
 import { applyMedicineUpdatePreservingCreationDate } from "@/lib/medicineList";
-import { createTreatmentPeriod, ensureCurrentTreatmentPeriod, treatmentPeriodForInstant } from "@/lib/treatmentPeriods";
+import { archiveMedicineForDeletion, createTreatmentPeriod, ensureCurrentTreatmentPeriod, treatmentPeriodForInstant } from "@/lib/treatmentPeriods";
 import {
   appendPrescriptionChange,
   createPrescriptionHistoryEntry,
@@ -540,23 +540,17 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
   const deleteMedicine = (id: string) => {
     if (!canMutateActiveProfile()) return;
     const medicine = medicinesRef.current.find((item) => item.id === id);
-    if (!medicine) return;
-    const hasHistory = doseRecordsRef.current.some((record) => record.medicineId === id) ||
-      prescriptionHistoryRef.current.some((entry) => entry.medicineId === id) ||
-      medicineEditHistoryRef.current.some((entry) => entry.medicineId === id) ||
-      inventoryTransactionsRef.current.some((entry) => entry.medicineId === id);
+    if (!medicine || medicine.archivedAt) return;
+    const hasHistory = hasDependentMedicineHistory(medicine, {
+      doseRecords: doseRecordsRef.current,
+      prescriptionHistory: prescriptionHistoryRef.current,
+      medicineEditHistory: medicineEditHistoryRef.current,
+      inventoryTransactions: inventoryTransactionsRef.current,
+    });
     if (hasHistory) {
       const now = new Date();
       const recordedAt = now.toISOString();
-      const archived: Medicine = {
-        ...medicine,
-        archivedAt: recordedAt,
-        endDate: localDateString(now),
-        updatedAt: recordedAt,
-        treatmentPeriods: (medicine.treatmentPeriods ?? []).map((period) => period.status === "active"
-          ? { ...period, status: "discontinued", endDate: localDateString(now), endedAt: recordedAt, updatedAt: recordedAt }
-          : period),
-      };
+      const archived = archiveMedicineForDeletion(medicine, recordedAt, localDateString(now));
       prescriptionHistoryRef.current = [...prescriptionHistoryRef.current, createPrescriptionHistoryEntry(
         archived,
         recordedAt,
@@ -676,7 +670,7 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
   const recordTakenDose = (record: DoseRecord, doseAmount: number) => {
     if (!canMutateActiveProfile()) return false;
     const medicine = medicinesRef.current.find((item) => item.id === record.medicineId);
-    if (!medicine) return false;
+    if (!medicine || medicine.archivedAt) return false;
     const existingRecord = doseRecordsRef.current.find((saved) => sameDoseOccurrence(saved, record));
     const occurrenceAt = record.scheduledInstant ? new Date(record.scheduledInstant) : new Date(`${record.scheduledDate}T${record.scheduledTime}`);
     const period = record.treatmentPeriodId
@@ -720,6 +714,7 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
     if (!canMutateActiveProfile()) return false;
     if (record.status !== "overdue" && record.status !== "missed") return false;
     const medicine = medicinesRef.current.find((item) => item.id === record.medicineId);
+    if (!medicine || medicine.archivedAt) return false;
     const existingRecord = doseRecordsRef.current.find((saved) => sameDoseOccurrence(saved, record));
     const period = medicine && record.treatmentPeriodId ? medicine.treatmentPeriods?.find((item) => item.id === record.treatmentPeriodId) : undefined;
     const periodMedicine = medicine && period ? medicineForTreatmentPeriod(medicine, period) : medicine;
@@ -747,7 +742,7 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
   const updateInventory = (medicineId: string, amount: number) => {
     if (!canMutateActiveProfile() || !Number.isFinite(amount) || amount < 0) return;
     const existing = medicinesRef.current.find((medicine) => medicine.id === medicineId);
-    if (!existing) return;
+    if (!existing || existing.archivedAt) return;
     const nextAmount = amount;
     const activePeriod = existing.treatmentPeriods?.find((period) => period.status === "active" && (!period.endDate || period.endDate >= localDateString()));
     medicinesRef.current = medicinesRef.current.map((m) => m.id === medicineId
@@ -766,7 +761,7 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
   const addStock = (medicineId: string, amountToAdd: number) => {
     if (!canMutateActiveProfile() || !Number.isFinite(amountToAdd) || amountToAdd <= 0) return;
     const existing = medicinesRef.current.find((medicine) => medicine.id === medicineId);
-    if (!existing) return;
+    if (!existing || existing.archivedAt) return;
     const balanceAfter = existing.inventoryAmount + amountToAdd;
     const activePeriod = existing.treatmentPeriods?.find((period) => period.status === "active");
     medicinesRef.current = medicinesRef.current.map((m) => m.id === medicineId

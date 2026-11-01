@@ -109,12 +109,13 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
 
   const todayStr = useMemo(() => localDateString(now), [now]);
   const canonicalDoseRecords = useMemo(() => canonicalizeOccurrenceRecords(doseRecords), [doseRecords]);
+  const currentMedicines = useMemo(() => medicines.filter((medicine) => !medicine.archivedAt), [medicines]);
 
   // Compute doses for today
   const todaysDoses = useMemo(() => {
     const doses: ScheduledDose[] = [];
     
-    medicines.forEach((med) => {
+    currentMedicines.forEach((med) => {
       const occurrences = getMedicineOccurrencesForDate(med, todayStr);
       const wallTimeCounts = new Map<string, number>();
       for (const occurrence of occurrences) wallTimeCounts.set(occurrence.scheduledTime, (wallTimeCounts.get(occurrence.scheduledTime) ?? 0) + 1);
@@ -201,7 +202,7 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
       }
     }
     for (const record of getUnscheduledSameDayMissedOccurrences(canonicalDoseRecords, todayStr, representedOccurrenceKeys)) {
-      const storedMedicine = medicines.find((medicine) => medicine.id === record.medicineId);
+      const storedMedicine = currentMedicines.find((medicine) => medicine.id === record.medicineId);
       if (!storedMedicine) continue;
       const recordPeriod = storedMedicine.treatmentPeriods?.find((period) => period.id === record.treatmentPeriodId);
       const med = recordPeriod ? medicineForTreatmentPeriod(storedMedicine, recordPeriod) : storedMedicine;
@@ -231,7 +232,7 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
       });
     }
 
-    const nearbyScheduleOccurrences = medicines.flatMap((med) => [-1, 0, 1].flatMap((dayOffset) => {
+    const nearbyScheduleOccurrences = currentMedicines.flatMap((med) => [-1, 0, 1].flatMap((dayOffset) => {
       const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + dayOffset);
       const dateString = localDateString(date);
       return getMedicineOccurrencesForDate(med, dateString).map((occurrence) => ({
@@ -256,7 +257,7 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
       }
       return a.scheduledDateObj.getTime() - b.scheduledDateObj.getTime();
     });
-  }, [medicines, canonicalDoseRecords, now, todayStr]);
+  }, [currentMedicines, canonicalDoseRecords, now, todayStr]);
 
   const doseLists = useMemo(() => ({
     all: filterDoseRecords(todaysDoses, "all"),
@@ -270,13 +271,13 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
     () => getMissedDoseNotificationsForToday(medicines, doseRecords, todayStr),
     [medicines, doseRecords, todayStr],
   );
-  const hasActivePeriodToday = (medicine: Medicine) => medicine.treatmentPeriods?.length
+  const hasActivePeriodToday = (medicine: Medicine) => !medicine.archivedAt && (medicine.treatmentPeriods?.length
     ? medicine.treatmentPeriods.some((period) => period.status === "active" && period.startDate <= todayStr && (!period.endDate || period.endDate >= todayStr))
-    : !medicine.archivedAt && medicine.startDate <= todayStr && (!medicine.endDate || medicine.endDate >= todayStr);
-  const prnMedicines = medicines.filter((med) => hasActivePeriodToday(med) && isPrnMedicine(med));
+    : medicine.startDate <= todayStr && (!medicine.endDate || medicine.endDate >= todayStr));
+  const prnMedicines = currentMedicines.filter((med) => hasActivePeriodToday(med) && isPrnMedicine(med));
 
-  const activeMedicines = medicines.filter(hasActivePeriodToday);
-  const stockAlerts = medicines.filter((medicine) => {
+  const activeMedicines = currentMedicines.filter(hasActivePeriodToday);
+  const stockAlerts = currentMedicines.filter((medicine) => {
     if (!hasActivePeriodToday(medicine)) return false;
     const status = getStockStatus(medicine);
     return status !== "available";
@@ -669,7 +670,7 @@ export default function DashboardExperience({ view }: { view: "overview" | "dose
 
         {/* Medicines List or Empty State */}
         {view === "doses" && <div className="order-2 mb-6">
-        {medicines.length === 0 ? (
+        {currentMedicines.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white/50 px-6 py-16 text-center dark:border-slate-800 dark:bg-slate-900/30">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-50 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7"><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M8 12h8" /><path d="M12 8v8" /></svg>
