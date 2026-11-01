@@ -151,16 +151,12 @@ export function buildPrescriptionHistoryFilterOptions(
   });
 
   currentMedicines.forEach((medicine) => {
-    const doctor = normalizeDoctorNameForSearch(medicine.prescribingDoctor);
-    if (doctor && !doctors.has(doctor)) {
-      doctors.set(doctor, { value: doctor, label: normalizeDoctorName(medicine.prescribingDoctor), doctor, doctorIdentity: doctor });
-    }
-
     const value = `medicine:${medicine.id}`;
     const existing = medicines.get(value);
     const details = `${medicine.name} · ${medicine.type}${medicine.strength ? ` · ${medicine.strength}` : ""}`;
+    // Current metadata may refresh a label only for a medicine already linked
+    // to at least one saved snapshot. It must not create history filter options.
     if (existing) existing.label = details;
-    else medicines.set(value, { value, label: details, medicineId: medicine.id });
   });
 
   const medicineOptions = [...medicines.values()];

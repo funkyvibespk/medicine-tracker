@@ -1827,24 +1827,36 @@ test("history filters match older snapshots before grouping while empty filters 
   assert.equal(hasActivePrescriptionHistoryFilters({ doctor: "   ", medicine: "  " }), false);
 });
 
-test("prescription filter options include doctors and medicines from snapshots and current saved medicines", () => {
+test("prescription filter options are snapshot-backed; current metadata only refreshes a linked medicine label", () => {
   const entries = [
     createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Rigix", type: "Tablet", strength: "10 mg", prescribingDoctor: "Sadia" }), "2026-10-20T10:00:00.000Z", "rigix-new"),
     createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Rigix", type: "Tablet", strength: "5 mg", prescribingDoctor: "Dr.Sadia" }), "2026-10-10T10:00:00.000Z", "rigix-old"),
     createPrescriptionHistoryEntry(prescriptionMedicine({ id: "deleted-id", name: "Archived medicine", type: "Capsule", strength: "20 mg", prescribingDoctor: "DR. SADIA" }), "2026-10-09T10:00:00.000Z", "archived"),
     createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-b", name: "Other medicine", prescribingDoctor: "  " }), "2026-10-08T10:00:00.000Z", "other"),
   ];
+  const originalEntries = structuredClone(entries);
   const options = buildPrescriptionHistoryFilterOptions(entries, [
-    { id: "legacy-med", name: "Legacy medicine", type: "Syrup", strength: "5 mg", prescribingDoctor: "Dr. Recent Physician" },
+    { id: "med-a", name: "Rigix current label", type: "Tablet", strength: "10 mg", prescribingDoctor: "Dr. Recent Physician" },
+    { id: "legacy-med", name: "Legacy medicine", type: "Syrup", strength: "5 mg", prescribingDoctor: "Dr. Unmatched Physician" },
   ]);
   assert.equal(options.doctors.filter((option) => option.doctorIdentity === "sadia").length, 1);
   assert.equal(options.doctors.find((option) => option.doctorIdentity === "sadia")?.label, "Dr. Sadia");
   assert.equal(options.doctors.some((option) => option.label === "Dr."), false);
-  assert.equal(options.medicines.length, 4);
-  assert.equal(options.medicines.find((option) => option.medicineId === "med-a")?.label, "Rigix · Tablet · 10 mg");
+  assert.equal(options.medicines.length, 3);
+  assert.equal(options.medicines.find((option) => option.medicineId === "med-a")?.label, "Rigix current label · Tablet · 10 mg");
   assert.equal(options.medicines.some((option) => option.medicineId === "deleted-id"), true);
-  assert.equal(options.doctors.some((option) => option.doctorIdentity === "recent physician"), true);
-  assert.equal(options.medicines.some((option) => option.medicineId === "legacy-med" && option.label === "Legacy medicine · Syrup · 5 mg"), true);
+  assert.equal(options.doctors.some((option) => option.doctorIdentity === "recent physician" || option.doctorIdentity === "unmatched physician"), false);
+  assert.equal(options.medicines.some((option) => option.medicineId === "legacy-med"), false);
+  for (const option of options.doctors) {
+    assert.ok(entries.some((entry) => normalizeDoctorName(entry.prescribingDoctor) === option.label));
+  }
+  for (const option of options.medicines) {
+    const matchingSnapshots = option.medicineId
+      ? entries.filter((entry) => entry.medicineId === option.medicineId)
+      : entries.filter((entry) => entry.id === option.medicineEntryId);
+    assert.ok(matchingSnapshots.length > 0, `filter option ${option.label} must match a saved snapshot`);
+  }
+  assert.deepEqual(entries, originalEntries, "building filter options does not modify historical snapshots");
 });
 
 test("medicine filter options distinguish same-label IDs and unlinked snapshots without merging", () => {
