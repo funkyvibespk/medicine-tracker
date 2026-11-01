@@ -1896,6 +1896,43 @@ test("history event-date filters use recorded timestamps, inclusive day boundari
   assert.deepEqual(filterPrescriptionHistory(entries, { doctorIdentity: "doctor a", medicineId: "med-a", prescriptionDateFrom: "2026-08-01", prescriptionDateTo: "2026-08-01" }).map((entry) => entry.id), ["event-start", "event-end"]);
 });
 
+test("prescription history filters keep matching snapshots when current medicine stock is zero", () => {
+  const snapshot = createPrescriptionHistoryEntry(
+    prescriptionMedicine({ id: "zero-stock-medicine", name: "Zero Stock Medicine", prescribingDoctor: "Dr. Example" }),
+    "2026-10-30T14:25:00.000Z",
+    "zero-stock-prescription",
+    undefined,
+    "changed",
+  );
+  const currentMedicine = {
+    id: "zero-stock-medicine",
+    name: "Zero Stock Medicine",
+    type: "Tablet",
+    strength: "10 mg",
+    prescribingDoctor: "Dr. Example",
+    inventoryAmount: 0,
+    archivedAt: undefined,
+  };
+  const options = buildPrescriptionHistoryFilterOptions([snapshot], [currentMedicine]);
+  const medicineFilter = options.medicines.find((option) => option.medicineId === currentMedicine.id);
+  const doctorFilter = options.doctors.find((option) => option.doctorIdentity === "example");
+  assert.ok(medicineFilter && doctorFilter);
+
+  const state = prescriptionHistoryViewReducer(createInitialPrescriptionHistoryViewState(), {
+    type: "edit-filters",
+    updates: {
+      medicineId: medicineFilter.medicineId,
+      doctorIdentity: doctorFilter.doctorIdentity,
+      prescriptionDateFrom: "2026-10-30",
+      prescriptionDateTo: "2026-10-30",
+    },
+  });
+  const results = getPrescriptionHistoryResults([snapshot], state);
+  assert.equal(results.mode, "filtered");
+  assert.deepEqual(results.entries.map((entry) => entry.id), ["zero-stock-prescription"]);
+  assert.equal(results.entries[0].recordedAt, "2026-10-30T14:25:00.000Z");
+});
+
 test("prescription history remains hidden until filters are selected and clearing returns to empty state", () => {
   const entries = [
     createPrescriptionHistoryEntry(prescriptionMedicine({ id: "med-a", name: "Alpha", prescribingDoctor: "Doctor A", prescriptionDate: "2026-08-01" }), "2026-08-02T10:00:00.000Z", "alpha"),
