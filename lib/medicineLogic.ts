@@ -80,6 +80,10 @@ export interface InventoryThresholdValidation {
   lowStockThresholdError?: string;
 }
 
+export function validateMedicineStrength(strength: unknown): string | null {
+  return typeof strength === "string" && strength.trim() ? null : "Strength is required.";
+}
+
 export function parseNonNegativeQuantity(value: unknown): number | null {
   if (typeof value === "string" && value.trim() === "") return null;
   const quantity = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;

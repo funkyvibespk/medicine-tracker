@@ -9,7 +9,7 @@ import {
   saveDemoProfileForActiveSession,
 } from "@/lib/demoProfiles";
 import { DEMO_SESSION_CHANGE_EVENT, readDemoSession } from "@/lib/demoSession";
-import { applySkippedDose, applyTakenDose, inventoryUnitFor, sameDoseOccurrenceIdentity, validateInventoryThreshold, withDoseDetailsSnapshot } from "@/lib/medicineLogic";
+import { applySkippedDose, applyTakenDose, inventoryUnitFor, sameDoseOccurrenceIdentity, validateInventoryThreshold, validateMedicineStrength, withDoseDetailsSnapshot } from "@/lib/medicineLogic";
 import { findBlockingMedicineIdentityMatch } from "@/lib/medicineIdentity";
 import { reconcileHistoricalMissedOccurrences } from "@/lib/missedDoses";
 import { addScheduleBaseline, localDateString, medicineForTreatmentPeriod } from "@/lib/schedule";
@@ -420,6 +420,8 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
 
   const addMedicine = (med: Medicine, options?: { allowLikelyDuplicate?: boolean }): AddMedicineResult => {
     if (!canMutateActiveProfile()) return { added: false, validationError: "The active local profile is not ready. Reload it before making changes." };
+    const strengthError = validateMedicineStrength(med.strength);
+    if (strengthError) return { added: false, validationError: strengthError };
     const quantityValidation = validateInventoryThreshold(med.inventoryAmount, med.lowStockThreshold);
     if (!quantityValidation.valid) {
       return { added: false, validationError: quantityValidation.inventoryAmountError ?? quantityValidation.lowStockThresholdError };
@@ -442,7 +444,7 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
         endDate: med.endDate,
       }],
     };
-    const prescriptionEntry = createPrescriptionHistoryEntry(medicine, createdAt, createPrescriptionHistoryId(), medicine.treatmentPeriods.find((item) => item.status === "active")?.id ?? period.id);
+    const prescriptionEntry = createPrescriptionHistoryEntry(medicine, new Date().toISOString(), createPrescriptionHistoryId(), medicine.treatmentPeriods.find((item) => item.status === "active")?.id ?? period.id, "added");
     prescriptionHistoryRef.current = [...prescriptionHistoryRef.current, prescriptionEntry];
     setPrescriptionHistory(prescriptionHistoryRef.current);
     medicinesRef.current = [...medicinesRef.current, medicine];
@@ -457,6 +459,8 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
     const now = new Date();
     const recordedAt = now.toISOString();
     const safeUpdates: Partial<Medicine> = { ...updates, id: existing.id, createdAt: existing.createdAt, updatedAt: recordedAt };
+    const strengthError = validateMedicineStrength(safeUpdates.strength ?? existing.strength);
+    if (strengthError) return { saved: false, validationError: strengthError };
     const quantityValidation = validateInventoryThreshold(
       safeUpdates.inventoryAmount ?? existing.inventoryAmount,
       safeUpdates.lowStockThreshold ?? existing.lowStockThreshold,
@@ -543,24 +547,42 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
       inventoryTransactionsRef.current.some((entry) => entry.medicineId === id);
     if (hasHistory) {
       const now = new Date();
+      const recordedAt = now.toISOString();
       const archived: Medicine = {
         ...medicine,
-        archivedAt: now.toISOString(),
+        archivedAt: recordedAt,
         endDate: localDateString(now),
-        updatedAt: now.toISOString(),
+        updatedAt: recordedAt,
         treatmentPeriods: (medicine.treatmentPeriods ?? []).map((period) => period.status === "active"
-          ? { ...period, status: "discontinued", endDate: localDateString(now), endedAt: now.toISOString(), updatedAt: now.toISOString() }
+          ? { ...period, status: "discontinued", endDate: localDateString(now), endedAt: recordedAt, updatedAt: recordedAt }
           : period),
       };
+      prescriptionHistoryRef.current = [...prescriptionHistoryRef.current, createPrescriptionHistoryEntry(
+        archived,
+        recordedAt,
+        createPrescriptionHistoryId(),
+        medicine.treatmentPeriods?.find((period) => period.status === "active")?.id,
+        "archived",
+      )];
+      setPrescriptionHistory(prescriptionHistoryRef.current);
       medicineEditHistoryRef.current = [...medicineEditHistoryRef.current, {
         id: createHistoryId("medicine-edit"), medicineId: id,
         treatmentPeriodId: medicine.treatmentPeriods?.find((period) => period.status === "active")?.id,
-        recordedAt: now.toISOString(), changedFields: ["archivedAt", "treatmentStatus"],
+        recordedAt, changedFields: ["archivedAt", "treatmentStatus"],
         previous: { ...medicine }, updated: { ...archived },
       }];
       setMedicineEditHistory(medicineEditHistoryRef.current);
       medicinesRef.current = medicinesRef.current.map((item) => item.id === id ? archived : item);
     } else {
+      const recordedAt = new Date().toISOString();
+      prescriptionHistoryRef.current = [...prescriptionHistoryRef.current, createPrescriptionHistoryEntry(
+        medicine,
+        recordedAt,
+        createPrescriptionHistoryId(),
+        undefined,
+        "deleted",
+      )];
+      setPrescriptionHistory(prescriptionHistoryRef.current);
       medicinesRef.current = medicinesRef.current.filter((item) => item.id !== id);
     }
     setMedicines(medicinesRef.current);
@@ -582,7 +604,7 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
         ? { ...period, status: "discontinued", endDate: localDateString(now), endedAt: recordedAt, updatedAt: recordedAt }
         : period),
     };
-    const history = appendPrescriptionChange(prescriptionHistoryRef.current, existing, nextMedicine, recordedAt, createPrescriptionHistoryId, activePeriod.id);
+    const history = appendPrescriptionChange(prescriptionHistoryRef.current, existing, nextMedicine, recordedAt, createPrescriptionHistoryId, activePeriod.id, "discontinued");
     if (history.length !== prescriptionHistoryRef.current.length) {
       prescriptionHistoryRef.current = history;
       setPrescriptionHistory(history);
@@ -604,6 +626,8 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
     const today = localDateString();
     if (existing.treatmentPeriods?.some((period) => period.status === "active" && (!period.endDate || period.endDate >= today))) return { saved: false, validationError: "This medicine already has an active treatment period." };
     const candidate = { ...existing, ...updates, id: existing.id };
+    const strengthError = validateMedicineStrength(candidate.strength);
+    if (strengthError) return { saved: false, validationError: strengthError };
     const duplicateMatch = findBlockingMedicineIdentityMatch(candidate, medicinesRef.current);
     if (duplicateMatch) return { saved: false, duplicateMatch };
     if (candidate.name !== existing.name || candidate.type !== existing.type || candidate.strength !== existing.strength) {
@@ -636,7 +660,7 @@ export function MedicineProvider({ children }: { children: ReactNode }) {
       }];
       setInventoryTransactions(inventoryTransactionsRef.current);
     }
-    const history = [...prescriptionHistoryRef.current, createPrescriptionHistoryEntry(nextMedicine, recordedAt, createPrescriptionHistoryId(), period.id)];
+    const history = [...prescriptionHistoryRef.current, createPrescriptionHistoryEntry(nextMedicine, recordedAt, createPrescriptionHistoryId(), period.id, "restarted")];
     prescriptionHistoryRef.current = history;
     setPrescriptionHistory(history);
     medicineEditHistoryRef.current = [...medicineEditHistoryRef.current, {

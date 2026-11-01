@@ -98,8 +98,16 @@ export default function MedicinesPage() {
       ? linkedPeriod.status === "active" && latestPrescriptionByPeriod.get(linkedPeriod.id) === entry.id
       : hasMedicineId && latestPrescriptionByMedicine.get(entry.medicineId) === entry.id;
     const isTracked = Boolean(linkedMedicine);
-    const recordedAt = new Date(entry.recordedAt);
+    const recordedAt = new Date(entry.recordedAt ?? "");
     const recordedLabel = Number.isNaN(recordedAt.getTime()) ? "Date unavailable" : recordedAt.toLocaleString();
+    const eventLabel = entry.eventType === "added" ? "Added medicine"
+      : entry.eventType === "changed" ? "Prescription changed"
+        : entry.eventType === "discontinued" ? "Treatment discontinued"
+          : entry.eventType === "restarted" ? "Treatment restarted"
+            : entry.eventType === "archived" ? "Medicine archived"
+              : entry.eventType === "deleted" ? "Medicine deleted"
+                : entry.eventType === "previous" ? "Previous details"
+                  : null;
     const schedule = entry.frequency === "As needed (PRN)"
       ? "As needed (PRN)"
       : entry.frequency === "Every X hours"
@@ -111,7 +119,7 @@ export default function MedicinesPage() {
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-2"><MedicineFormIcon type={entry.medicineType} size="sm" /><p className="min-w-0 font-semibold text-slate-900 dark:text-white">{entry.medicineName} <span className="font-normal text-slate-500 dark:text-slate-400">· {entry.medicineType}{entry.strength ? ` · ${entry.strength}` : ""}</span></p></div>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              {!hasMedicineId ? "Medicine link unavailable" : isTracked ? (isCurrent ? "Current prescription" : "Previous prescription") : "Medicine no longer tracked"}
+              {eventLabel ?? (!hasMedicineId ? "Medicine link unavailable" : isTracked ? (isCurrent ? "Current prescription" : "Previous prescription") : "Medicine no longer tracked")}
             </p>
             {linkedPeriod && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Treatment period: {linkedPeriod.startDate}{linkedPeriod.endDate ? ` to ${linkedPeriod.endDate}` : " · ongoing"}</p>}
           </div>

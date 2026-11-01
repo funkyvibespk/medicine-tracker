@@ -9,6 +9,7 @@ export interface PrescribableMedicine {
   intervalHours?: number;
   scheduleTimes: string[];
   startDate: string;
+  createdAt?: string;
   endDate?: string;
   instructions?: string;
   prescribingDoctor?: string;
@@ -22,7 +23,8 @@ export interface PrescriptionHistoryEntry {
   id: string;
   medicineId: string;
   treatmentPeriodId?: string;
-  recordedAt: string;
+  recordedAt?: string;
+  eventType?: "added" | "changed" | "discontinued" | "restarted" | "archived" | "deleted" | "previous";
   prescriptionDate?: string;
   prescribingDoctor?: string;
   prescribingClinic?: string;
@@ -337,15 +339,17 @@ export function samePrescriptionDetails(a: PrescribableMedicine, b: Prescribable
 
 export function createPrescriptionHistoryEntry(
   medicine: PrescribableMedicine,
-  recordedAt: string,
+  recordedAt: string | undefined,
   id: string,
   treatmentPeriodId?: string,
+  eventType?: PrescriptionHistoryEntry["eventType"],
 ): PrescriptionHistoryEntry {
   return {
     id,
     medicineId: medicine.id,
     treatmentPeriodId,
     recordedAt,
+    eventType,
     prescriptionDate: normalizedText(medicine.prescriptionDate) || undefined,
     prescribingDoctor: normalizeDoctorName(medicine.prescribingDoctor) || undefined,
     prescribingClinic: normalizedText(medicine.prescribingClinic) || undefined,
@@ -381,21 +385,24 @@ export function appendPrescriptionChange(
   recordedAt: string,
   createId: () => string,
   treatmentPeriodId?: string,
+  eventType: "changed" | "discontinued" = "changed",
 ): PrescriptionHistoryEntry[] {
   if (samePrescriptionDetails(previous, updated)) return [...history];
 
   const medicineEntries = history.filter((entry) => entry.medicineId === previous.id);
   const latest = sortPrescriptionHistory(medicineEntries)[0];
   const next = [...history];
-  if (!latest) next.push(createPrescriptionHistoryEntry(previous, recordedAt, createId(), treatmentPeriodId));
-  else if (!entryMatchesMedicine(latest, previous)) next.push(createPrescriptionHistoryEntry(previous, recordedAt, createId(), treatmentPeriodId));
-  next.push(createPrescriptionHistoryEntry(updated, recordedAt, createId(), treatmentPeriodId));
+  const previousMatch = sortPrescriptionHistory(medicineEntries.filter((entry) => entryMatchesMedicine(entry, previous)))[0];
+  if (!latest || !entryMatchesMedicine(latest, previous)) {
+    next.push(createPrescriptionHistoryEntry(previous, previousMatch?.recordedAt ?? previous.createdAt, createId(), treatmentPeriodId, "previous"));
+  }
+  next.push(createPrescriptionHistoryEntry(updated, recordedAt, createId(), treatmentPeriodId, eventType));
   return next;
 }
 
 export function sortPrescriptionHistory(entries: readonly PrescriptionHistoryEntry[]): PrescriptionHistoryEntry[] {
   return entries
-    .map((entry, index) => ({ entry, index, timestamp: new Date(entry.recordedAt).getTime() }))
+    .map((entry, index) => ({ entry, index, timestamp: new Date(entry.recordedAt ?? "").getTime() }))
     .sort((a, b) => {
       const aValid = Number.isFinite(a.timestamp);
       const bValid = Number.isFinite(b.timestamp);

@@ -2,13 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 import { Medicine, MedicineType, type AddMedicineResult, type DoseRecord, type MedicineUpdateResult } from "@/contexts/MedicineContext";
 import { localDateString } from "@/lib/schedule";
-import { availableVolumeFromContainers, inventoryUnitFor, parseNonNegativeQuantity, validateInventoryThreshold } from "@/lib/medicineLogic";
+import { availableVolumeFromContainers, inventoryUnitFor, parseNonNegativeQuantity, validateInventoryThreshold, validateMedicineStrength } from "@/lib/medicineLogic";
 import { findMedicineIdentityMatches, type MedicineIdentityMatch } from "@/lib/medicineIdentity";
 import { normalizeOptionalMedicineDetails } from "@/lib/medicineList";
 import { normalizeDoctorName } from "@/lib/prescriptionHistory";
 import { keepDialogFocusInside } from "@/lib/accessibility";
+import { hasMedicineFormChanges, medicineDuplicateAction, medicineFormCloseAction, medicineFormEscapeAction, unsavedChangesChoiceAction } from "@/lib/medicineFormUX";
 
 // ─── Per-type strength configuration ──────────────────────────────────────────
 
@@ -156,7 +158,7 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
   const [strengthValue, setStrengthValue] = useState<string>(initSV);
   const [strengthUnit, setStrengthUnit] = useState<string>(initSU);
   const [syrupStockEntryUnit, setSyrupStockEntryUnit] = useState<"ml" | "bottles">("ml");
-  const [initialFormValues] = useState(() => JSON.stringify({ formData, strengthValue, strengthUnit, syrupStockEntryUnit }));
+  const [initialFormValues] = useState(() => ({ formData, strengthValue, strengthUnit, syrupStockEntryUnit }));
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [reviewingDuplicate, setReviewingDuplicate] = useState<{ candidate: Medicine; matches: MedicineIdentityMatch[] } | null>(null);
@@ -170,7 +172,8 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
   const [restartMode, setRestartMode] = useState(false);
   const today = localDateString();
   const hasActiveTreatment = Boolean(initialData?.treatmentPeriods?.some((period) => period.status === "active" && (!period.endDate || period.endDate >= today)));
-  const isDirty = JSON.stringify({ formData, strengthValue, strengthUnit, syrupStockEntryUnit }) !== initialFormValues;
+  const currentFormValues = { formData, strengthValue, strengthUnit, syrupStockEntryUnit };
+  const isDirty = hasMedicineFormChanges(initialFormValues, currentFormValues);
 
   // ── Derived config for the current type ──
   const currentType = (formData.type as MedicineType) ?? "Tablet";
@@ -244,6 +247,8 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
   const validate = (scheduleTimes: string[], currentStockInput: FormDataEntryValue | null, thresholdInput: FormDataEntryValue | null) => {
     const newErrors: Record<string, string> = {};
     if (!formData.name?.trim()) newErrors.name = "Name is required";
+    const strengthError = validateMedicineStrength(strengthValue);
+    if (strengthError) newErrors.strengthValue = strengthError;
     if (!formData.doseAmount || formData.doseAmount <= 0) newErrors.doseAmount = "Valid dose amount required";
     const fixedCount = FIXED_DAILY_COUNTS[formData.frequency || "Once daily"];
     if (fixedCount && scheduleTimes.length !== fixedCount)
@@ -345,7 +350,9 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
     setSaveError("");
     const matches = findMedicineIdentityMatches(med, existingMedicines);
     if (matches.length) {
-      secondaryDialogReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      secondaryDialogReturnFocusRef.current = formRef.current?.contains(document.activeElement)
+        ? document.activeElement as HTMLElement
+        : formRef.current?.querySelector<HTMLElement>("#medicineName") ?? null;
       setReviewingDuplicate({ candidate: med, matches });
       submittingRef.current = false;
       return;
@@ -361,14 +368,15 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
           ? "This medicine could not be updated. No changes were saved; reload and try again."
           : "This medicine could not be added safely.");
       } else {
-        secondaryDialogReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        secondaryDialogReturnFocusRef.current = formRef.current?.contains(document.activeElement)
+          ? document.activeElement as HTMLElement
+          : formRef.current?.querySelector<HTMLElement>("#medicineName") ?? null;
         setReviewingDuplicate({ candidate: med, matches: [failedResult.duplicateMatch] });
-        setSaveError("A matching medicine was added while this form was open. Review it before continuing.");
+        setSaveError("A matching medicine was saved while this form was open. Review the existing medicine before continuing.");
       }
       submittingRef.current = false;
       return;
     }
-    submittingRef.current = false;
   };
 
   const openExistingMedicine = (medicine: Medicine) => {
@@ -383,31 +391,66 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
     if (target?.isConnected) target.focus();
   };
 
+  const requestClose = () => {
+    if (submittingRef.current) return;
+    if (medicineFormCloseAction(isDirty) === "confirm-unsaved") {
+      secondaryDialogReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      setConfirmingDiscard(true);
+    } else {
+      onCancel();
+    }
+  };
+
   const handleEscape = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key !== "Escape") {
       keepDialogFocusInside(event as KeyboardEvent<HTMLDivElement>);
+      if (reviewingDuplicate || confirmingDiscard) event.stopPropagation();
       return;
     }
     event.preventDefault();
     event.stopPropagation();
-    if (confirmingDiscard) {
+    const action = medicineFormEscapeAction(confirmingDiscard ? "unsaved" : reviewingDuplicate ? "duplicate" : null, isDirty);
+    if (action === "dismiss-unsaved") {
       setConfirmingDiscard(false);
       restoreSecondaryDialogFocus();
-      return;
-    }
-    if (reviewingDuplicate) {
+    } else if (action === "dismiss-duplicate") {
       setReviewingDuplicate(null);
       setSaveError("");
       restoreSecondaryDialogFocus();
-      return;
+    } else if (action === "confirm-unsaved") {
+      requestClose();
+    } else {
+      onCancel();
     }
-    if (isDirty) {
-      secondaryDialogReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      setConfirmingDiscard(true);
-      return;
-    }
-    onCancel();
   };
+
+  useEffect(() => {
+    const handleFormEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      const action = medicineFormEscapeAction(confirmingDiscard ? "unsaved" : reviewingDuplicate ? "duplicate" : null, isDirty);
+      if (action === "dismiss-unsaved") {
+        setConfirmingDiscard(false);
+        const target = secondaryDialogReturnFocusRef.current;
+        secondaryDialogReturnFocusRef.current = null;
+        if (target?.isConnected) target.focus();
+      } else if (action === "dismiss-duplicate") {
+        setReviewingDuplicate(null);
+        setSaveError("");
+        const target = secondaryDialogReturnFocusRef.current;
+        secondaryDialogReturnFocusRef.current = null;
+        if (target?.isConnected) target.focus();
+      } else if (action === "confirm-unsaved") {
+        secondaryDialogReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        setConfirmingDiscard(true);
+      } else {
+        onCancel();
+      }
+    };
+    document.addEventListener("keydown", handleFormEscape);
+    return () => document.removeEventListener("keydown", handleFormEscape);
+  }, [confirmingDiscard, isDirty, onCancel, reviewingDuplicate]);
 
   const restartExistingMedicine = (medicine: Medicine) => {
     if (!onRestart) return;
@@ -447,13 +490,6 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
     if (confirmingDiscard) discardDialogRef.current?.querySelector<HTMLElement>("button")?.focus();
   }, [confirmingDiscard]);
 
-  const isTreatmentActive = (medicine: Medicine) => {
-    if (medicine.archivedAt) return false;
-    return medicine.treatmentPeriods?.length
-      ? medicine.treatmentPeriods.some((period) => period.status === "active" && (!period.endDate || period.endDate >= today))
-      : !medicine.endDate || medicine.endDate >= today;
-  };
-
   const scheduleSummary = (medicine: Medicine) => medicine.frequency === "As needed (PRN)"
     ? "As needed (PRN)"
     : medicine.frequency === "Every X hours"
@@ -483,7 +519,7 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
 
   return (
     <>
-    <form ref={formRef} onSubmit={handleSubmit} onKeyDown={handleEscape} className="space-y-6 text-left">
+    <form ref={formRef} noValidate onSubmit={handleSubmit} onKeyDown={handleEscape} className="space-y-6 text-left">
 
       {/* ── 1. Medicine Details ─────────────────────────────────────────────── */}
       <div className="space-y-4">
@@ -543,7 +579,7 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
         <div>
           <label htmlFor="strengthValue" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
             {strengthConfig.label}{" "}
-            <span className="font-normal text-slate-400 dark:text-slate-500">(optional)</span>
+            <span className="text-rose-500">*</span>
           </label>
 
           <div className="flex gap-2">
@@ -555,6 +591,8 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
               min="0"
               step="any"
               value={strengthValue}
+              aria-invalid={Boolean(errors.strengthValue)}
+              aria-describedby={errors.strengthValue ? "strengthValue-error" : undefined}
               onChange={(e) => {
                 setStrengthValue(e.target.value);
                 if (errors.strengthValue) setErrors((prev) => ({ ...prev, strengthValue: "" }));
@@ -594,6 +632,7 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
               </span>
             )}
           </div>
+          {errors.strengthValue && <p id="strengthValue-error" className="mt-1 text-xs text-rose-600 dark:text-rose-400" role="alert">{errors.strengthValue}</p>}
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -882,7 +921,7 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
         {restartMode && <button type="button" onClick={() => setRestartMode(false)} className="min-h-11 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-300">Cancel restart</button>}
         <button
           type="button"
-          onClick={onCancel}
+          onClick={requestClose}
           className="min-h-11 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
         >
           Cancel
@@ -894,9 +933,9 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
           {restartMode ? "Start Treatment" : initialData ? "Save Changes" : "Add Medicine"}
         </button>
       </div>
-      {saveError && <p className="text-sm font-medium text-rose-700 dark:text-rose-300" role="alert">{saveError}</p>}
+      {saveError && !reviewingDuplicate && <p className="text-sm font-medium text-rose-700 dark:text-rose-300" role="alert">{saveError}</p>}
     </form>
-    {reviewingDuplicate && (
+    {typeof document !== "undefined" && reviewingDuplicate && createPortal((
       <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/65 p-3 backdrop-blur-sm sm:p-5">
         <div ref={duplicateDialogRef} role="dialog" aria-modal="true" aria-labelledby="medicine-duplicate-title" onKeyDown={handleEscape} className="max-h-[92dvh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-6">
           <h3 id="medicine-duplicate-title" className="text-lg font-bold text-slate-900 dark:text-white">
@@ -906,6 +945,7 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
             Compare the existing medicine before continuing. Nothing has been merged or changed.
             {reviewingDuplicate.matches.some((match) => match.kind === "likely") && " A similar name is a review suggestion only; it does not mean the medicines are equivalent."}
           </p>
+          {saveError && reviewingDuplicate.matches.length > 0 && <p className="mt-3 rounded-xl bg-rose-50 p-3 text-sm text-rose-800 dark:bg-rose-950/40 dark:text-rose-200" role="alert">{saveError}</p>}
           {reviewingDuplicate.matches.length === 0 ? (
             <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200" role="alert">{saveError || "A matching medicine was found. Review the existing entry before continuing."}</p>
           ) : (
@@ -935,7 +975,7 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
                       </table>
                     </div>
                     <div className="flex justify-end border-t border-slate-100 p-3 dark:border-slate-800">
-                      {isTreatmentActive(medicine) ? (
+                      {medicineDuplicateAction(medicine, today) === "view-existing" ? (
                         <button type="button" aria-label={`View existing ${medicine.name}`} onClick={() => openExistingMedicine(medicine)} className="min-h-10 rounded-xl border border-teal-300 px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50 dark:border-teal-700 dark:text-teal-200 dark:hover:bg-teal-950/40">View Existing</button>
                       ) : (
                         <button type="button" aria-label={`Restart existing ${medicine.name}`} onClick={() => restartExistingMedicine(medicine)} className="min-h-10 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-500">Restart Existing</button>
@@ -951,20 +991,20 @@ export default function MedicineForm({ initialData, existingMedicines = [], dose
           </div>
         </div>
       </div>
-    )}
-    {confirmingDiscard && (
+    ), document.body)}
+    {typeof document !== "undefined" && confirmingDiscard && createPortal((
       <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/65 p-3 backdrop-blur-sm sm:p-5">
         <div ref={discardDialogRef} role="dialog" aria-modal="true" aria-labelledby="medicine-unsaved-title" onKeyDown={handleEscape} className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-6">
           <h3 id="medicine-unsaved-title" className="text-lg font-bold text-slate-900 dark:text-white">Save changes before closing?</h3>
           <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">You have unsaved medicine details. Save them, discard them, or return to editing.</p>
           <div className="mt-5 flex flex-wrap justify-end gap-2">
-            <button type="button" onClick={() => { setConfirmingDiscard(false); formRef.current?.requestSubmit(); }} className="min-h-10 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-500">Save Changes</button>
-            <button type="button" onClick={onCancel} className="min-h-10 rounded-xl border border-rose-300 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-300 dark:hover:bg-rose-950/30">Don&apos;t Save</button>
-            <button type="button" onClick={() => { setConfirmingDiscard(false); restoreSecondaryDialogFocus(); }} className="min-h-10 rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">Cancel</button>
+            <button type="button" onClick={() => { if (unsavedChangesChoiceAction("save") === "submit") { secondaryDialogReturnFocusRef.current = formRef.current?.querySelector<HTMLElement>("#medicineName") ?? null; setConfirmingDiscard(false); formRef.current?.requestSubmit(); } }} className="min-h-10 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-500">Save Changes</button>
+            <button type="button" onClick={() => { if (unsavedChangesChoiceAction("discard") === "close-form") onCancel(); }} className="min-h-10 rounded-xl border border-rose-300 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-300 dark:hover:bg-rose-950/30">Don&apos;t Save</button>
+            <button type="button" onClick={() => { if (unsavedChangesChoiceAction("cancel") === "resume-editing") { setConfirmingDiscard(false); restoreSecondaryDialogFocus(); } }} className="min-h-10 rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">Cancel</button>
           </div>
         </div>
       </div>
-    )}
+    ), document.body)}
     </>
   );
 }

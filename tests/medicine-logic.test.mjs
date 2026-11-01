@@ -8,6 +8,7 @@ import { sortDoseHistoryRecords, sortTakenDoseRecordsNewestFirst } from "../lib/
 import { appendPrescriptionChange, buildPrescriptionHistoryFilterOptions, createEmptyPrescriptionHistoryFilters, createInitialPrescriptionHistoryViewState, createPrescriptionHistoryEntry, filterCurrentPrescriptionMedicines, filterPrescriptionHistory, getPrescriptionHistoryResults, groupPrescriptionHistoryByMedicine, hasActivePrescriptionHistoryFilters, normalizeDoctorName, prescriptionHistoryViewReducer, sortPrescriptionHistory, validatePrescriptionHistoryFilters } from "../lib/prescriptionHistory.ts";
 import { applyMedicineUpdatePreservingCreationDate, formatMedicineAddedAt, normalizeOptionalMedicineDetails, sortMedicinesNewestFirst } from "../lib/medicineList.ts";
 import { getMedicineFormAppearance } from "../lib/medicineFormIcon.ts";
+import { hasMedicineFormChanges, medicineDuplicateAction, medicineFormCloseAction, medicineFormEscapeAction, unsavedChangesChoiceAction } from "../lib/medicineFormUX.ts";
 import { createTreatmentPeriod, ensureCurrentTreatmentPeriod } from "../lib/treatmentPeriods.ts";
 import { deleteVitalReading, filterVitalReadings, latestVitalReadingOnDate, sortVitalReadingsNewestFirst, upsertVitalReading, validateVitalReading, vitalReadingLabel } from "../lib/vitalTrack.ts";
 import { addScheduleBaseline, getMedicineOccurrencesForDate, getScheduledTimesForDate, localDateString } from "../lib/schedule.ts";
@@ -33,6 +34,7 @@ import {
   scheduledOccurrenceKey,
   upsertMissedOccurrenceRecords,
   validateInventoryThreshold,
+  validateMedicineStrength,
   withDoseDetailsSnapshot,
 } from "../lib/medicineLogic.ts";
 
@@ -1270,6 +1272,36 @@ test("medicine identity suggests a conservative spelling match without treating 
   assert.equal(findBlockingMedicineIdentityMatch(candidate, [existing], true), undefined);
 });
 
+test("medicine strength is required for writes while legacy medicine records remain readable", () => {
+  assert.equal(validateMedicineStrength("40 mg"), null);
+  assert.equal(validateMedicineStrength(" 40 mg "), null);
+  assert.equal(validateMedicineStrength(""), "Strength is required.");
+  assert.equal(validateMedicineStrength("   "), "Strength is required.");
+  const legacyMedicine = { ...syrup({ id: "legacy-strength", name: "Legacy" }), strength: "" };
+  const serialized = serializeDemoProfile({ email: "legacy-empty-strength@example.test", medicines: [legacyMedicine], doseRecords: [] });
+  const legacyKey = demoProfileStorageKey("legacy-empty-strength@example.test");
+  const savedProfile = new Map([[legacyKey, serialized]]);
+  assert.equal(loadDemoProfile({ getItem: (key) => savedProfile.get(key) ?? null }, "legacy-empty-strength@example.test").medicines[0].strength, "");
+});
+
+test("medicine form dirty, Escape, Cancel, unsaved choices, and duplicate actions resolve consistently", () => {
+  const initial = { name: "Example", strength: "10 mg" };
+  assert.equal(hasMedicineFormChanges(initial, { ...initial }), false);
+  assert.equal(hasMedicineFormChanges(initial, { ...initial, strength: "20 mg" }), true);
+  assert.equal(medicineFormCloseAction(false), "close-form");
+  assert.equal(medicineFormCloseAction(true), "confirm-unsaved");
+  assert.equal(medicineFormEscapeAction(null, false), "close-form");
+  assert.equal(medicineFormEscapeAction(null, true), "confirm-unsaved");
+  assert.equal(medicineFormEscapeAction("duplicate", true), "dismiss-duplicate");
+  assert.equal(medicineFormEscapeAction("unsaved", true), "dismiss-unsaved");
+  assert.equal(unsavedChangesChoiceAction("save"), "submit");
+  assert.equal(unsavedChangesChoiceAction("discard"), "close-form");
+  assert.equal(unsavedChangesChoiceAction("cancel"), "resume-editing");
+  assert.equal(medicineDuplicateAction({ endDate: undefined }, "2026-11-01"), "view-existing");
+  assert.equal(medicineDuplicateAction({ endDate: "2026-10-31" }, "2026-11-01"), "restart-existing");
+  assert.equal(medicineDuplicateAction({ archivedAt: "2026-10-31T10:00:00.000Z", treatmentPeriods: [{ status: "active" }] }, "2026-11-01"), "restart-existing");
+});
+
 test("rapid repeated medicine addition is blocked after the first explicit similar-medicine confirmation", () => {
   const existing = identityMedicine({ name: "Calan" });
   const candidate = identityMedicine({ id: "synthetic-identity-b", name: "Calam" });
@@ -1439,6 +1471,40 @@ test("first prescription change on a legacy medicine captures the prior and upda
   assert.equal(history[1].prescribingDoctor, "Dr. New");
   assert.equal(previous.prescribingDoctor, undefined);
   assert.equal(previous.scheduleTimes[0], "08:00");
+});
+
+test("older prescription snapshots keep their actual event time and unknown legacy times stay unknown", () => {
+  const previous = prescriptionMedicine({ createdAt: "2026-01-05T09:00:00.000Z" });
+  const updated = { ...previous, prescribingDoctor: "Dr. New" };
+  const changedAt = "2026-10-30T11:00:00.000Z";
+  const history = appendPrescriptionChange([], previous, updated, changedAt, (() => { let index = 0; return () => `ordered-${++index}`; })());
+  assert.equal(history[0].recordedAt, previous.createdAt);
+  assert.equal(history[0].eventType, "previous");
+  assert.equal(history[1].recordedAt, changedAt);
+  assert.equal(history[1].eventType, "changed");
+  assert.deepEqual(sortPrescriptionHistory(history).map((entry) => entry.id), ["ordered-2", "ordered-1"]);
+
+  const undatedLegacy = prescriptionMedicine();
+  const legacyHistory = appendPrescriptionChange([], undatedLegacy, { ...undatedLegacy, prescribingDoctor: "Dr. New" }, changedAt, () => "legacy-snapshot");
+  assert.equal(legacyHistory[0].recordedAt, undefined, "unknown original event time is not replaced with the later edit time");
+  assert.deepEqual(sortPrescriptionHistory(legacyHistory).map((entry) => entry.id), [legacyHistory[1].id, legacyHistory[0].id]);
+});
+
+test("prescription history event labels and optional timestamps persist safely", () => {
+  const medicine = prescriptionMedicine({ createdAt: "2026-01-01T00:00:00.000Z" });
+  const added = createPrescriptionHistoryEntry(medicine, "2026-10-30T12:00:00.000Z", "add-event", undefined, "added");
+  const archived = createPrescriptionHistoryEntry(medicine, "2026-10-31T12:00:00.000Z", "archive-event", undefined, "archived");
+  const deleted = createPrescriptionHistoryEntry(medicine, "2026-11-01T12:00:00.000Z", "delete-event", undefined, "deleted");
+  const unknownTime = createPrescriptionHistoryEntry(medicine, undefined, "unknown-time", undefined, "previous");
+  const email = "prescription-events@example.test";
+  const key = demoProfileStorageKey(email);
+  assert.equal(added.recordedAt, "2026-10-30T12:00:00.000Z", "the add event time stays separate from the medicine creation timestamp");
+  const value = serializeDemoProfile({ email, medicines: [], doseRecords: [], prescriptionHistory: [added, archived, deleted, unknownTime] });
+  const storage = new Map([[key, value]]);
+  const loaded = loadDemoProfile({ getItem: (storageKey) => storage.get(storageKey) ?? null }, email);
+  assert.deepEqual(loaded.prescriptionHistory.map((entry) => entry.eventType), ["added", "archived", "deleted", "previous"]);
+  assert.equal(loaded.prescriptionHistory[3].recordedAt, undefined);
+  assert.deepEqual(sortPrescriptionHistory(loaded.prescriptionHistory).map((entry) => entry.id), ["delete-event", "archive-event", "add-event", "unknown-time"]);
 });
 
 test("legacy profile serialization remains compatible and prescription history stays account scoped after medicine deletion", () => {

@@ -210,10 +210,12 @@ function parseProfile(raw: string, email: string): DemoProfileData {
 function isProfilePrescriptionEntry(value: unknown): value is PrescriptionHistoryEntry {
   if (typeof value !== "object" || value === null) return false;
   const entry = value as Partial<PrescriptionHistoryEntry>;
-  const requiredStrings = [entry.id, entry.medicineId, entry.recordedAt, entry.medicineName, entry.medicineType, entry.strength, entry.frequency, entry.startDate];
+  const requiredStrings = [entry.id, entry.medicineId, entry.medicineName, entry.medicineType, entry.strength, entry.frequency, entry.startDate];
   const optionalStrings = [entry.prescriptionDate, entry.prescribingDoctor, entry.prescribingClinic, entry.prescriptionNotes, entry.doseUnit, entry.endDate, entry.instructions, entry.composition];
   return requiredStrings.every((field) => typeof field === "string") &&
     optionalStrings.every((field) => field === undefined || typeof field === "string") &&
+    (entry.recordedAt === undefined || typeof entry.recordedAt === "string") &&
+    (entry.eventType === undefined || ["added", "changed", "discontinued", "restarted", "archived", "deleted", "previous"].includes(entry.eventType)) &&
     (entry.treatmentPeriodId === undefined || typeof entry.treatmentPeriodId === "string") &&
     typeof entry.doseAmount === "number" && Number.isFinite(entry.doseAmount) &&
     (entry.intervalHours === undefined || (typeof entry.intervalHours === "number" && Number.isFinite(entry.intervalHours))) &&
